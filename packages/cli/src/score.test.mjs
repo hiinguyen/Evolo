@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { classifyFile } from "./facts.mjs";
-import { extractJsonObject } from "./judge.mjs";
+import { extractJsonObject } from "./judges/opencode.mjs";
 import { computeXp, triage, validateEvaluation } from "./score.mjs";
 
 const scored = (impact, centrality, difficulty, quality, scope_fit) => ({ impact, centrality, difficulty, quality, scope_fit });
@@ -104,6 +104,12 @@ test("validateEvaluation holds suspected prompt injection for review", () => {
   const result = validateEvaluation(judgeOutput({ flags: ["suspected_injection", "made_up_flag"] }), facts(), known);
   assert.equal(result.status, "needs_review");
   assert.deepEqual(result.evaluation.flags, ["suspected_injection"]);
+});
+
+test("validateEvaluation rejects an evaluation the judge itself reports as incomplete", () => {
+  const result = validateEvaluation(judgeOutput({ flags: ["incomplete_investigation"], notes: "did not read the diff" }), facts(), known);
+  assert.equal(result.ok, false);
+  assert.match(result.problems[0], /incomplete investigation: did not read the diff/);
 });
 
 test("triage scores small docs edits by rule and sends code to the judge", () => {

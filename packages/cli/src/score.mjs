@@ -74,10 +74,15 @@ function checkShape(raw) {
 }
 
 // Validates the judge's raw output against the schema and the measured facts.
-// Shape errors are fatal (the caller retries); fact contradictions adjust scores and are recorded as issues.
+// Shape errors and self-reported incomplete investigations are rejected (the caller retries);
+// fact contradictions adjust scores and are recorded as issues.
 export function validateEvaluation(raw, facts, knownPaths) {
   const shapeProblems = checkShape(raw);
   if (shapeProblems.length > 0) return { ok: false, problems: shapeProblems };
+  // A judge that admits it did not read the change has not produced an evaluation, only a guess.
+  if (raw.flags?.includes("incomplete_investigation")) {
+    return { ok: false, problems: [`judge reported an incomplete investigation: ${raw.notes ?? ""}`.trim()] };
+  }
 
   const issues = [];
   const scores = Object.fromEntries(

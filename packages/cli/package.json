@@ -1,0 +1,10 @@
+{
+  "name": "evolo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Scores git contributions with an AI judge and a deterministic XP formula.",
+  "type": "module",
+  "bin": { "evolo": "bin/evolo.mjs" },
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" }
+}
