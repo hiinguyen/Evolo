@@ -175,7 +175,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 | Giai đoạn | Nội dung | Điều kiện nghiệm thu |
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (nhánh `feat/claude-judge`) |
-| **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR; `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, thông báo, `status`, `why`, skill `/evolo` (chi tiết trong `docs/auto-scoring.md`) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi |
+| **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, thông báo, `status`, `why`, skill `/evolo` (chi tiết trong `docs/auto-scoring.md`) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi |
 | **2. Game hoá** | Level, achievement, analytics, `/evolo review`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |

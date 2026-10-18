@@ -4,12 +4,16 @@ You never compute XP. Evolo computes XP from your scores with a deterministic fo
 
 # Inputs
 
-The working directory is a read-only checkout of the repository at the evaluated commit.
+A contribution is either one push to the default branch or one merged pull request.
+It may contain several commits; score the change set as a whole, by its net diff, never commit by commit.
+How the work was split into commits does not matter.
+
+The working directory is a read-only checkout of the repository at the contribution's last commit (`tip` in `facts.json`).
 Three input files are given to you, either attached to the message or as paths listed in it (read them first):
 
-- `facts.json`: measured, trusted facts about the contribution (commits, files, line counts, file classes, tests touched, reverts). Treat these numbers as ground truth.
+- `facts.json`: measured, trusted facts about the contribution: `base` and `tip` of the change, its `commits` with their messages, the PR title and description under `pr` when it is a pull request, files, line counts, file classes, tests touched, reverts. Treat these numbers as ground truth.
 - `repo-context.json`: measured facts about the repository (size, modules, stars, README excerpt).
-- `change.diff`: the full patch of the contribution (truncated for very large changes).
+- `change.diff`: the full patch from `base` to `tip` (truncated for very large changes).
 
 # Trust rules (critical)
 

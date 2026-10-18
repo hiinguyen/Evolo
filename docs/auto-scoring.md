@@ -60,8 +60,9 @@ evolo sync (sau mỗi job, khi mở phiên    │
                              9. notify     thông báo desktop + cập nhật status line
 ```
 
-Bước 2, 3, 6, 7 dùng lại code đã có trong `packages/cli/src/`.
-`facts.mjs` và `evaluate.mjs` hiện chấm một commit; cần mở rộng để nhận một danh sách commit (change set) và thông tin PR.
+Bước 2-7 dùng lại code đã có trong `packages/cli/src/`.
+`units.mjs` biến một dải push hoặc một số PR thành change set `{kind, base, tip}`; `facts.mjs` đo diff ròng `base..tip` và `evaluate.mjs` chấm nó.
+Phần chưa có là bước 0, 1 (chọn commit) và 8, 9.
 
 ## 3. Cài đặt: `evolo init`
 
@@ -118,7 +119,8 @@ Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới
 
 1. `evolo sync` hỏi `gh pr list --author @me --state merged` các PR merge sau lần sync trước, cho mọi repo đã đăng ký.
 2. Mỗi PR mới thành một job `{number, base, headSha, mergeCommit}`.
-3. Worker fetch `refs/pull/<number>/head`, lấy diff từ `git merge-base <base> <headSha>` tới `headSha`, và đưa thêm tiêu đề, mô tả PR vào facts.
+3. Worker lấy `baseRefOid` và `headRefOid` bằng `gh pr view`, fetch những commit còn thiếu từ `origin`, lấy diff từ `git merge-base <baseRefOid> <headRefOid>` tới `headRefOid`, và đưa thêm tiêu đề, mô tả PR vào facts.
+   Cách tính này khớp đúng số file và số dòng GitHub hiển thị trên 3 PR thật của `hiinguyen/lightrag`, gồm PR merge commit, PR fast-forward và PR có base là nhánh feature.
    Mô tả PR là dữ liệu do người viết, nên judge coi nó là dữ liệu chứ không phải chỉ dẫn, như với commit message.
 4. PR bị đóng mà không merge thì không chấm.
 
@@ -152,7 +154,7 @@ EVOLO_JUDGE=1 claude -p \
   --json-schema "$(cat judge/output.schema.json)" \
   --max-budget-usd 1 \
   --output-format stream-json --verbose \
-  "Evaluate commit <sha>. Input files: <facts.json, repo-context.json, change.diff>"
+  "Evaluate a push to the default branch: the change <base>..<tip> (N commits). Input files: <facts.json, repo-context.json, change.diff>"
 ```
 
 Mỗi cờ có một lý do:
@@ -176,7 +178,7 @@ Mỗi cờ có một lý do:
 - `stream-json` để theo dõi từng tool call trong lúc chấm. Kết quả cuối nằm ở sự kiện `result`, cùng với chi phí.
 - `EVOLO_JUDGE=1` là chốt an toàn chống đệ quy: dù judge không có quyền commit, shim vẫn bỏ qua mọi commit tạo ra khi biến này được bật.
 
-Thư mục làm việc là git worktree tại đúng SHA đó, giống bản prototype đã chạy với opencode.
+Thư mục làm việc là git worktree tại commit cuối (`tip`) của change set.
 Để repo không tự định nghĩa lại agent, prompt của judge được truyền qua `--append-system-prompt-file`, không qua `.claude/agents/` trong repo.
 
 **Ghim model:** mỗi `rubric_version` gắn với một model cố định, ghi vào ledger.
@@ -259,9 +261,9 @@ Nhờ vậy không cần database, không bao giờ đọc phải file ghi dở,
 
 ```
 packages/cli/                 # gói npm "evolo"
-  bin/evolo.mjs               # [có] evaluate | [chưa] init, uninstall, enqueue, worker, sync, status, why, backfill, retry, preview
-  src/evaluate.mjs            # [có] facts → triage → worktree → judge → validate → xp cho một commit; [chưa] change set và PR
-  src/facts.mjs               # [có] số liệu một commit; [chưa] gộp nhiều commit, thông tin PR
+  bin/evolo.mjs               # [có] evaluate --range/--pr/<sha> | [chưa] init, uninstall, enqueue, worker, sync, status, why, backfill, retry, preview
+  src/evaluate.mjs            # [có] facts → triage → worktree → judge → validate → xp cho một change set
+  src/facts.mjs               # [có] số liệu diff ròng base..tip, danh sách commit, revert, thông tin PR
   src/score.mjs               # [có] triage, validator, công thức XP
   src/judges/common.mjs       # [có] READ_ONLY_COMMANDS, chạy tiến trình JSONL, timeout, dọn tiến trình con
   src/judges/claude.mjs       # [có] backend claude -p (mục 5), mặc định
@@ -269,7 +271,7 @@ packages/cli/                 # gói npm "evolo"
   src/hooks.mjs               # [chưa] cài và gỡ hook pre-push, tôn trọng core.hooksPath, chain hook cũ
   src/queue.mjs               # [chưa] hàng đợi file, lock có PID, ghi atomic
   src/worker.mjs              # [chưa] vòng lặp gọi evaluate.mjs cho từng mục trong hàng đợi
-  src/units.mjs               # [chưa] chọn commit cho đơn vị push, phát hiện PR merge qua gh
+  src/units.mjs               # [có] dải push, commit đơn, PR qua gh thành change set | [chưa] lọc commit của push, phát hiện PR merge
   src/ledger.mjs              # [chưa] trạng thái, superseded và reverted khi sync
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator
@@ -277,12 +279,12 @@ skills/evolo/SKILL.md         # [chưa] skill /evolo
 ```
 
 Chạy test: `cd packages/cli && npm test`.
-Chấm thử: `node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own [--judge opencode] [--model M] <sha>...`.
+Chấm thử: `node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own [--judge opencode] [--model M] [--range <from>..<to>]... [--pr <number>]... [<sha>...]`.
 
 ## 10. Lộ trình
 
 1. **Judge Claude:** xong, Sonnet là mặc định (mục 5).
-2. **Change set và PR:** mở rộng `facts.mjs` và `evaluate.mjs` để chấm nhiều commit và PR; chạy thử trên vài lần push thật của Friday và một PR.
+2. **Change set và PR:** xong (2026-10-18), xem `docs/handoff.md` mục 3.
 3. **Hook, hàng đợi, sync:** `init`, `uninstall`, `enqueue`, `worker`, `sync`, kèm test E2E trên một repo tạm có remote giả (bare repo).
    Test này push thành công, push bị từ chối, force-push, merge PR (qua `gh` giả lập), revert, rồi kiểm tra trạng thái trong ledger.
 4. **Hiển thị:** thông báo desktop, `status`, `why`, skill `/evolo` và status line.

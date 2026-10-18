@@ -1,4 +1,4 @@
-// Collects measured, trusted facts about a commit and its repository.
+// Collects measured, trusted facts about a contribution (a push or a merged PR) and its repository.
 // Nothing here uses AI: these numbers are the ground truth the judge must not contradict.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -27,21 +27,26 @@ export function classifyFile(path) {
 // Lines in these classes count toward contribution size; the rest are excluded from every calculation.
 export const COUNTED_CLASSES = new Set(["source", "test"]);
 
+// Parses `git diff --numstat -z`. A rename is "added\tdeleted\t" followed by the old and new path as separate fields,
+// and is reported under its new path so it can be classified and cited as evidence.
 function parseNumstat(output) {
-  return output
-    .split("\n")
-    .filter(Boolean)
-    .map((line) => {
-      const [added, deleted, path] = line.split("\t");
-      const isBinary = added === "-";
-      return {
-        path,
-        class: classifyFile(path),
-        additions: isBinary ? 0 : Number(added),
-        deletions: isBinary ? 0 : Number(deleted),
-        binary: isBinary,
-      };
+  const fields = output.split("\0");
+  const files = [];
+  for (let index = 0; index < fields.length; index += 1) {
+    if (!fields[index]) continue;
+    const [added, deleted, inlinePath] = fields[index].split("\t");
+    if (inlinePath === "") index += 2;
+    const path = inlinePath === "" ? fields[index] : inlinePath;
+    const isBinary = added === "-";
+    files.push({
+      path,
+      class: classifyFile(path),
+      additions: isBinary ? 0 : Number(added),
+      deletions: isBinary ? 0 : Number(deleted),
+      binary: isBinary,
     });
+  }
+  return files;
 }
 
 function sumLinesByClass(files) {
@@ -51,39 +56,76 @@ function sumLinesByClass(files) {
   }, {});
 }
 
-export function collectCommitFacts(repoDir, sha) {
-  const [fullSha, parent, author, date, subject, ...bodyLines] = git(repoDir, [
-    "show", "-s", "--format=%H%n%P%n%an <%ae>%n%aI%n%s%n%b", sha,
-  ]).split("\n");
-  const files = parseNumstat(git(repoDir, ["show", "--numstat", "--format=", sha]));
-  const linesByClass = sumLinesByClass(files);
+const FIELD = "\x1f";
+const RECORD = "\x1e";
+
+// The diff base of a unit whose range starts at the root: the empty tree, so the root commit is all additions.
+export function diffBase(repoDir, base) {
+  return base ?? git(repoDir, ["hash-object", "-t", "tree", "/dev/null"]).trim();
+}
+
+function rangeArgs(base, tip) {
+  return base ? [`${base}..${tip}`] : [tip];
+}
+
+function listCommits(repoDir, base, tip) {
+  const format = ["%H", "%an <%ae>", "%aI", "%s", "%b"].join("%x1f") + "%x1e";
+  return git(repoDir, ["log", "--no-merges", "--reverse", `--format=${format}`, ...rangeArgs(base, tip)])
+    .split(RECORD)
+    .map((record) => record.trim())
+    .filter(Boolean)
+    .map((record) => {
+      const [sha, author, date, subject, body] = record.split(FIELD);
+      return { sha, author, date, subject, body: body.trim() };
+    });
+}
+
+// Maps each reverted commit to the commits that revert it, from one scan of every ref.
+function findReverts(repoDir) {
+  const reverts = new Map();
+  const log = git(repoDir, ["log", "--all", "--grep=This reverts commit", `--format=%H${FIELD}%B${RECORD}`]);
+  for (const record of log.split(RECORD).filter((entry) => entry.trim())) {
+    const [sha, message] = record.trim().split(FIELD);
+    for (const [, reverted] of message.matchAll(/This reverts commit ([0-9a-f]{40,64})/g)) {
+      reverts.set(reverted, [...(reverts.get(reverted) ?? []), sha]);
+    }
+  }
+  return reverts;
+}
+
+// Measures a unit from units.mjs: the net change from `base` to `tip`, which is exactly the diff the judge reads.
+// A file added and removed again inside the unit is therefore not part of the contribution.
+export function collectChangeFacts(repoDir, unit) {
+  const { kind, id, base, tip, pr = null } = unit;
+  const reverts = findReverts(repoDir);
+  const commits = listCommits(repoDir, base, tip).map((commit) => ({ ...commit, revertedBy: reverts.get(commit.sha) ?? [] }));
+  const files = parseNumstat(git(repoDir, ["diff", "--numstat", "-z", diffBase(repoDir, base), tip]));
   const countedLines = files
     .filter((file) => COUNTED_CLASSES.has(file.class))
     .reduce((total, file) => total + file.additions + file.deletions, 0);
-  const revertedBy = git(repoDir, ["log", "--format=%H", `--grep=This reverts commit ${fullSha}`, "--all"])
-    .split("\n")
-    .filter(Boolean);
   const repoHasTests = git(repoDir, ["ls-files", "-z"]).split("\0").some((path) => classifyFile(path) === "test");
+  const prFacts = pr && { ...pr, revertedBy: (pr.mergeCommit && reverts.get(pr.mergeCommit)) ?? [] };
+  // Partial reverts are recorded per commit but do not change XP yet (docs/auto-scoring.md section 4).
+  const reverted = prFacts?.revertedBy.length > 0 || (commits.length > 0 && commits.every((commit) => commit.revertedBy.length > 0));
 
   return {
-    kind: "commit",
-    sha: fullSha,
-    parent: parent.split(" ")[0] || null,
-    author,
-    date,
-    subject,
-    body: bodyLines.join("\n").trim(),
+    kind,
+    id,
+    base,
+    tip,
+    pr: prFacts,
+    commits,
     files,
     totals: {
       files: files.length,
       additions: files.reduce((total, file) => total + file.additions, 0),
       deletions: files.reduce((total, file) => total + file.deletions, 0),
       countedLines,
-      linesByClass,
+      linesByClass: sumLinesByClass(files),
     },
     testsTouched: files.some((file) => file.class === "test"),
     repoHasTests,
-    revertedBy,
+    reverted,
   };
 }
 
@@ -96,7 +138,7 @@ function countLines(text) {
   return text === "" ? 0 : text.split("\n").length;
 }
 
-// Describes the repository as it was at `checkoutDir` (a worktree at the evaluated commit).
+// Describes the repository as it was at `checkoutDir` (a worktree at the unit's tip).
 export function collectRepoContext(checkoutDir, { name, url, stars, isOwnRepo }) {
   const paths = git(checkoutDir, ["ls-files", "-z"]).split("\0").filter(Boolean);
   const modules = paths.reduce((acc, path) => {
