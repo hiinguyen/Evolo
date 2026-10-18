@@ -14,7 +14,7 @@ Chỉ dùng cho bản thân, nên **không có chống gian lận, server hay le
 
 | File | Nội dung | Trạng thái |
 |---|---|---|
-| `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Thiết kế, chưa commit |
+| `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Thiết kế |
 | `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Judge đã xây; phần còn lại là thiết kế |
 | `docs/xp-evaluation.md` | Rubric, judge, công thức XP, mô hình dữ liệu ban đầu | Đã xây |
 | `docs/handoff.md` | File này | |
@@ -62,9 +62,9 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 
 ### Git
 
-- Nhánh `feat/claude-judge`, commit `25c6d0f`, đã push lên `origin` (`github.com/hiinguyen/Evolo`).
+- Mọi thứ nằm trên nhánh `feat/claude-judge`, đã push lên `origin` (`github.com/hiinguyen/Evolo`):
+  `25c6d0f` (code chấm điểm) và `aa48452` (tài liệu).
   Chưa merge vào `main`.
-- **Chưa commit:** `docs/architecture.md`, `docs/auto-scoring.md` (viết lại theo push và PR), `docs/handoff.md`.
 
 ## 4. Việc tiếp theo
 
