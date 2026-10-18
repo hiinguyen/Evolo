@@ -92,7 +92,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 
 - Mọi thứ nằm trên nhánh `feat/claude-judge`, đã push lên `origin` (`github.com/hiinguyen/Evolo`):
   `25c6d0f` (code chấm điểm) và `aa48452` (tài liệu).
-  Phần change set và PR chưa commit.
+  `4ebc82a` (chấm change set và PR) và `b9980ba` (tài liệu).
   Chưa merge vào `main`.
 
 ## 4. Việc tiếp theo
