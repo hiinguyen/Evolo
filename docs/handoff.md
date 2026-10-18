@@ -23,15 +23,16 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 
 ## 3. Đã làm xong
 
-### Chấm một commit (giai đoạn 0)
+### Chấm một change set: push hoặc PR (giai đoạn 0 và đầu giai đoạn 1)
 
 Code trong `packages/cli/`:
 
 | File | Vai trò |
 |---|---|
-| `bin/evolo.mjs` | CLI, hiện chỉ có lệnh `evaluate` |
-| `src/evaluate.mjs` | Pipeline cho một commit: facts → triage → worktree tạm → judge → validate → XP; thử lại tối đa 3 lần |
-| `src/facts.mjs` | Số liệu đo bằng git (file, dòng, loại file, test, revert) và bối cảnh repo (module, README) |
+| `bin/evolo.mjs` | CLI, hiện chỉ có lệnh `evaluate`, nhận `--range`, `--pr` và SHA đơn |
+| `src/units.mjs` | Biến dải push, commit đơn hoặc số PR (qua `gh`) thành unit `{kind, id, base, tip, pr?}` |
+| `src/evaluate.mjs` | Pipeline cho một unit: facts → triage → worktree tạm tại `tip` → judge → validate → XP; thử lại tối đa 3 lần |
+| `src/facts.mjs` | Số liệu diff ròng `base..tip` (file, dòng, loại file, test), danh sách commit, revert, thông tin PR, và bối cảnh repo |
 | `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.1 |
 | `src/judges/claude.mjs` | Judge mặc định: `claude -p` sandbox, model `claude-sonnet-5-5` |
 | `src/judges/opencode.mjs` | Judge thay thế qua opencode (`--judge opencode`) |
@@ -42,8 +43,9 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 20 test, đều pass
-node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own <sha>...
+cd packages/cli && npm test                      # 33 test, đều pass
+node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own \
+  [--range <from>..<to>]... [--pr <number>]... [<sha>...]
 ```
 
 ### Kết quả đã đo trên 6 commit của `hiinguyen/Friday`
@@ -60,24 +62,48 @@ node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own <sha>.
 Sonnet: 8-17 giây và khoảng $0.06 mỗi commit, xếp hạng ổn định qua hai lần chạy.
 Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 
+### Quy tắc của change set
+
+- Một commit đơn là push `sha^..sha`; dải push là `from..to`; PR là `merge-base(baseRefOid, headRefOid)..headRefOid`.
+- Số liệu và diff cho judge là **diff ròng** `base..tip`, nên file thêm rồi xoá trong cùng đơn vị không được tính.
+- `commits` liệt kê mọi commit không phải merge trong dải, cũ trước, kèm `revertedBy`.
+- `reverted` chỉ đúng khi mọi commit bị revert, hoặc merge commit của PR bị revert; revert một phần chỉ được ghi lại.
+- Chỉ PR có trạng thái `MERGED` được chấm.
+- Dải push phải có `from` là tổ tiên của `to`; sau force-push thì dải bị từ chối, vì diff ròng sẽ gồm cả việc gỡ lịch sử bị bỏ.
+- Đơn vị không có commit nào ngoài merge commit bị từ chối trước khi gọi judge.
+- File đổi tên được ghi theo đường dẫn mới (`git diff --numstat -z`), để phân loại đúng và dùng được làm bằng chứng.
+- Prompt của judge nói rõ đơn vị là push hay PR, và bảo chấm cả change set chứ không chấm từng commit.
+
+### Kết quả chấm change set thật (Sonnet, 2026-10-18)
+
+| Đơn vị | Nội dung | Loại | Điểm rubric | Dòng tính | XP | Chi phí | Thời gian |
+|---|---|---|---|---|---|---|---|
+| Friday `eb82eec..89fd4e3` | 7 commit tính năng gesture + docs | feature | I3 C2 D3 Q4 S3 | 1430 | 162 | $0.20 | 13s |
+| Friday `89fd4e3..8c68e65` | 3 bản sửa, gồm `61e69bc` | bugfix | I2 C2 D3 Q3 S3 | 81 | 77 | $0.04 | 10s |
+| Friday `8c68e65..db9ce91` | 3 bản sửa nhỏ, gồm `1ecc693` | bugfix | I2 C1 D2 Q2 S3 | 7 | 38 | $0.03 | 9s |
+| lightrag PR #5 | 17 commit, merge commit, mô tả 4,6 KB | feature | I3 C2 D3 Q4 S3 | 934 | 162 | $0.31 | 31s |
+
+- Số file và số dòng của PR #5 khớp đúng GitHub (21 file, +2075 -16).
+- Dải `89fd4e3..8c68e65` được 77 XP, gần bằng `61e69bc` chấm riêng (74-78), nên gộp không làm lệch điểm của bản sửa chính.
+- Không còn worktree hay thư mục tạm nào sau khi chạy.
+- Friday không có PR nào, nên PR được thử trên `hiinguyen/lightrag`.
+
 ### Git
 
 - Mọi thứ nằm trên nhánh `feat/claude-judge`, đã push lên `origin` (`github.com/hiinguyen/Evolo`):
   `25c6d0f` (code chấm điểm) và `aa48452` (tài liệu).
+  Phần change set và PR chưa commit.
   Chưa merge vào `main`.
 
 ## 4. Việc tiếp theo
 
 Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 
-1. **Chấm change set và PR.**
-   Mở rộng `facts.mjs` để gộp nhiều commit (numstat cộng dồn, danh sách commit, `testsTouched`, revert) và nhận thông tin PR (số, tiêu đề, mô tả).
-   Mở rộng `evaluate.mjs` để chấm một danh sách SHA hoặc một PR: diff là `from..to` hoặc `merge-base..headSha`, worktree tại commit cuối, câu lệnh cho judge nói rõ là push hay PR.
-   Thêm lệnh `evolo evaluate --range <from>..<to>` và `--pr <number>`.
-   Kiểm thử trên vài dải push thật của Friday và ít nhất một PR thật.
-2. **Hook, hàng đợi, worker, sync** (`docs/auto-scoring.md` mục 2-4), với test E2E trên repo tạm có bare repo làm remote.
-3. **Hiển thị:** thông báo, `status`, `why`, skill `/evolo`, status line.
-4. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
+1. **Hook, hàng đợi, worker, sync** (`docs/auto-scoring.md` mục 2-4), với test E2E trên repo tạm có bare repo làm remote.
+   Điểm cần thiết kế khi chọn commit cho một push (`units.mjs`): diff ròng `from..to` sẽ gồm cả commit của người khác, merge commit và commit đã thuộc một PR đã merge.
+   Khi lọc bỏ chúng, change set không còn là một dải liền, nên cần quyết định giữa: chỉ chấm khi phần còn lại liền nhau, chia thành nhiều dải liền, hoặc ghép diff từng commit.
+2. **Hiển thị:** thông báo, `status`, `why`, skill `/evolo`, status line.
+3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 
 ## 5. Quyết định đã chốt và lý do
 
