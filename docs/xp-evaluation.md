@@ -141,7 +141,9 @@ Bài học khi chạy thật (opencode v2.0.26):
 - Model có thể chậm, mỗi bước 10-110 giây, nên giới hạn thời gian mỗi lần chấm là 20 phút và agent bị giới hạn 30 bước.
 - Gửi kèm `change.diff` giúp agent bớt được vài bước đọc diff qua git.
 
-Bản prototype nằm ở `scripts/evaluate.mjs` (pipeline), `scripts/xp/` (facts, judge, score) và `.opencode/agent/xp-judge.md` (agent).
+Code nằm ở `packages/cli/`: `src/evaluate.mjs` (pipeline), `src/facts.mjs`, `src/score.mjs` và `src/judges/` (backend opencode và Claude).
+Rubric là một file duy nhất, `packages/cli/judge/xp-judge.md`, dùng chung cho mọi backend.
+Cách chạy judge bằng Claude và cách nhúng vào dự án được mô tả trong `docs/auto-scoring.md`.
 
 Agent được phép đọc file, chạy `git log`, `git diff`, `git show`, `git blame` và tìm kiếm trong code để hiểu thay đổi trong bối cảnh repo.
 Agent **không được** ghi file, truy cập mạng, hay chạy code của repo (kết quả test lấy từ CI qua Collector).
@@ -166,7 +168,8 @@ Tổng XP của người dùng là tổng các dòng trong `xp_ledger`, nên có
 
 ## 5. Agent `xp-judge`
 
-Định nghĩa agent đặt trong repo của worker chấm điểm, ví dụ `.opencode/agent/xp-judge.md` (kiểm tra lại đường dẫn theo phiên bản opencode đang dùng).
+Prompt của agent nằm ở `packages/cli/judge/xp-judge.md`, trong bản cài Evolo chứ không nằm trong repo được chấm.
+Backend opencode tạo file agent tạm từ prompt này cộng với frontmatter quyền, còn backend Claude truyền nó qua `--append-system-prompt-file`.
 Agent này:
 
 - Chỉ có công cụ đọc file, tìm kiếm và bash giới hạn ở các lệnh `git` chỉ đọc.

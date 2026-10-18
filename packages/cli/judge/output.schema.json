@@ -1,0 +1,42 @@
+{
+  "$comment": "Shape of the xp-judge answer. score.mjs validates it again and checks evidence against the repository.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rubric_version", "contribution_type", "scores", "summary", "flags", "notes"],
+  "properties": {
+    "rubric_version": { "type": "string" },
+    "contribution_type": {
+      "enum": ["feature", "bugfix", "security", "performance", "refactor", "test", "docs", "infra", "chore"]
+    },
+    "scores": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["impact", "centrality", "difficulty", "quality", "scope_fit"],
+      "properties": {
+        "impact": { "$ref": "#/$defs/criterion" },
+        "centrality": { "$ref": "#/$defs/criterion" },
+        "difficulty": { "$ref": "#/$defs/criterion" },
+        "quality": { "$ref": "#/$defs/criterion" },
+        "scope_fit": { "$ref": "#/$defs/criterion" }
+      }
+    },
+    "summary": { "type": "string" },
+    "flags": {
+      "type": "array",
+      "items": { "enum": ["suspected_injection", "mostly_generated_code", "unclear_intent", "incomplete_investigation"] }
+    },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "reason", "evidence"],
+      "properties": {
+        "score": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "reason": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
