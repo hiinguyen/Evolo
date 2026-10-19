@@ -61,7 +61,7 @@ evolo sync (sau mỗi job, khi mở phiên    │
 ```
 
 Bước 2-7 dùng lại code đã có trong `packages/cli/src/`.
-`units.mjs` biến một dải push hoặc một số PR thành change set `{kind, base, tip}`; `facts.mjs` đo diff ròng `base..tip` và `evaluate.mjs` chấm nó.
+`units.mjs` biến một dải push hoặc một số PR thành change set và chọn commit được tính (bước 1); `facts.mjs` đo nó và `evaluate.mjs` chấm nó.
 Phần chưa có là bước 0, 1 (chọn commit) và 8, 9.
 
 ## 3. Cài đặt: `evolo init`
@@ -76,7 +76,7 @@ npx evolo init          # hoặc: evolo init nếu đã cài global
 1. Kiểm tra `claude` đã cài và đăng nhập, bằng một lệnh `claude -p` rẻ nhất có thể. Kiểm tra `gh` đã đăng nhập (để đọc PR). Nếu lỗi thì dừng và hướng dẫn.
 2. Tìm thư mục hook thật: `git rev-parse --git-path hooks`. Lệnh này tôn trọng `core.hooksPath`, nên chạy đúng cả với husky và với worktree.
 3. Cài hook `pre-push` (chi tiết bên dưới).
-4. Đăng ký repo vào `~/.evolo/repos.json`: đường dẫn, remote, nhánh mặc định, email tác giả, có phải repo của mình không (`isOwnRepo`) và số sao (lấy bằng `gh`).
+4. Đăng ký repo vào `~/.evolo/repos.json`: đường dẫn, remote trỏ tới repo GitHub (chọn bằng `remoteFor` trong `src/github.mjs`), nhánh mặc định, email tác giả, có phải repo của mình không (`isOwnRepo`) và số sao (lấy bằng `gh`).
 5. Hỏi có muốn chấm bù các PR đã merge và các commit đã push trong N ngày gần nhất không. Mặc định là không.
 
 Không có file nào được thêm vào repo hay được commit.
@@ -110,19 +110,29 @@ Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới
 1. `enqueue push` chỉ giữ các ref trỏ tới nhánh mặc định của remote, và ghi job `{remote, ref, from: remote sha, to: local sha}`.
 2. Worker chờ xác nhận push thành công: `git fetch <remote> <ref>` rồi kiểm tra `to` đã nằm trên ref đó.
    Thử lại trong khoảng 10 phút; nếu không bao giờ thành công thì job bị bỏ với trạng thái `push_failed`.
-3. Chọn commit: `git rev-list from..to`, bỏ merge commit, bỏ commit của người khác, bỏ commit đã thuộc một PR đã merge (tra bằng `gh api repos/{owner}/{repo}/commits/{sha}/pulls`).
+3. Chọn commit (đã có trong `units.mjs`): lấy các commit không phải merge trong `from..to`, rồi bỏ:
+   - commit có email tác giả không nằm trong danh sách email đã đăng ký;
+   - commit được một PR đã merge chấm rồi.
+     GitHub cho biết commit liên kết với PR đã merge nào, bằng một truy vấn GraphQL cho tối đa 100 commit (`mergedPrsOfCommits` trong `src/github.mjs`).
+     Liên kết này đúng với cả ba kiểu merge (merge commit, squash, rebase), nhưng GitHub cũng liên kết cả commit đã nằm trên nhánh đích trước khi PR được merge.
+     Vì vậy commit là tổ tiên của commit base của PR thì vẫn thuộc lần push; nếu không, nó sẽ không được chấm ở đâu cả.
+     Máy không có commit base của PR thì tin GitHub.
+     Khi có ledger, worker tra ledger trước và chỉ hỏi GitHub cho commit ledger chưa biết.
    Nếu `from` toàn số 0 (nhánh mới trên remote), dải là các commit chưa có trên remote: `git rev-list to --not --remotes=<remote>`.
 4. Không còn commit nào thì xong, không tốn lần gọi judge nào.
-   Còn lại thì chấm cả nhóm như một change set.
+   Không bỏ commit nào thì chấm diff ròng `from..to`.
+   Có bỏ commit thì chấm từng commit còn lại ghép nối (`diffMode: "per-commit"`): số liệu cộng dồn từng commit, diff là các patch nối nhau, và các commit bị bỏ được ghi trong `excluded` kèm lý do.
+   Dòng bị hai commit cùng sửa thì được tính hai lần; đó là cái giá chấp nhận được cho một trường hợp hiếm.
 
 ### PR
 
 1. `evolo sync` hỏi `gh pr list --author @me --state merged` các PR merge sau lần sync trước, cho mọi repo đã đăng ký.
 2. Mỗi PR mới thành một job `{number, base, headSha, mergeCommit}`.
-3. Worker lấy `baseRefOid` và `headRefOid` bằng `gh pr view`, fetch những commit còn thiếu từ `origin`, lấy diff từ `git merge-base <baseRefOid> <headRefOid>` tới `headRefOid`, và đưa thêm tiêu đề, mô tả PR vào facts.
+3. Worker lấy `baseRefOid` và `headRefOid` bằng `gh pr view`, fetch `refs/pull/<number>/head` khi thiếu commit, từ remote trỏ tới đúng repo GitHub của PR (trong clone của một fork, đó không phải `origin`), lấy diff từ `git merge-base <baseRefOid> <headRefOid>` tới `headRefOid`, và đưa thêm tiêu đề, mô tả PR vào facts.
    Cách tính này khớp đúng số file và số dòng GitHub hiển thị trên 3 PR thật của `hiinguyen/lightrag`, gồm PR merge commit, PR fast-forward và PR có base là nhánh feature.
    Mô tả PR là dữ liệu do người viết, nên judge coi nó là dữ liệu chứ không phải chỉ dẫn, như với commit message.
 4. PR bị đóng mà không merge thì không chấm.
+5. PR merge vào nhánh khác nhánh mặc định thì không chấm riêng: công việc của nó nằm trong PR đưa nhánh đó vào nhánh mặc định, nên chấm cả hai sẽ tính trùng.
 
 ### Trạng thái trong ledger
 
@@ -271,7 +281,8 @@ packages/cli/                 # gói npm "evolo"
   src/hooks.mjs               # [chưa] cài và gỡ hook pre-push, tôn trọng core.hooksPath, chain hook cũ
   src/queue.mjs               # [chưa] hàng đợi file, lock có PID, ghi atomic
   src/worker.mjs              # [chưa] vòng lặp gọi evaluate.mjs cho từng mục trong hàng đợi
-  src/units.mjs               # [có] dải push, commit đơn, PR qua gh thành change set | [chưa] lọc commit của push, phát hiện PR merge
+  src/units.mjs               # [có] dải push, commit đơn, PR thành change set; chọn commit của push | [chưa] phát hiện PR merge mới
+  src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, chọn remote đúng
   src/ledger.mjs              # [chưa] trạng thái, superseded và reverted khi sync
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator

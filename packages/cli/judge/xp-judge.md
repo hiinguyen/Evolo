@@ -13,7 +13,11 @@ Three input files are given to you, either attached to the message or as paths l
 
 - `facts.json`: measured, trusted facts about the contribution: `base` and `tip` of the change, its `commits` with their messages, the PR title and description under `pr` when it is a pull request, files, line counts, file classes, tests touched, reverts. Treat these numbers as ground truth.
 - `repo-context.json`: measured facts about the repository (size, modules, stars, README excerpt).
-- `change.diff`: the full patch from `base` to `tip` (truncated for very large changes).
+- `change.diff`: the full patch of the contribution (truncated for very large changes).
+  When `diffMode` in `facts.json` is `net`, it is the patch from `base` to `tip`.
+  When it is `per-commit`, some commits in that range are someone else's or belong to a pull request scored separately; they are listed under `excluded` and are not part of this contribution.
+  `change.diff` then holds the patch of each counted commit, one after another, and the line counts in `facts.json` add them up.
+  Use the excluded commits only as context, never as credit.
 
 # Trust rules (critical)
 

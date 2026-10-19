@@ -1,10 +1,10 @@
 // Turns what the user names (a commit, a pushed range, a PR number) into a unit: the change set Evolo scores.
-// A unit is { kind: "push" | "pr", id, base, tip, pr? }; its contribution is the net diff base..tip.
+// A unit is { kind: "push" | "pr", id, base, tip, excluded, selected?, pr? }.
+// Its contribution is the net diff base..tip, unless some commits in the range are not the user's work:
+// then `selected` lists the commits that count, and they are measured one by one (facts.mjs).
 // `base` is null when the range starts at the root commit.
-import { execFileSync } from "node:child_process";
 import { git } from "./facts.mjs";
-
-const PR_FIELDS = "number,title,body,url,state,baseRefOid,headRefOid,mergeCommit";
+import { githubRepo, remoteFor, viewPullRequest } from "./github.mjs";
 
 const short = (sha) => (sha ? sha.slice(0, 7) : "root");
 
@@ -25,16 +25,53 @@ function hasCommit(repoDir, sha) {
   }
 }
 
-// Merge commits are not work of their own, so a change set without any other commit has nothing to score.
-function requireCommits(repoDir, base, tip) {
-  const range = base ? [`${base}..${tip}`] : [tip];
-  const count = Number(git(repoDir, ["rev-list", "--count", "--no-merges", ...range]).trim());
-  if (count === 0) throw new Error(`no commits to score in ${short(base)}..${short(tip)}`);
+// The merged PR that scores `sha`, or null.
+// GitHub links a PR to the commits it brought in, whichever way it was merged (merge commit, squash or rebase),
+// but also to commits that were already on its base branch when it was merged: those are not in its diff,
+// so they stay with the push or they would be scored nowhere. When the PR's base commit is not in this clone,
+// GitHub's link is trusted.
+function scoringPr(repoDir, sha, prs) {
+  const isBeforePr = ({ base }) => hasCommit(repoDir, base) && isAncestor(repoDir, sha, base);
+  return prs.find((pr) => !isBeforePr(pr))?.number ?? null;
 }
 
-function pushUnit(repoDir, base, tip) {
-  requireCommits(repoDir, base, tip);
-  return { kind: "push", id: `push-${short(base)}-${short(tip)}`, base, tip };
+// Lists the non-merge commits of base..tip, each with the reason it does not count, or null when it does.
+// Merge commits are never work of their own.
+// authors: lower-case emails that are the user's; omitted means every author counts.
+// mergedPrsOf(shas): Map from each sha to the merged PRs GitHub links to it, as [{ number, base }]
+// (github.mjs's mergedPrsOfCommits); a commit one of them scores is left to that PR.
+function classifyCommits(repoDir, base, tip, { authors, mergedPrsOf } = {}) {
+  const range = base ? [`${base}..${tip}`] : [tip];
+  const commits = git(repoDir, ["log", "--no-merges", "--reverse", "--format=%H%x1f%ae%x1f%s", ...range])
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, email, subject] = line.split("\x1f");
+      return { sha, email, subject, isTheirs: Boolean(authors) && !authors.has(email.toLowerCase()) };
+    });
+  // One lookup for the whole push, and only for the user's own commits.
+  const own = commits.filter((commit) => !commit.isTheirs).map((commit) => commit.sha);
+  const prsBySha = mergedPrsOf && own.length > 0 ? mergedPrsOf(own) : new Map();
+  return commits.map(({ sha, email, subject, isTheirs }) => {
+    const pr = isTheirs ? null : scoringPr(repoDir, sha, prsBySha.get(sha) ?? []);
+    const reason = isTheirs ? `authored by ${email}` : pr ? `part of merged PR #${pr}` : null;
+    return { sha, subject, reason };
+  });
+}
+
+function changeSet(repoDir, base, tip, filters) {
+  const commits = classifyCommits(repoDir, base, tip, filters);
+  const excluded = commits.filter((commit) => commit.reason);
+  if (excluded.length === commits.length) {
+    const why = excluded.map((commit) => `${short(commit.sha)} ${commit.reason}`).join(", ");
+    throw new Error(`no commits to score in ${short(base)}..${short(tip)}${why ? `: ${why}` : ""}`);
+  }
+  const selected = excluded.length > 0 ? { selected: commits.filter((commit) => !commit.reason).map((commit) => commit.sha) } : {};
+  return { base, tip, excluded, ...selected };
+}
+
+function pushUnit(repoDir, base, tip, filters) {
+  return { kind: "push", id: `push-${short(base)}-${short(tip)}`, ...changeSet(repoDir, base, tip, filters) };
 }
 
 function isAncestor(repoDir, ancestor, descendant) {
@@ -48,14 +85,15 @@ function isAncestor(repoDir, ancestor, descendant) {
 
 // "<from>..<to>": what a push moved the default branch from and to.
 // Ref names cannot contain "..", so the first one separates the two ends.
-export function rangeUnit(repoDir, range) {
+// filters: { authors, mergedPrsOf } as in classifyCommits.
+export function rangeUnit(repoDir, range, filters = {}) {
   const at = range.indexOf("..");
   const [from, to] = [range.slice(0, at), range.slice(at + 2)];
   if (at <= 0 || to === "" || to.startsWith(".")) throw new Error(`expected <from>..<to>, got ${JSON.stringify(range)}`);
   const [base, tip] = [resolveCommit(repoDir, from), resolveCommit(repoDir, to)];
   // After a force push the old tip is not an ancestor, and base..tip would also undo the discarded history.
   if (!isAncestor(repoDir, base, tip)) throw new Error(`${from} is not an ancestor of ${to}, so ${range} is not one push`);
-  return pushUnit(repoDir, base, tip);
+  return pushUnit(repoDir, base, tip, filters);
 }
 
 // One commit, scored as a push that contained only it.
@@ -65,40 +103,38 @@ export function commitUnit(repoDir, rev) {
   return pushUnit(repoDir, parent, tip);
 }
 
-// `pr` is the output of `gh pr view --json ${PR_FIELDS}`.
+// `pr` is the output of github.mjs's viewPullRequest.
 // The diff runs from the merge base to the PR head, which is the change GitHub shows on the PR,
 // whether it was merged with a merge commit, squashed, rebased or fast-forwarded.
-export function pullRequestUnit(repoDir, pr) {
+// Only PRs into the default branch are scored: a PR stacked on a feature branch is also part of the PR that later
+// brings that branch in, so scoring both would count its work twice.
+export function pullRequestUnit(repoDir, pr, { defaultBranch } = {}) {
   if (pr.state !== "MERGED") throw new Error(`PR #${pr.number} is ${pr.state}; only merged PRs are scored`);
+  if (defaultBranch && pr.baseRefName !== defaultBranch) {
+    throw new Error(`PR #${pr.number} was merged into ${pr.baseRefName}, not ${defaultBranch}; it is scored with the PR that merges ${pr.baseRefName}`);
+  }
   const tip = resolveCommit(repoDir, pr.headRefOid);
   const base = git(repoDir, ["merge-base", resolveCommit(repoDir, pr.baseRefOid), tip]).trim();
-  requireCommits(repoDir, base, tip);
   return {
     kind: "pr",
     id: `pr-${pr.number}`,
-    base,
-    tip,
+    ...changeSet(repoDir, base, tip),
     pr: { number: pr.number, title: pr.title, body: pr.body, url: pr.url, mergeCommit: pr.mergeCommit?.oid ?? null },
   };
 }
 
-// Reads the PR from GitHub with `gh`, and fetches its head and base from origin when this clone lacks them
-// (for example when the PR branch was deleted after the merge).
+// Reads the PR from GitHub with `gh`. When this clone lacks the PR's commits (for example because the PR branch
+// was deleted after the merge), fetches them from the remote that points at the PR's repository,
+// which in a clone of a fork is not `origin`.
 export function fetchPullRequest(repoDir, number) {
   if (!/^[1-9][0-9]*$/.test(String(number))) throw new Error(`PR number must be a positive integer, got ${JSON.stringify(number)}`);
-  let pr;
-  try {
-    const output = execFileSync("gh", ["pr", "view", String(number), "--json", PR_FIELDS], {
-      cwd: repoDir,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    pr = JSON.parse(output);
-  } catch (error) {
-    throw new Error(`gh pr view ${number} failed: ${String(error.stderr || error.message).trim()}`);
+  const pr = viewPullRequest(repoDir, number);
+  const repo = githubRepo(repoDir);
+  const missing = [pr.headRefOid, pr.baseRefOid].filter((oid) => !hasCommit(repoDir, oid));
+  if (missing.length > 0) {
+    const remote = remoteFor(git(repoDir, ["remote", "-v"]), repo.url);
+    // refs/pull/<n>/head stays on GitHub after the branch is deleted and carries every commit of the PR.
+    git(repoDir, ["fetch", "--quiet", remote, `refs/pull/${number}/head`, ...(hasCommit(repoDir, pr.baseRefOid) ? [] : [pr.baseRefOid])]);
   }
-  for (const sha of [pr.headRefOid, pr.baseRefOid].filter((oid) => !hasCommit(repoDir, oid))) {
-    git(repoDir, ["fetch", "--quiet", "origin", sha]);
-  }
-  return pullRequestUnit(repoDir, pr);
+  return pullRequestUnit(repoDir, pr, { defaultBranch: repo.defaultBranchRef.name });
 }

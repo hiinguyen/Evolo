@@ -93,13 +93,38 @@ function findReverts(repoDir) {
   return reverts;
 }
 
-// Measures a unit from units.mjs: the net change from `base` to `tip`, which is exactly the diff the judge reads.
-// A file added and removed again inside the unit is therefore not part of the contribution.
+// Sums each commit's own changes per file, for a unit whose commits are not a contiguous range of the user's work.
+// A line changed by two of the commits is counted twice: the price of leaving the other commits out.
+function perCommitFiles(repoDir, shas) {
+  const byPath = new Map();
+  for (const sha of shas) {
+    for (const file of parseNumstat(git(repoDir, ["show", "--numstat", "-z", "--format=", sha]))) {
+      const previous = byPath.get(file.path);
+      const merged = previous && {
+        ...previous,
+        additions: previous.additions + file.additions,
+        deletions: previous.deletions + file.deletions,
+        binary: previous.binary || file.binary,
+      };
+      byPath.set(file.path, merged ?? file);
+    }
+  }
+  return [...byPath.values()];
+}
+
+// Measures a unit from units.mjs, the same way changeDiff shows it to the judge:
+// - "net": the change from `base` to `tip`, so a file added and removed again inside the unit does not count;
+// - "per-commit": when `unit.selected` names the only commits that count, each of them on its own.
 export function collectChangeFacts(repoDir, unit) {
-  const { kind, id, base, tip, pr = null } = unit;
+  const { kind, id, base, tip, excluded = [], selected, pr = null } = unit;
+  const diffMode = selected ? "per-commit" : "net";
   const reverts = findReverts(repoDir);
-  const commits = listCommits(repoDir, base, tip).map((commit) => ({ ...commit, revertedBy: reverts.get(commit.sha) ?? [] }));
-  const files = parseNumstat(git(repoDir, ["diff", "--numstat", "-z", diffBase(repoDir, base), tip]));
+  const commits = listCommits(repoDir, base, tip)
+    .filter((commit) => !selected || selected.includes(commit.sha))
+    .map((commit) => ({ ...commit, revertedBy: reverts.get(commit.sha) ?? [] }));
+  const files = selected
+    ? perCommitFiles(repoDir, selected)
+    : parseNumstat(git(repoDir, ["diff", "--numstat", "-z", diffBase(repoDir, base), tip]));
   const countedLines = files
     .filter((file) => COUNTED_CLASSES.has(file.class))
     .reduce((total, file) => total + file.additions + file.deletions, 0);
@@ -114,7 +139,9 @@ export function collectChangeFacts(repoDir, unit) {
     base,
     tip,
     pr: prFacts,
+    diffMode,
     commits,
+    excluded,
     files,
     totals: {
       files: files.length,
@@ -127,6 +154,12 @@ export function collectChangeFacts(repoDir, unit) {
     repoHasTests,
     reverted,
   };
+}
+
+// The patch the judge reads, matching what collectChangeFacts measured.
+export function changeDiff(repoDir, facts) {
+  if (facts.diffMode === "net") return git(repoDir, ["diff", "--patch", diffBase(repoDir, facts.base), facts.tip]);
+  return facts.commits.map((commit) => git(repoDir, ["show", "--patch", "--format=commit %H%n%n    %s%n", commit.sha])).join("\n");
 }
 
 function moduleOf(path) {
