@@ -30,7 +30,8 @@ Code trong `packages/cli/`:
 | File | Vai trò |
 |---|---|
 | `bin/evolo.mjs` | CLI, hiện chỉ có lệnh `evaluate`, nhận `--range`, `--pr` và SHA đơn |
-| `src/units.mjs` | Biến dải push, commit đơn hoặc số PR (qua `gh`) thành unit `{kind, id, base, tip, pr?}` |
+| `src/units.mjs` | Biến dải push, commit đơn hoặc số PR thành unit `{kind, id, base, tip, excluded, selected?, pr?}`, và chọn commit được tính |
+| `src/github.mjs` | Mọi lời gọi `gh`: đọc PR, PR đã merge chứa một commit, chọn remote trỏ đúng repo GitHub |
 | `src/evaluate.mjs` | Pipeline cho một unit: facts → triage → worktree tạm tại `tip` → judge → validate → XP; thử lại tối đa 3 lần |
 | `src/facts.mjs` | Số liệu diff ròng `base..tip` (file, dòng, loại file, test), danh sách commit, revert, thông tin PR, và bối cảnh repo |
 | `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.1 |
@@ -43,7 +44,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 33 test, đều pass
+cd packages/cli && npm test                      # 40 test, đều pass
 node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own \
   [--range <from>..<to>]... [--pr <number>]... [<sha>...]
 ```
@@ -66,9 +67,15 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 
 - Một commit đơn là push `sha^..sha`; dải push là `from..to`; PR là `merge-base(baseRefOid, headRefOid)..headRefOid`.
 - Số liệu và diff cho judge là **diff ròng** `base..tip`, nên file thêm rồi xoá trong cùng đơn vị không được tính.
+- `--range` bỏ commit đã được một PR đã merge chấm, và bỏ commit của tác giả khác khi có `--author` (lặp được, vì bạn commit bằng nhiều email).
+  Commit bị bỏ vì PR khi GitHub liên kết nó với một PR đã merge (đúng cho merge commit, squash và rebase), trừ khi nó đã nằm trên nhánh đích từ trước PR đó.
+  Cả lần push chỉ tốn một truy vấn GraphQL cho mỗi 100 commit.
+- Có commit bị bỏ thì đơn vị chuyển sang `diffMode: "per-commit"`: chấm các commit còn lại ghép nối, ghi các commit bị bỏ trong `excluded` (phương án C của vấn đề 1).
+- Tải PR thiếu commit từ remote trỏ đúng repo GitHub, không mặc định `origin` (phương án C của vấn đề 2); `evolo init` sẽ lưu remote này vào `repos.json`.
 - `commits` liệt kê mọi commit không phải merge trong dải, cũ trước, kèm `revertedBy`.
 - `reverted` chỉ đúng khi mọi commit bị revert, hoặc merge commit của PR bị revert; revert một phần chỉ được ghi lại.
-- Chỉ PR có trạng thái `MERGED` được chấm.
+- Chỉ PR có trạng thái `MERGED` và merge vào nhánh mặc định được chấm.
+  PR merge vào nhánh feature (PR lồng nhau, như lightrag #4) được tính trong PR đưa nhánh đó vào nhánh mặc định (#5), để không chấm trùng.
 - Dải push phải có `from` là tổ tiên của `to`; sau force-push thì dải bị từ chối, vì diff ròng sẽ gồm cả việc gỡ lịch sử bị bỏ.
 - Đơn vị không có commit nào ngoài merge commit bị từ chối trước khi gọi judge.
 - File đổi tên được ghi theo đường dẫn mới (`git diff --numstat -z`), để phân loại đúng và dùng được làm bằng chứng.
@@ -88,6 +95,14 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Không còn worktree hay thư mục tạm nào sau khi chạy.
 - Friday không có PR nào, nên PR được thử trên `hiinguyen/lightrag`.
 
+### Kết quả lọc commit và chọn remote (2026-10-19)
+
+- lightrag `21ba23b..db8fb94` (đoạn có PR #2, PR #3 và commit đẩy thẳng): 2 commit được tính, 5 bị bỏ vì thuộc PR #2 và #3; chế độ `per-commit`; feature I3 C3 D2 Q2 S3, 443 dòng, 130 XP, $0.12, 13 giây.
+  Lời tóm tắt của judge chỉ nói về 2 commit được tính.
+- Tra GitHub bằng một truy vấn GraphQL: 1,8 giây cho đoạn trên; 2,8 giây cho toàn bộ lịch sử lightrag (`1bd88fc..main`, 27 commit được tính, 33 commit được giao cho PR #1-#5).
+- Friday `89fd4e3..8c68e65` vẫn ở chế độ `net` và vẫn 77 XP.
+- Clone giả làm fork (`origin` trỏ repo khác, repo thật là `upstream`, đã xoá commit của PR #1): `--pr 1` tự tìm `upstream`, tải PR về, số liệu khớp GitHub.
+
 ### Git
 
 - Mọi thứ nằm trên nhánh `feat/claude-judge`, đã push lên `origin` (`github.com/hiinguyen/Evolo`):
@@ -100,8 +115,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 
 1. **Hook, hàng đợi, worker, sync** (`docs/auto-scoring.md` mục 2-4), với test E2E trên repo tạm có bare repo làm remote.
-   Điểm cần thiết kế khi chọn commit cho một push (`units.mjs`): diff ròng `from..to` sẽ gồm cả commit của người khác, merge commit và commit đã thuộc một PR đã merge.
-   Khi lọc bỏ chúng, change set không còn là một dải liền, nên cần quyết định giữa: chỉ chấm khi phần còn lại liền nhau, chia thành nhiều dải liền, hoặc ghép diff từng commit.
+   Việc chọn commit cho một push đã có trong `units.mjs`; worker chỉ cần truyền email đã đăng ký và tra ledger trước khi hỏi GitHub.
 2. **Hiển thị:** thông báo, `status`, `why`, skill `/evolo`, status line.
 3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 

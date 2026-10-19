@@ -2,21 +2,24 @@
 // Evolo CLI. Only `evaluate` exists so far; init, enqueue and worker follow docs/auto-scoring.md.
 //
 //   evolo evaluate --repo <clone> --out <results dir> [--judge claude|opencode] [--model M]
-//                  [--budget USD] [--url U] [--stars N] [--own]
+//                  [--budget USD] [--url U] [--stars N] [--own] [--author EMAIL]...
 //                  [--range <from>..<to>]... [--pr <number>]... [<sha>...]
 //
 // Each --range is one push, each --pr one merged PR, and each bare <sha> a push of that commit alone.
+// A range leaves out commits that belong to a merged PR (they are scored with the PR) and, when --author is given,
+// commits by anyone else.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { evaluateUnit, scoreValues } from "../src/evaluate.mjs";
 import { git } from "../src/facts.mjs";
+import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
 import { commitUnit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
 
 const USAGE =
   "usage: evolo evaluate --repo <dir> --out <dir> [--judge claude|opencode] [--model M] [--budget USD] " +
-  "[--url U] [--stars N] [--own] [--range <from>..<to>]... [--pr <number>]... [<sha>...]";
+  "[--url U] [--stars N] [--own] [--author EMAIL]... [--range <from>..<to>]... [--pr <number>]... [<sha>...]";
 
 function describe(facts) {
   if (facts.kind === "pr") return `#${facts.pr.number} ${facts.pr.title}`;
@@ -60,12 +63,17 @@ async function evaluate(argv) {
       url: { type: "string", default: "" },
       stars: { type: "string", default: "0" },
       own: { type: "boolean", default: false },
+      author: { type: "string", multiple: true, default: [] },
       range: { type: "string", multiple: true, default: [] },
       pr: { type: "string", multiple: true, default: [] },
     },
   });
+  const filters = {
+    authors: values.author.length > 0 ? new Set(values.author.map((email) => email.toLowerCase())) : undefined,
+    mergedPrsOf: (shas) => mergedPrsOfCommits(values.repo, shas),
+  };
   const targets = [
-    ...values.range.map((range) => () => rangeUnit(values.repo, range)),
+    ...values.range.map((range) => () => rangeUnit(values.repo, range, filters)),
     ...values.pr.map((number) => () => fetchPullRequest(values.repo, number)),
     ...positionals.map((sha) => () => commitUnit(values.repo, sha)),
   ];

@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { collectChangeFacts, collectRepoContext, diffBase, git } from "./facts.mjs";
+import { changeDiff, collectChangeFacts, collectRepoContext, diffBase, git } from "./facts.mjs";
 import { FatalJudgeError } from "./judges/common.mjs";
 import { computeXp, triage, validateEvaluation } from "./score.mjs";
 
@@ -11,10 +11,9 @@ const MAX_ATTEMPTS = 3;
 const MAX_DIFF_BYTES = 80 * 1024;
 
 function writeDiff(repoDir, facts, path) {
-  const range = [diffBase(repoDir, facts.base), facts.tip];
-  const diff = git(repoDir, ["diff", "--patch", ...range]);
-  const truncated = diff.length > MAX_DIFF_BYTES;
-  const note = truncated ? `\n\n[diff truncated at ${MAX_DIFF_BYTES} bytes; use git diff ${range.join(" ")} for the rest]\n` : "";
+  const diff = changeDiff(repoDir, facts);
+  const rest = facts.diffMode === "net" ? `git diff ${diffBase(repoDir, facts.base)} ${facts.tip}` : "git show on the commits in facts.json";
+  const note = diff.length > MAX_DIFF_BYTES ? `\n\n[diff truncated at ${MAX_DIFF_BYTES} bytes; use ${rest} for the rest]\n` : "";
   writeFileSync(path, diff.slice(0, MAX_DIFF_BYTES) + note);
 }
 
@@ -36,7 +35,12 @@ function taskFor(facts) {
       ? `merged pull request #${facts.pr.number}: the change ${range} (${commits}). ` +
         "Its title and description are in facts.json under `pr`."
       : `a push to the default branch: the change ${range} (${commits}).`;
-  return `Evaluate ${unit} Judge the change set as one contribution. Answer with the JSON object defined in your instructions.`;
+  const left = facts.excluded.length;
+  const leftOut = left
+    ? ` ${left} other commit${left === 1 ? " is" : "s are"} in that range but not part of this contribution (see \`excluded\` in facts.json); ` +
+      "change.diff holds only the counted commits, one after another."
+    : "";
+  return `Evaluate ${unit}${leftOut} Judge the change set as one contribution. Answer with the JSON object defined in your instructions.`;
 }
 
 async function judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress }) {
