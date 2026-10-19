@@ -16,7 +16,10 @@ function resolveCommit(repoDir, rev) {
   }
 }
 
-function hasCommit(repoDir, sha) {
+// Thrown when every commit of a change set is someone else's or a merge commit: nothing to judge, and no retry helps.
+export class NothingToScoreError extends Error {}
+
+export function hasCommit(repoDir, sha) {
   try {
     resolveCommit(repoDir, sha);
     return true;
@@ -64,7 +67,7 @@ function changeSet(repoDir, base, tip, filters) {
   const excluded = commits.filter((commit) => commit.reason);
   if (excluded.length === commits.length) {
     const why = excluded.map((commit) => `${short(commit.sha)} ${commit.reason}`).join(", ");
-    throw new Error(`no commits to score in ${short(base)}..${short(tip)}${why ? `: ${why}` : ""}`);
+    throw new NothingToScoreError(`no commits to score in ${short(base)}..${short(tip)}${why ? `: ${why}` : ""}`);
   }
   const selected = excluded.length > 0 ? { selected: commits.filter((commit) => !commit.reason).map((commit) => commit.sha) } : {};
   return { base, tip, excluded, ...selected };
@@ -74,7 +77,7 @@ function pushUnit(repoDir, base, tip, filters) {
   return { kind: "push", id: `push-${short(base)}-${short(tip)}`, ...changeSet(repoDir, base, tip, filters) };
 }
 
-function isAncestor(repoDir, ancestor, descendant) {
+export function isAncestor(repoDir, ancestor, descendant) {
   try {
     git(repoDir, ["merge-base", "--is-ancestor", ancestor, descendant]);
     return true;
@@ -93,6 +96,24 @@ export function rangeUnit(repoDir, range, filters = {}) {
   const [base, tip] = [resolveCommit(repoDir, from), resolveCommit(repoDir, to)];
   // After a force push the old tip is not an ancestor, and base..tip would also undo the discarded history.
   if (!isAncestor(repoDir, base, tip)) throw new Error(`${from} is not an ancestor of ${to}, so ${range} is not one push`);
+  return pushUnit(repoDir, base, tip, filters);
+}
+
+// What a push to the default branch added: `from` is the commit the remote branch was at (null for a new branch)
+// and `to` the commit it was pushed to. After a force push only the commits since the two diverged count;
+// the units that scored the discarded commits become superseded (ledger.mjs).
+// filters: { authors, mergedPrsOf } as in classifyCommits.
+export function pushedUnit(repoDir, from, to, filters = {}) {
+  const tip = resolveCommit(repoDir, to);
+  if (!from) return pushUnit(repoDir, null, tip, filters);
+  const old = resolveCommit(repoDir, from);
+  if (isAncestor(repoDir, old, tip)) return pushUnit(repoDir, old, tip, filters);
+  let base = null;
+  try {
+    base = git(repoDir, ["merge-base", old, tip]).trim();
+  } catch {
+    // Unrelated histories: the push replaced the whole branch.
+  }
   return pushUnit(repoDir, base, tip, filters);
 }
 
@@ -124,17 +145,17 @@ export function pullRequestUnit(repoDir, pr, { defaultBranch } = {}) {
 }
 
 // Reads the PR from GitHub with `gh`. When this clone lacks the PR's commits (for example because the PR branch
-// was deleted after the merge), fetches them from the remote that points at the PR's repository,
+// was deleted after the merge), fetches them from `remote`, by default the remote that points at the PR's repository,
 // which in a clone of a fork is not `origin`.
-export function fetchPullRequest(repoDir, number) {
+export function fetchPullRequest(repoDir, number, { remote } = {}) {
   if (!/^[1-9][0-9]*$/.test(String(number))) throw new Error(`PR number must be a positive integer, got ${JSON.stringify(number)}`);
   const pr = viewPullRequest(repoDir, number);
   const repo = githubRepo(repoDir);
   const missing = [pr.headRefOid, pr.baseRefOid].filter((oid) => !hasCommit(repoDir, oid));
   if (missing.length > 0) {
-    const remote = remoteFor(git(repoDir, ["remote", "-v"]), repo.url);
+    const from = remote ?? remoteFor(git(repoDir, ["remote", "-v"]), repo.url);
     // refs/pull/<n>/head stays on GitHub after the branch is deleted and carries every commit of the PR.
-    git(repoDir, ["fetch", "--quiet", remote, `refs/pull/${number}/head`, ...(hasCommit(repoDir, pr.baseRefOid) ? [] : [pr.baseRefOid])]);
+    git(repoDir, ["fetch", "--quiet", from, `refs/pull/${number}/head`, ...(hasCommit(repoDir, pr.baseRefOid) ? [] : [pr.baseRefOid])]);
   }
   return pullRequestUnit(repoDir, pr, { defaultBranch: repo.defaultBranchRef.name });
 }

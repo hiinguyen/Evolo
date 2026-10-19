@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BASE_XP, CRITERIA } from "../score.mjs";
 import { claudeArgs, readClaudeRun } from "./claude.mjs";
-import { FatalJudgeError, OUTPUT_SCHEMA_PATH } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, OUTPUT_SCHEMA_PATH } from "./common.mjs";
 
 const answer = { contribution_type: "bugfix" };
 const run = (events, overrides = {}) => ({ events, timedOut: false, code: 0, stderr: "", ...overrides });
@@ -36,6 +36,17 @@ test("readClaudeRun reports runs without a usable answer as retryable errors", (
   for (const failed of cases) {
     assert.throws(() => readClaudeRun(failed), (error) => !(error instanceof FatalJudgeError));
   }
+});
+
+test("readClaudeRun tells a judge that never reached the API from one that answered badly", () => {
+  const unavailable = [
+    run([], { code: 1, stderr: "not logged in" }),
+    run([result({ is_error: true, result: "Invalid API key · Please run /login" })]),
+    run([result({ is_error: true, api_error_status: 529 })]),
+  ];
+  for (const failed of unavailable) assert.throws(() => readClaudeRun(failed), JudgeUnavailableError);
+  const answeredBadly = [run([result({ subtype: "error_during_execution", is_error: true })]), run([result({})]), run([], { timedOut: true })];
+  for (const failed of answeredBadly) assert.throws(() => readClaudeRun(failed), (error) => !(error instanceof JudgeUnavailableError));
 });
 
 test("claudeArgs sandboxes the judge and allows only read-only git commands", () => {

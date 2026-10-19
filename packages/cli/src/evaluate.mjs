@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { changeDiff, collectChangeFacts, collectRepoContext, diffBase, git } from "./facts.mjs";
-import { FatalJudgeError } from "./judges/common.mjs";
+import { FatalJudgeError, JudgeUnavailableError } from "./judges/common.mjs";
 import { computeXp, triage, validateEvaluation } from "./score.mjs";
 
 const MAX_ATTEMPTS = 3;
@@ -48,6 +48,8 @@ async function judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress 
   const knownPaths = knownPathsFor(checkoutDir, facts);
   const failures = [];
   let costUsd = 0;
+  // Stays true while every attempt failed before the judge could answer: then nothing is wrong with this unit.
+  let unavailable = true;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
       const run = await judge.judge({ checkoutDir, inputs, task, onProgress });
@@ -55,12 +57,14 @@ async function judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress 
       const validation = validateEvaluation(run.output, facts, knownPaths);
       if (validation.ok) return { ...validation, ...run, attempts: attempt, failures, costUsd };
       failures.push(`attempt ${attempt}: invalid output: ${validation.problems.join("; ")}`);
+      unavailable = false;
     } catch (error) {
       failures.push(`attempt ${attempt}: ${error.message}`);
+      unavailable &&= error instanceof JudgeUnavailableError;
       if (error instanceof FatalJudgeError) break;
     }
   }
-  return { ok: false, failures, costUsd };
+  return { ok: false, failures, costUsd, unavailable };
 }
 
 // Creates a worktree at `sha` plus the judge's input files, and removes both however the run ends.
@@ -113,7 +117,8 @@ export async function evaluateUnit({ options, judge, unit, onProgress }) {
 
   const judgeInfo = { backend: judge.backend, model: judge.model };
   const common = { facts, method: "ai", judge: judgeInfo, failures: judged.failures, costUsd: judged.costUsd };
-  if (!judged.ok) return { ...common, status: "failed", ...elapsed() };
+  // `judgeUnavailable`: the judge could not be reached at all, so the caller may try again later.
+  if (!judged.ok) return { ...common, status: "failed", judgeUnavailable: judged.unavailable, ...elapsed() };
 
   const { xp, breakdown } = computeXp({ ...xpInput, type: judged.evaluation.contribution_type, scores: scoreValues(judged.evaluation) });
   return {

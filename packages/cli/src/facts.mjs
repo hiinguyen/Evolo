@@ -6,8 +6,9 @@ import { join } from "node:path";
 
 const README_EXCERPT_LINES = 60;
 
-export function git(repoDir, args) {
-  return execFileSync("git", args, { cwd: repoDir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+// `timeout` (ms) bounds calls that talk to a remote, which can hang on a dead network.
+export function git(repoDir, args, { timeout } = {}) {
+  return execFileSync("git", args, { cwd: repoDir, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout });
 }
 
 const FILE_CLASS_RULES = [
@@ -81,7 +82,7 @@ function listCommits(repoDir, base, tip) {
 }
 
 // Maps each reverted commit to the commits that revert it, from one scan of every ref.
-function findReverts(repoDir) {
+export function findReverts(repoDir) {
   const reverts = new Map();
   const log = git(repoDir, ["log", "--all", "--grep=This reverts commit", `--format=%H${FIELD}%B${RECORD}`]);
   for (const record of log.split(RECORD).filter((entry) => entry.trim())) {
@@ -91,6 +92,13 @@ function findReverts(repoDir) {
     }
   }
   return reverts;
+}
+
+// A unit is reverted when its PR's merge commit is, or every one of its commits is.
+// Partial reverts are recorded per commit but do not change XP yet (docs/auto-scoring.md section 4).
+export function isReverted(commitShas, mergeCommit, reverts) {
+  if (mergeCommit && reverts.has(mergeCommit)) return true;
+  return commitShas.length > 0 && commitShas.every((sha) => reverts.has(sha));
 }
 
 // Sums each commit's own changes per file, for a unit whose commits are not a contiguous range of the user's work.
@@ -130,8 +138,7 @@ export function collectChangeFacts(repoDir, unit) {
     .reduce((total, file) => total + file.additions + file.deletions, 0);
   const repoHasTests = git(repoDir, ["ls-files", "-z"]).split("\0").some((path) => classifyFile(path) === "test");
   const prFacts = pr && { ...pr, revertedBy: (pr.mergeCommit && reverts.get(pr.mergeCommit)) ?? [] };
-  // Partial reverts are recorded per commit but do not change XP yet (docs/auto-scoring.md section 4).
-  const reverted = prFacts?.revertedBy.length > 0 || (commits.length > 0 && commits.every((commit) => commit.revertedBy.length > 0));
+  const reverted = isReverted(commits.map((commit) => commit.sha), prFacts?.mergeCommit, reverts);
 
   return {
     kind,

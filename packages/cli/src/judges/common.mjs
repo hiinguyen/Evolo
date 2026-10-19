@@ -11,6 +11,10 @@ export const ATTEMPT_TIMEOUT_MS = 20 * 60 * 1000;
 // Errors a retry cannot fix; retrying would only spend more.
 export class FatalJudgeError extends Error {}
 
+// The judge never got to judge: the CLI could not start, reach the API or sign in, or the API refused the call
+// (overloaded, rate or usage limit). Waiting can fix this, so the worker keeps the unit queued and tries later.
+export class JudgeUnavailableError extends Error {}
+
 export const judgePrompt = () => readFileSync(PROMPT_PATH, "utf8");
 
 // The only shell commands a judge may run: read-only inspection of the checkout.

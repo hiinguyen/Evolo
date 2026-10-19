@@ -2,7 +2,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { judgePrompt, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
+import { JudgeUnavailableError, judgePrompt, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
 
 // Deny everything (including MCP tools from the user's global config), then allow read-only inspection.
 function agentFrontmatter() {
@@ -52,7 +52,7 @@ function readOpencodeRun({ events, timedOut, code, stderr }) {
   if (error) throw new Error(`opencode error: ${error.error?.message ?? JSON.stringify(error.error)}`);
   if (timedOut) throw new Error("opencode timed out");
   const texts = events.filter((event) => event.type === "text").map((event) => event.part.text);
-  if (texts.length === 0) throw new Error(`opencode produced no text (exit ${code}): ${stderr.slice(-500)}`);
+  if (texts.length === 0) throw new JudgeUnavailableError(`opencode produced no text (exit ${code}): ${stderr.slice(-500)}`);
   return {
     output: extractJsonObject(texts.at(-1)),
     toolCalls: events.filter((event) => event.type === "tool_use").length,

@@ -1,6 +1,6 @@
 # Evolo: bàn giao để tiếp tục ở session mới
 
-Cập nhật: 2026-10-18.
+Cập nhật: 2026-10-19.
 Mở session mới và bảo Claude: "đọc `docs/handoff.md` rồi làm tiếp bước tiếp theo".
 
 ## 1. Evolo là gì
@@ -15,7 +15,7 @@ Chỉ dùng cho bản thân, nên **không có chống gian lận, server hay le
 | File | Nội dung | Trạng thái |
 |---|---|---|
 | `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Thiết kế |
-| `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Judge đã xây; phần còn lại là thiết kế |
+| `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Đã xây, trừ phần hiển thị (thông báo, `why`, skill, status line) |
 | `docs/xp-evaluation.md` | Rubric, judge, công thức XP, mô hình dữ liệu ban đầu | Đã xây |
 | `docs/handoff.md` | File này | |
 
@@ -29,12 +29,19 @@ Code trong `packages/cli/`:
 
 | File | Vai trò |
 |---|---|
-| `bin/evolo.mjs` | CLI, hiện chỉ có lệnh `evaluate`, nhận `--range`, `--pr` và SHA đơn |
+| `bin/evolo.mjs` | CLI: `init`, `uninstall`, `sync`, `status`, `worker`, `enqueue` (hook gọi), và `evaluate` (chấm tay `--range`, `--pr`, SHA đơn) |
+| `src/hooks.mjs` | Cài và gỡ hook `pre-push`, nối tiếp hook cũ (`pre-push.evolo-chained`) |
+| `src/repos.mjs` | `~/.evolo/repos.json`, `init`, `uninstall` |
+| `src/queue.mjs` | Hàng đợi file, lock của worker (PID và heartbeat), khởi động worker tách rời |
+| `src/worker.mjs` | Ghi push vào hàng đợi, xác nhận push tới remote, chấm, thử lại, sync PR đã merge |
+| `src/ledger.mjs` | Bản ghi kết quả từng đơn vị và trạng thái (`scored`, `superseded`, `reverted`...) |
+| `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic, `evolo.log` |
+| `fakes/` | `gh` và `claude` giả cho test E2E |
 | `src/units.mjs` | Biến dải push, commit đơn hoặc số PR thành unit `{kind, id, base, tip, excluded, selected?, pr?}`, và chọn commit được tính |
 | `src/github.mjs` | Mọi lời gọi `gh`: đọc PR, PR đã merge chứa một commit, chọn remote trỏ đúng repo GitHub |
 | `src/evaluate.mjs` | Pipeline cho một unit: facts → triage → worktree tạm tại `tip` → judge → validate → XP; thử lại tối đa 3 lần |
 | `src/facts.mjs` | Số liệu diff ròng `base..tip` (file, dòng, loại file, test), danh sách commit, revert, thông tin PR, và bối cảnh repo |
-| `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.1 |
+| `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.2 (bội số của 5, tối thiểu 5), `levelFor` (`20 × L²`) |
 | `src/judges/claude.mjs` | Judge mặc định: `claude -p` sandbox, model `claude-sonnet-5-5` |
 | `src/judges/opencode.mjs` | Judge thay thế qua opencode (`--judge opencode`) |
 | `src/judges/common.mjs` | Allowlist lệnh git chỉ-đọc, chạy tiến trình JSONL, timeout, dọn tiến trình con |
@@ -44,8 +51,11 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 40 test, đều pass
-node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own \
+cd packages/cli && npm test                      # 54 test, đều pass (10 test E2E, khoảng 12 giây)
+ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
+evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
+evolo status                                     # hàng đợi và các lần chấm gần nhất
+evolo evaluate --repo <clone> --out <dir> --own \
   [--range <from>..<to>]... [--pr <number>]... [<sha>...]
 ```
 
@@ -71,7 +81,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   Commit bị bỏ vì PR khi GitHub liên kết nó với một PR đã merge (đúng cho merge commit, squash và rebase), trừ khi nó đã nằm trên nhánh đích từ trước PR đó.
   Cả lần push chỉ tốn một truy vấn GraphQL cho mỗi 100 commit.
 - Có commit bị bỏ thì đơn vị chuyển sang `diffMode: "per-commit"`: chấm các commit còn lại ghép nối, ghi các commit bị bỏ trong `excluded` (phương án C của vấn đề 1).
-- Tải PR thiếu commit từ remote trỏ đúng repo GitHub, không mặc định `origin` (phương án C của vấn đề 2); `evolo init` sẽ lưu remote này vào `repos.json`.
+- Tải PR thiếu commit từ remote trỏ đúng repo GitHub, không mặc định `origin` (phương án C của vấn đề 2); `evolo init` lưu remote này vào `repos.json`.
 - `commits` liệt kê mọi commit không phải merge trong dải, cũ trước, kèm `revertedBy`.
 - `reverted` chỉ đúng khi mọi commit bị revert, hoặc merge commit của PR bị revert; revert một phần chỉ được ghi lại.
 - Chỉ PR có trạng thái `MERGED` và merge vào nhánh mặc định được chấm.
@@ -103,19 +113,34 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Friday `89fd4e3..8c68e65` vẫn ở chế độ `net` và vẫn 77 XP.
 - Clone giả làm fork (`origin` trỏ repo khác, repo thật là `upstream`, đã xoá commit của PR #1): `--pr 1` tự tìm `upstream`, tải PR về, số liệu khớp GitHub.
 
+### Tự chấm sau push và PR (giai đoạn 1, 2026-10-19)
+
+- `evolo init` cài hook `pre-push` (nối tiếp hook cũ) và đăng ký repo vào `~/.evolo/repos.json`; `--remote` chọn remote khi không tự tìm được.
+- Hook chỉ ghi một job cho lần cập nhật nhánh mặc định trên remote đã đăng ký, rồi khởi động worker tách rời; nó không bao giờ làm push thất bại.
+- Worker xác nhận push tới nơi bằng `ls-remote`, dùng PID của `git push` (`$PPID` của hook) để biết push bị từ chối ngay khi `git push` kết thúc.
+- Sau khi chấm xong, worker sync: xếp hàng PR của mình merge vào nhánh mặc định từ lúc đăng ký, và đánh dấu `superseded` (force-push) hoặc `reverted`.
+- Judge không chạy được (chưa đăng nhập, mất mạng, hết hạn mức) thì job ở lại hàng đợi, thử lại sau 1, 5, 30 phút; không ghi `failed` ngay.
+- Chi tiết, trạng thái ledger và giới hạn đã biết: `docs/auto-scoring.md` mục 3, 4, 7.
+- Test E2E (`src/worker.test.mjs`) chạy hook và worker thật trên repo tạm có bare repo làm remote, với `gh` và `claude` giả trong `fakes/`:
+  push thành công, nhánh khác, push dưới `EVOLO_JUDGE`, push bị từ chối, push lại sau khi bị từ chối, force-push qua remote chậm, force-push đè commit chưa fetch, PR merge, revert, push dồn dập, mất GitHub, judge không chạy được, worker bị `SIGKILL`.
+- Agent review tìm 3 lỗi HIGH (push bị từ chối không bao giờ được chấm lại; judge chưa đăng nhập thành `failed` ngay; sync chạy trước khi force-push tới nơi), đã sửa, mỗi lỗi có test và đã kiểm tra test bắt được lỗi khi đưa nó trở lại.
+- Chạy thật (2026-10-19) trên clone tạm của `hiinguyen/lightrag` với `gh` và `claude` thật, `EVOLO_HOME` riêng, mốc `since` lùi về 2026-09-15 08:30:
+  sync tìm đúng PR #5 (bỏ PR #4 vì merge vào nhánh feature), worker chấm 162 XP (I3 C2 D3 Q4 S3), $0.16, 17 giây, khớp lần chấm tay; sync lần hai báo "nothing new".
+  Chưa thử push thật lên GitHub, vì đó là thao tác ra bên ngoài.
+
 ### Git
 
 - Repo: `github.com/hiinguyen/Evolo`.
 - `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
+- Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
 - Mọi PR trên đã merge; chưa có nhánh nào đang mở.
 
 ## 4. Việc tiếp theo
 
 Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 
-1. **Hook, hàng đợi, worker, sync** (`docs/auto-scoring.md` mục 2-4), với test E2E trên repo tạm có bare repo làm remote.
-   Việc chọn commit cho một push đã có trong `units.mjs`; worker chỉ cần truyền email đã đăng ký và tra ledger trước khi hỏi GitHub.
-2. **Hiển thị:** thông báo, `status`, `why`, skill `/evolo`, status line.
+1. **Dùng thật vài ngày:** `evolo init` trong các repo cá nhân, theo dõi `~/.evolo/evolo.log` và `evolo status`.
+2. **Hiển thị:** thông báo desktop khi chấm xong, `why`, `retry`, `backfill`, skill `/evolo`, status line, hook `SessionStart` chạy `evolo sync`.
 3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 
 ## 5. Quyết định đã chốt và lý do
