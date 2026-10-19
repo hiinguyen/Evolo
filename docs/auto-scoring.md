@@ -38,17 +38,17 @@ Vì vậy điểm được báo cho **người**, qua thông báo, status line v
 ## 2. Kiến trúc
 
 ```
-git push ─► .git/hooks/pre-push ─► evolo enqueue push      (< 50 ms, chỉ ghi 1 file)
+git push ─► .git/hooks/pre-push ─► evolo enqueue push      (chỉ ghi 1 file rồi khởi động worker tách rời)
                                          │
 evolo sync (sau mỗi job, khi mở phiên    │
   Claude, hoặc gọi tay) ─► gh: PR nào    │
   của tôi vừa merge? ─► enqueue pr ──────┤
                                          ▼
-                           ~/.evolo/queue/<repo-id>/<job-id>.json
+                           ~/.evolo/queue/<job-id>.json
                                          │
                                          ▼  (spawn tách rời nếu chưa có worker)
                            evolo worker  (1 worker toàn máy, giữ lock)
-                             0. land       push: chờ xác nhận remote đã nhận; pr: fetch head của PR
+                             0. land       push: chờ `git push` xong rồi xác nhận remote đã nhận; pr: fetch head của PR
                              1. units      chọn commit: của mình, không phải merge, chưa thuộc PR nào
                              2. facts      git đo số liệu cho cả change set (facts.mjs)
                              3. triage     docs/lockfile nhỏ → chấm bằng luật, xong
@@ -56,28 +56,30 @@ evolo sync (sau mỗi job, khi mở phiên    │
                              5. judge      claude -p trong sandbox chỉ-đọc
                              6. validate   kiểm bằng chứng, cap điểm (score.mjs)
                              7. xp         công thức tất định (computeXp)
-                             8. ledger     ~/.evolo/ledger/<repo-id>/<unit-id>.json
+                             8. ledger     ~/.evolo/ledger/<owner>/<name>/<unit-id>.json
                              9. notify     thông báo desktop + cập nhật status line
 ```
 
-Bước 2-7 dùng lại code đã có trong `packages/cli/src/`.
-`units.mjs` biến một dải push hoặc một số PR thành change set và chọn commit được tính (bước 1); `facts.mjs` đo nó và `evaluate.mjs` chấm nó.
-Phần chưa có là bước 0, 1 (chọn commit) và 8, 9.
+Bước 0, 1 và 8 nằm trong `worker.mjs` và `ledger.mjs`; bước 2-7 là `evaluate.mjs`.
+`units.mjs` biến một lần push hoặc một số PR thành change set và chọn commit được tính (bước 1); `facts.mjs` đo nó và `evaluate.mjs` chấm nó.
+Phần chưa có là bước 9 (thông báo), thuộc phần hiển thị.
 
 ## 3. Cài đặt: `evolo init`
 
 ```bash
 cd ~/code/my-project
-npx evolo init          # hoặc: evolo init nếu đã cài global
+evolo init
 ```
 
 `evolo init` làm đúng các việc sau, và in ra từng việc:
 
-1. Kiểm tra `claude` đã cài và đăng nhập, bằng một lệnh `claude -p` rẻ nhất có thể. Kiểm tra `gh` đã đăng nhập (để đọc PR). Nếu lỗi thì dừng và hướng dẫn.
+1. Kiểm tra `claude` đã cài (`claude --version`; chưa kiểm tra đăng nhập, vì lệnh rẻ nhất vẫn tốn một lượt gọi model). `gh` phải đăng nhập được, vì bước 4 đọc repo bằng `gh`. Nếu lỗi thì dừng và báo lý do.
 2. Tìm thư mục hook thật: `git rev-parse --git-path hooks`. Lệnh này tôn trọng `core.hooksPath`, nên chạy đúng cả với husky và với worktree.
 3. Cài hook `pre-push` (chi tiết bên dưới).
-4. Đăng ký repo vào `~/.evolo/repos.json`: đường dẫn, remote trỏ tới repo GitHub (chọn bằng `remoteFor` trong `src/github.mjs`), nhánh mặc định, email tác giả, có phải repo của mình không (`isOwnRepo`) và số sao (lấy bằng `gh`).
-5. Hỏi có muốn chấm bù các PR đã merge và các commit đã push trong N ngày gần nhất không. Mặc định là không.
+4. Đăng ký repo vào `~/.evolo/repos.json`, khoá là `owner/name` trên GitHub:
+   đường dẫn clone, thư mục git chung (để mọi worktree của clone đều khớp), remote trỏ tới repo GitHub (chọn bằng `remoteFor` trong `src/github.mjs`, hoặc `--remote`), nhánh mặc định, email tác giả (`git config user.email` cộng các `--author`), có phải repo của mình không (`isOwnRepo`: chủ repo là tài khoản `gh` đang đăng nhập), số sao, và `since`: thời điểm đăng ký.
+   PR merge trước `since` không được chấm; chạy lại `init` giữ nguyên `since` cũ.
+5. (Chưa làm) Hỏi có muốn chấm bù các PR đã merge và các commit đã push trong N ngày gần nhất không. Mặc định là không.
 
 Không có file nào được thêm vào repo hay được commit.
 Hook nằm trong `.git/`, nên chỉ máy này có, đồng đội clone về không bị ảnh hưởng.
@@ -93,23 +95,34 @@ Nếu repo đã có hook `pre-push`, stdin chỉ đọc được một lần, n�
 #!/bin/sh
 # Installed by evolo. The previous hook, if any, is pre-push.evolo-chained.
 input=$(cat)
+[ -n "$input" ] && input="$input
+"
 if [ -z "$EVOLO_JUDGE" ]; then
-  printf '%s\n' "$input" | evolo enqueue push "$@" >/dev/null 2>&1 || true
+  printf '%s' "$input" | '<node>' '<evolo.mjs>' enqueue push --pusher "$PPID" -- "$@" >/dev/null 2>&1 || true
 fi
 chained="$(dirname "$0")/pre-push.evolo-chained"
-[ -x "$chained" ] && { printf '%s\n' "$input" | "$chained" "$@"; exit $?; }
+if [ -x "$chained" ]; then
+  printf '%s' "$input" | "$chained" "$@"
+  exit $?
+fi
 exit 0
 ```
 
 Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới có quyền chặn push, đúng như trước khi cài.
+Hook gọi Evolo bằng đường dẫn tuyệt đối tới `node` và `evolo.mjs`, vì git có thể chạy hook với một `PATH` khác (IDE, GUI).
+`$PPID` của hook là tiến trình `git push`; worker dùng nó để biết lúc nào push đã kết thúc.
+Lỗi của `enqueue` được ghi vào `~/.evolo/evolo.log`, vì hook không in gì ra terminal.
 
 ## 4. Vòng đời một đơn vị
 
 ### Push
 
-1. `enqueue push` chỉ giữ các ref trỏ tới nhánh mặc định của remote, và ghi job `{remote, ref, from: remote sha, to: local sha}`.
-2. Worker chờ xác nhận push thành công: `git fetch <remote> <ref>` rồi kiểm tra `to` đã nằm trên ref đó.
-   Thử lại trong khoảng 10 phút; nếu không bao giờ thành công thì job bị bỏ với trạng thái `push_failed`.
+1. `enqueue push` chỉ giữ các lần cập nhật nhánh mặc định trên đúng remote đã đăng ký (so theo tên remote, vì URL hook nhận được đã qua `insteadOf`), bỏ lệnh xoá nhánh, và ghi job `{remote, ref, from: remote sha, to: local sha, pusher: PID của git push}`.
+2. Worker xác nhận push thành công: `git ls-remote` lấy commit của nhánh trên remote (fetch nếu máy chưa có), rồi kiểm tra `to` là tổ tiên của nó.
+   Chưa thấy và `git push` còn chạy thì hỏi lại sau 1 giây.
+   Chưa thấy mà `git push` đã kết thúc thì push đã bị từ chối: ghi `push_failed` ngay, không gọi judge.
+   Worker kiểm tra tiến trình trước rồi mới hỏi remote; làm ngược lại thì một push vừa xong giữa hai bước sẽ bị coi là thất bại.
+   Job không biết PID thì được chờ tối đa 10 phút.
 3. Chọn commit (đã có trong `units.mjs`): lấy các commit không phải merge trong `from..to`, rồi bỏ:
    - commit có email tác giả không nằm trong danh sách email đã đăng ký;
    - commit được một PR đã merge chấm rồi.
@@ -117,8 +130,10 @@ Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới
      Liên kết này đúng với cả ba kiểu merge (merge commit, squash, rebase), nhưng GitHub cũng liên kết cả commit đã nằm trên nhánh đích trước khi PR được merge.
      Vì vậy commit là tổ tiên của commit base của PR thì vẫn thuộc lần push; nếu không, nó sẽ không được chấm ở đâu cả.
      Máy không có commit base của PR thì tin GitHub.
-     Khi có ledger, worker tra ledger trước và chỉ hỏi GitHub cho commit ledger chưa biết.
-   Nếu `from` toàn số 0 (nhánh mới trên remote), dải là các commit chưa có trên remote: `git rev-list to --not --remotes=<remote>`.
+   Nếu `from` toàn số 0 (nhánh mặc định chưa có trên remote, tức lần push đầu), đơn vị là toàn bộ lịch sử của `to`.
+   Sau force-push (`from` không phải tổ tiên của `to`), đơn vị bắt đầu từ `git merge-base from to`: chỉ các commit mới được tính, còn đơn vị cũ chứa commit bị bỏ thành `superseded` ở lần sync sau.
+   Máy không có `from` (force-push đè lên commit chưa từng fetch) thì worker fetch nó theo SHA từ remote; GitHub vẫn phục vụ commit đã mất khỏi nhánh.
+   Không fetch được thì đơn vị thành `failed` ngay, kèm lý do.
 4. Không còn commit nào thì xong, không tốn lần gọi judge nào.
    Không bỏ commit nào thì chấm diff ròng `from..to`.
    Có bỏ commit thì chấm từng commit còn lại ghép nối (`diffMode: "per-commit"`): số liệu cộng dồn từng commit, diff là các patch nối nhau, và các commit bị bỏ được ghi trong `excluded` kèm lý do.
@@ -126,9 +141,10 @@ Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới
 
 ### PR
 
-1. `evolo sync` hỏi `gh pr list --author @me --state merged` các PR merge sau lần sync trước, cho mọi repo đã đăng ký.
-2. Mỗi PR mới thành một job `{number, base, headSha, mergeCommit}`.
-3. Worker lấy `baseRefOid` và `headRefOid` bằng `gh pr view`, fetch `refs/pull/<number>/head` khi thiếu commit, từ remote trỏ tới đúng repo GitHub của PR (trong clone của một fork, đó không phải `origin`), lấy diff từ `git merge-base <baseRefOid> <headRefOid>` tới `headRefOid`, và đưa thêm tiêu đề, mô tả PR vào facts.
+1. `evolo sync` hỏi `gh pr list --author @me --state merged --base <nhánh mặc định>` các PR merge từ lúc đăng ký (`since`), cho mọi repo đã đăng ký.
+   Worker tự chạy sync một lần mỗi khi chạy hết hàng đợi, tức sau mỗi lần push.
+2. PR chưa có trong ledger và chưa nằm trong hàng đợi thành một job `{type: "pr", repo, number}`.
+3. Worker lấy `baseRefOid` và `headRefOid` bằng `gh pr view`, fetch `refs/pull/<number>/head` khi thiếu commit, từ remote đã đăng ký (trong clone của một fork, đó không phải `origin`), lấy diff từ `git merge-base <baseRefOid> <headRefOid>` tới `headRefOid`, và đưa thêm tiêu đề, mô tả PR vào facts.
    Cách tính này khớp đúng số file và số dòng GitHub hiển thị trên 3 PR thật của `hiinguyen/lightrag`, gồm PR merge commit, PR fast-forward và PR có base là nhánh feature.
    Mô tả PR là dữ liệu do người viết, nên judge coi nó là dữ liệu chứ không phải chỉ dẫn, như với commit message.
 4. PR bị đóng mà không merge thì không chấm.
@@ -136,17 +152,23 @@ Phần của Evolo không bao giờ làm push thất bại; chỉ hook cũ mới
 
 ### Trạng thái trong ledger
 
+Đơn vị đang chờ nằm trong hàng đợi (`~/.evolo/queue/`), chưa có bản ghi trong ledger.
+
 | Trạng thái | Nghĩa | Tính vào level? |
 |---|---|---|
-| `queued` | Đang chờ chấm hoặc chờ xác nhận push | Không |
 | `scored` | Đã chấm | Có |
 | `push_failed` | Push không bao giờ tới được remote | Không |
-| `superseded` | Commit không còn trên nhánh mặc định (force-push viết lại lịch sử) | Không |
-| `reverted` | Mọi commit của đơn vị đã bị revert sau đó | Không, XP về 0 |
-| `failed` | Chấm lỗi sau 3 lần thử | Không, `evolo retry` để chấm lại |
+| `skipped` | Không còn commit nào để chấm: của người khác, merge commit, hoặc thuộc PR đã merge | Không |
+| `superseded` | Commit cuối của đơn vị không còn trên nhánh mặc định (force-push viết lại lịch sử) | Không, XP về 0 |
+| `reverted` | Mọi commit của đơn vị, hoặc merge commit của PR, đã bị revert trên nhánh mặc định | Không, XP về 0 |
+| `failed` | Judge trả lời sai sau 3 lần thử, hoặc lỗi tạm thời (mạng, `gh`, judge không chạy được) vẫn còn sau 3 lần thử lại với backoff 1, 5, 30 phút | Không, `evolo retry` để chấm lại (chưa làm) |
 | `needs_review` | Nghi prompt injection | Không, chờ người xem |
 
-`evolo sync` cũng kiểm tra `superseded` và `reverted` cho các đơn vị gần đây.
+Sync kiểm tra `superseded` và `reverted` cho mọi đơn vị đang `scored` hoặc `needs_review`, so với commit hiện tại của nhánh mặc định trên remote.
+Chỉ revert đã nằm trên nhánh mặc định mới được tính; revert trên một nhánh thử nghiệm thì không.
+Bản ghi đổi trạng thái giữ `previousStatus` và `changedAt`, và giữ nguyên kết quả chấm ban đầu trong `result`.
+Bản ghi `push_failed`, `failed` và `skipped` bị ghi đè khi đơn vị đó đến lại, ví dụ push bị từ chối được push lại sau khi sửa; bản ghi của đơn vị đã chấm thì không.
+Sync không tự xếp lại PR đã có bản ghi, kể cả `failed`, để một PR lỗi không tốn tiền sau mỗi lần push.
 Revert một phần (chỉ vài commit trong đơn vị) được ghi lại nhưng chưa đổi XP; cách xử lý để dành cho giai đoạn hiệu chỉnh.
 
 ## 5. Judge chạy bằng Claude
@@ -246,16 +268,28 @@ Prompt giờ bắt buộc đọc hết diff, và validator loại mọi kết qu
 | Tình huống | Xử lý |
 |---|---|
 | Push liên tục nhiều lần | Tất cả vào hàng đợi, 1 worker chấm lần lượt theo thứ tự push |
-| Push bị remote từ chối | Worker không thấy commit trên remote sau 10 phút, đánh dấu `push_failed`, không gọi judge |
-| Mất mạng, `claude` hoặc `gh` chưa đăng nhập, hết quota | Job vẫn ở `queued`, worker thử lại với backoff, `evolo status` hiện lý do |
-| Máy tắt khi đang chấm | Lock có PID. Lần enqueue sau thấy PID chết thì gỡ lock, xoá worktree mồ côi (`git worktree prune`) và chạy lại |
+| Push bị remote từ chối | `git push` kết thúc mà remote không có commit: `push_failed` ngay, không gọi judge |
+| Mất mạng, `gh` chưa đăng nhập | Job ở lại hàng đợi, thử lại sau 1, 5, 30 phút rồi thành `failed`; `evolo status` hiện lý do. Mọi lời gọi `gh`, `ls-remote` và `fetch` có timeout 2 phút |
+| `claude` chưa đăng nhập, mất mạng, API quá tải hoặc hết hạn mức | Judge không trả lời được (`JudgeUnavailableError`): job ở lại hàng đợi như trên, không ghi gì vào ledger |
+| Judge trả lời sai schema hoặc thiếu bằng chứng | `evaluate.mjs` thử 3 lần; vẫn sai thì `failed` |
+| Máy tắt khi đang chấm | Lock chứa PID và được làm mới mỗi 30 giây. Lock của PID đã chết, hoặc không được làm mới trong 5 phút (PID bị tái sử dụng sau khi khởi động lại), bị gỡ. Job chỉ bị xoá sau khi bản ghi ledger đã được ghi, nên job đang chấm dở được chấm lại |
+| Job thêm vào đúng lúc worker sắp thoát | Worker nhả lock rồi xem lại hàng đợi một lần nữa, nên job không bị bỏ quên |
+| Job đang chờ thử lại | Worker ngủ tối đa 5 giây mỗi lần rồi xem lại hàng đợi, nên push mới không phải chờ |
+| Force-push qua mạng chậm | Worker sync sau khi đã chấm xong và không còn job nào mới hay đang chờ push tới nơi, nên đơn vị bị thay luôn thành `superseded` |
+| Hai worker cùng thấy lock cũ | Mỗi worker chỉ xoá lock khi nó vẫn chứa đúng PID đã đọc, và chỉ nhả lock của chính mình |
 | Judge treo | Timeout cho mỗi lần thử, giết tiến trình con (đã có trong `judges/common.mjs`) |
 | Đầu ra sai schema hoặc thiếu bằng chứng | Thử lại tối đa 3 lần, sau đó là `failed` |
-| Chi phí tăng vọt | `--max-budget-usd` cho mỗi lần chấm, cộng với trần theo ngày trong `~/.evolo/config.json`. Vượt trần thì job chờ sang ngày sau |
+| Chi phí tăng vọt | `--max-budget-usd` cho mỗi lần chấm. Trần theo ngày trong `~/.evolo/config.json` chưa làm |
 | Repo bị xoá hoặc di chuyển | Worker bỏ qua các mục trong hàng đợi có đường dẫn không còn tồn tại và báo trong `evolo status` |
 
 Hàng đợi và ledger là các file JSON, mỗi job hoặc đơn vị một file, ghi theo kiểu atomic (ghi file tạm rồi `rename`).
 Nhờ vậy không cần database, không bao giờ đọc phải file ghi dở, và dễ debug bằng `cat`.
+
+Giới hạn đã biết:
+- Lần push đầu của nhánh mặc định chấm cả lịch sử thành một đơn vị (hệ số kích thước có trần, nên XP không tăng vô hạn).
+- Hook gọi `node` theo đường dẫn lúc `init`; đổi bản Node (nvm) thì hook im lặng không chạy, cần `evolo init` lại.
+- Với `core.hooksPath` dùng chung cho nhiều repo, `uninstall` ở một repo gỡ hook của tất cả; husky có thể sinh lại thư mục hook và xoá hook của Evolo.
+- Lock dựa trên file: hai worker cùng gỡ một lock cũ trong cùng vài micro giây vẫn có thể cùng chạy.
 
 ## 8. Bảo mật và quyền riêng tư
 
@@ -271,32 +305,37 @@ Nhờ vậy không cần database, không bao giờ đọc phải file ghi dở,
 
 ```
 packages/cli/                 # gói npm "evolo"
-  bin/evolo.mjs               # [có] evaluate --range/--pr/<sha> | [chưa] init, uninstall, enqueue, worker, sync, status, why, backfill, retry, preview
+  bin/evolo.mjs               # [có] init, uninstall, enqueue, worker, sync, status, evaluate | [chưa] why, backfill, retry, preview
   src/evaluate.mjs            # [có] facts → triage → worktree → judge → validate → xp cho một change set
   src/facts.mjs               # [có] số liệu diff ròng base..tip, danh sách commit, revert, thông tin PR
   src/score.mjs               # [có] triage, validator, công thức XP
   src/judges/common.mjs       # [có] READ_ONLY_COMMANDS, chạy tiến trình JSONL, timeout, dọn tiến trình con
   src/judges/claude.mjs       # [có] backend claude -p (mục 5), mặc định
   src/judges/opencode.mjs     # [có] backend opencode, sinh file agent tạm từ judge/xp-judge.md
-  src/hooks.mjs               # [chưa] cài và gỡ hook pre-push, tôn trọng core.hooksPath, chain hook cũ
-  src/queue.mjs               # [chưa] hàng đợi file, lock có PID, ghi atomic
-  src/worker.mjs              # [chưa] vòng lặp gọi evaluate.mjs cho từng mục trong hàng đợi
-  src/units.mjs               # [có] dải push, commit đơn, PR thành change set; chọn commit của push | [chưa] phát hiện PR merge mới
-  src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, chọn remote đúng
-  src/ledger.mjs              # [chưa] trạng thái, superseded và reverted khi sync
+  src/hooks.mjs               # [có] cài và gỡ hook pre-push, tôn trọng core.hooksPath, chain hook cũ
+  src/queue.mjs               # [có] hàng đợi file, lock có PID và heartbeat, khởi động worker tách rời
+  src/worker.mjs              # [có] enqueue, xác nhận push, chấm, thử lại, sync PR
+  src/repos.mjs               # [có] repos.json, init, uninstall
+  src/store.mjs               # [có] ~/.evolo, ghi JSON atomic, log
+  src/units.mjs               # [có] dải push, lần push của hook (cả force-push), commit đơn, PR thành change set; chọn commit của push
+  src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, PR đã merge của tôi, chọn remote đúng
+  src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync
+  fakes/gh.mjs, claude.mjs    # [có] gh và claude giả cho test E2E (worker.test.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator
 skills/evolo/SKILL.md         # [chưa] skill /evolo
 ```
 
 Chạy test: `cd packages/cli && npm test`.
-Chấm thử: `node packages/cli/bin/evolo.mjs evaluate --repo <clone> --out <dir> --own [--judge opencode] [--model M] [--range <from>..<to>]... [--pr <number>]... [<sha>...]`.
+Cài lệnh `evolo` một lần: `ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo` (hoặc `npm link` trong `packages/cli` nếu thư mục global của npm ghi được không cần sudo).
+Cài cho một repo: `evolo init` trong clone đó; xem kết quả bằng `evolo status`.
+Chấm thử: `evolo evaluate --repo <clone> --out <dir> --own [--judge opencode] [--model M] [--range <from>..<to>]... [--pr <number>]... [<sha>...]`.
 
 ## 10. Lộ trình
 
 1. **Judge Claude:** xong, Sonnet là mặc định (mục 5).
 2. **Change set và PR:** xong (2026-10-18), xem `docs/handoff.md` mục 3.
-3. **Hook, hàng đợi, sync:** `init`, `uninstall`, `enqueue`, `worker`, `sync`, kèm test E2E trên một repo tạm có remote giả (bare repo).
+3. **Hook, hàng đợi, sync:** xong (2026-10-19): `init`, `uninstall`, `enqueue`, `worker`, `sync`, `status`, kèm test E2E trên một repo tạm có remote giả (bare repo).
    Test này push thành công, push bị từ chối, force-push, merge PR (qua `gh` giả lập), revert, rồi kiểm tra trạng thái trong ledger.
 4. **Hiển thị:** thông báo desktop, `status`, `why`, skill `/evolo` và status line.
 

@@ -234,12 +234,16 @@ Loại này quyết định XP gốc (mục 7).
 ## 7. Công thức tính XP
 
 ```
-XP = BASE[type]
-   × M_value
-   × M_size
-   × M_repo
-   × M_signals
+XP_raw = BASE[type]
+       × M_value
+       × M_size
+       × M_repo
+       × M_signals
+XP     = max(5, làm tròn XP_raw tới bội số gần nhất của 5)      (0 nếu bị revert)
 ```
+
+XP luôn là bội số của 5 để dễ đọc và dễ cộng; đóng góp được tính thì nhận ít nhất 5 XP.
+`XP_raw` vẫn được ghi trong `breakdown.raw` của mỗi lần chấm (công thức 1.2).
 
 ### 7.1. XP gốc theo loại
 
@@ -318,7 +322,8 @@ M_value  = 0.25 + 3.25 × 0.6875             ≈ 2.48
 M_size   = 0.5 + 0.25 × log2(1 + 2.4)       ≈ 0.94
 M_repo   = 0.8 + 0.1 × log10(2001) + 0.3    ≈ 1.43
 M_signal = 1 + 0.05 + 0.10                   = 1.15
-XP       = 60 × 2.48 × 0.94 × 1.43 × 1.15    ≈ 230 XP
+XP_raw   = 60 × 2.48 × 0.94 × 1.43 × 1.15    ≈ 229,6
+XP       = 230
 ```
 
 Để so sánh, một PR sửa typo trong README của chính mình nhận khoảng 5-10 XP.

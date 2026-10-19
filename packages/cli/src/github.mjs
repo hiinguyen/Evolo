@@ -4,9 +4,12 @@ import { execFileSync } from "node:child_process";
 
 const PR_FIELDS = "number,title,body,url,state,baseRefName,baseRefOid,headRefOid,mergeCommit";
 
+// Every call talks to GitHub, so none may hang forever: the worker would stop scoring.
+const GH_TIMEOUT_MS = 2 * 60 * 1000;
+
 function gh(repoDir, args) {
   try {
-    return execFileSync("gh", args, { cwd: repoDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    return execFileSync("gh", args, { cwd: repoDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: GH_TIMEOUT_MS });
   } catch (error) {
     throw new Error(`gh ${args.slice(0, 2).join(" ")} failed: ${String(error.stderr || error.message).trim()}`);
   }
@@ -16,9 +19,27 @@ function gh(repoDir, args) {
 const COMMITS_PER_QUERY = 100;
 
 // The GitHub repository this clone belongs to:
-// { nameWithOwner: "owner/name", url: "https://github.com/owner/name", defaultBranchRef: { name: "main" } }.
+// { nameWithOwner: "owner/name", url: "https://github.com/owner/name", defaultBranchRef: { name: "main" }, stargazerCount }.
 export function githubRepo(repoDir) {
-  return JSON.parse(gh(repoDir, ["repo", "view", "--json", "nameWithOwner,url,defaultBranchRef"]));
+  return JSON.parse(gh(repoDir, ["repo", "view", "--json", "nameWithOwner,url,defaultBranchRef,stargazerCount"]));
+}
+
+// The login `gh` is signed in as.
+export function githubLogin(repoDir) {
+  return gh(repoDir, ["api", "user", "--jq", ".login"]).trim();
+}
+
+// Most PRs listed per sync; a sync runs after every push, so far fewer are ever new.
+const PRS_PER_SYNC = 100;
+
+// Numbers of the signed-in user's PRs merged into `base` since the ISO time `since`, oldest first.
+export function listMergedPrs(repoDir, { base, since }) {
+  const args = ["pr", "list", "--author", "@me", "--state", "merged", "--base", base, "--search", `merged:>=${since.slice(0, 10)}`];
+  const prs = JSON.parse(gh(repoDir, [...args, "--json", "number,mergedAt", "--limit", String(PRS_PER_SYNC)]));
+  return prs
+    .filter((pr) => Date.parse(pr.mergedAt) >= Date.parse(since))
+    .sort((a, b) => Date.parse(a.mergedAt) - Date.parse(b.mergedAt))
+    .map((pr) => pr.number);
 }
 
 // "host/owner/name" for any URL form git accepts (https, ssh://, scp-like user@host:path), or null for local paths.

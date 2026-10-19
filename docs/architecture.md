@@ -83,19 +83,21 @@ Chưa tách thành package riêng vì hiện chỉ có một nơi dùng nó.
 
 Level tính từ tổng XP trong ledger, không bao giờ giảm, và XP không bị trừ theo thời gian.
 
-Tổng XP cần để đạt level `L` là `50 × L²`.
+Tổng XP cần để đạt level `L` là `20 × L²` (hạ từ `50 × L²` ngày 2026-10-19 vì lên level quá chậm).
 
 | Level | Tổng XP |
 |---|---|
-| 5 | 1.250 |
-| 10 | 5.000 |
-| 20 | 20.000 |
-| 40 | 80.000 |
+| 1 | 20 |
+| 5 | 500 |
+| 10 | 2.000 |
+| 20 | 8.000 |
+| 40 | 32.000 |
 
 Đường cong bậc hai cho cảm giác tiến bộ nhanh lúc đầu và chậm dần, nhưng không chạm trần.
-Hằng số 50 là phỏng đoán.
-Nó sẽ được chỉnh ở giai đoạn 3, sau vài tuần có XP thật theo đơn vị push và PR, với mục tiêu đạt level 10 sau khoảng một tháng làm việc đều.
-Hàm `levelFor(xp)` nằm trong `score.mjs`, cùng chỗ với công thức XP, và có `LEVEL_FORMULA_VERSION` riêng.
+Với khoảng 100-300 XP mỗi ngày làm việc (đo trên Friday và lightrag), level 10 đến sau khoảng 1-2 tuần làm đều.
+Hằng số 20 sẽ được chỉnh lại ở giai đoạn 3, khi có vài tuần XP thật.
+Hàm `levelFor(xp)` nằm trong `score.mjs`, cùng chỗ với công thức XP, và có `LEVEL_FORMULA_VERSION` riêng; `evolo status` hiện level, tổng XP và số XP còn thiếu để lên level kế tiếp.
+Tổng XP chỉ cộng các đơn vị đang `scored`.
 
 ## 6. Achievement
 
@@ -175,7 +177,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 | Giai đoạn | Nội dung | Điều kiện nghiệm thu |
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (nhánh `feat/claude-judge`) |
-| **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, thông báo, `status`, `why`, skill `/evolo` (chi tiết trong `docs/auto-scoring.md`) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi |
+| **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, `status` (**xong**, 2026-10-19); thông báo, `why`, skill `/evolo` (chi tiết trong `docs/auto-scoring.md`) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi |
 | **2. Game hoá** | Level, achievement, analytics, `/evolo review`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |

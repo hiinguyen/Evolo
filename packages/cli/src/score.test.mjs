@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { classifyFile } from "./facts.mjs";
 import { extractJsonObject } from "./judges/opencode.mjs";
-import { computeXp, triage, validateEvaluation } from "./score.mjs";
+import { computeXp, levelFor, triage, validateEvaluation } from "./score.mjs";
 
 const scored = (impact, centrality, difficulty, quality, scope_fit) => ({ impact, centrality, difficulty, quality, scope_fit });
 
@@ -34,7 +34,7 @@ const facts = (overrides = {}) => ({
 
 const known = new Set(["src/auth/session.ts", "test/auth/session.test.ts"]);
 
-test("computeXp reproduces the worked example in docs/xp-evaluation.md (about 230 XP)", () => {
+test("computeXp reproduces the worked example in docs/xp-evaluation.md (230 XP)", () => {
   const { xp } = computeXp({
     type: "bugfix",
     scores: scored(3, 4, 3, 3, 4),
@@ -43,7 +43,27 @@ test("computeXp reproduces the worked example in docs/xp-evaluation.md (about 23
     isOwnRepo: false,
     signals: { ciFirstPass: true, closesBugIssue: true },
   });
-  assert.ok(xp >= 228 && xp <= 232, `got ${xp}`);
+  assert.equal(xp, 230);
+});
+
+test("computeXp awards XP in steps of 5, at least one step for a contribution that counts", () => {
+  const xpFor = (type, scores, countedLines) => computeXp({ type, scores, countedLines, stars: 0, isOwnRepo: true });
+  for (const [type, scores, lines] of [["feature", scored(3, 2, 3, 4, 3), 900], ["bugfix", scored(2, 2, 2, 2, 4), 70], ["refactor", scored(1, 2, 2, 3, 4), 179]]) {
+    const { xp, breakdown } = xpFor(type, scores, lines);
+    assert.equal(xp % 5, 0, `${type}: ${xp}`);
+    assert.ok(Math.abs(xp - breakdown.raw) <= 2.5, `${type}: ${xp} is the nearest step to ${breakdown.raw}`);
+  }
+  const tiny = xpFor("chore", scored(0, 0, 0, 2, 4), 1);
+  assert.ok(tiny.breakdown.raw < 2.5);
+  assert.equal(tiny.xp, 5);
+});
+
+test("levelFor needs 20 × L² XP in total for level L", () => {
+  assert.deepEqual(levelFor(0), { level: 0, from: 0, next: 20 });
+  assert.deepEqual(levelFor(19), { level: 0, from: 0, next: 20 });
+  assert.deepEqual(levelFor(20), { level: 1, from: 20, next: 80 });
+  assert.deepEqual(levelFor(1999), { level: 9, from: 1620, next: 2000 });
+  assert.deepEqual(levelFor(2000), { level: 10, from: 2000, next: 2420 });
 });
 
 test("computeXp gives no centrality credit to a change with no impact", () => {

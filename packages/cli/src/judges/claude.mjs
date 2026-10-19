@@ -1,7 +1,7 @@
 // Judge backend that runs the rubric in a sandboxed, headless Claude Code session (`claude -p`).
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { FatalJudgeError, OUTPUT_SCHEMA_PATH, PROMPT_PATH, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, OUTPUT_SCHEMA_PATH, PROMPT_PATH, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
 
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-5-5";
 const DEFAULT_BUDGET_USD = 1;
@@ -46,9 +46,13 @@ function describeTool(block) {
 export function readClaudeRun({ events, timedOut, code, stderr }) {
   if (timedOut) throw new Error("claude timed out");
   const result = events.findLast((event) => event.type === "result");
-  if (!result) throw new Error(`claude produced no result (exit ${code}): ${stderr.slice(-500)}`);
+  if (!result) throw new JudgeUnavailableError(`claude produced no result (exit ${code}): ${stderr.slice(-500)}`);
   if (result.subtype === "error_max_budget_usd") {
     throw new FatalJudgeError(`claude stopped at the budget limit after $${result.total_cost_usd?.toFixed(2)}`);
+  }
+  // A run that ends as "success" yet is an error never got an answer from the API: sign-in, network, limits.
+  if (result.is_error && result.subtype === "success") {
+    throw new JudgeUnavailableError(`claude: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`);
   }
   if (result.is_error || result.subtype !== "success") {
     throw new Error(`claude ${result.subtype}: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`);

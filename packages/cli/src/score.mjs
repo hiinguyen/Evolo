@@ -1,7 +1,8 @@
 // Pure functions: triage, validation of the judge's output, and the XP formula from docs/xp-evaluation.md section 7.
 
 export const RUBRIC_VERSION = "1.0";
-export const FORMULA_VERSION = "1.1";
+export const FORMULA_VERSION = "1.2";
+export const LEVEL_FORMULA_VERSION = "1.0";
 
 export const CRITERIA = ["impact", "centrality", "difficulty", "quality", "scope_fit"];
 const EVIDENCE_REQUIRED = CRITERIA.filter((criterion) => criterion !== "scope_fit");
@@ -25,6 +26,10 @@ const TRIAGE_MAX_LINES = 20;
 const UNSUPPORTED_SCORE_CAP = 2;
 const UNTESTED_QUALITY_CAP = 3;
 const UNFOCUSED_SIZE_CAP = 1.0;
+// XP is awarded in steps of XP_STEP, and a contribution that counts earns at least one step.
+const XP_STEP = 5;
+// Reaching level L takes LEVEL_XP_FACTOR × L² XP in total.
+const LEVEL_XP_FACTOR = 20;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -130,13 +135,15 @@ export function computeXp({ type, scores, countedLines, stars, isOwnRepo, signal
   const mRepo = clamp(0.8 + 0.1 * Math.log10(1 + stars) + (isOwnRepo ? 0 : 0.3), 0.8, 1.6);
   const mSignals =
     1 + (signals.ciFirstPass ? 0.05 : 0) + (signals.cleanMerge ? 0.05 : 0) + (signals.closesBugIssue ? 0.1 : 0);
-  const xp = signals.reverted ? 0 : Math.round(BASE_XP[type] * mValue * mSize * mRepo * mSignals);
+  const raw = BASE_XP[type] * mValue * mSize * mRepo * mSignals;
+  const xp = signals.reverted ? 0 : Math.max(XP_STEP, Math.round(raw / XP_STEP) * XP_STEP);
 
   return {
     xp,
     breakdown: {
       formula_version: FORMULA_VERSION,
       base: BASE_XP[type],
+      raw: round2(raw),
       value: round2(value),
       mValue: round2(mValue),
       mSize: round2(mSize),
@@ -145,4 +152,10 @@ export function computeXp({ type, scores, countedLines, stars, isOwnRepo, signal
       reverted: Boolean(signals.reverted),
     },
   };
+}
+
+// The level reached with `totalXp`, and the XP totals where it started and where the next one starts.
+export function levelFor(totalXp) {
+  const level = Math.floor(Math.sqrt(Math.max(0, totalXp) / LEVEL_XP_FACTOR));
+  return { level, from: LEVEL_XP_FACTOR * level ** 2, next: LEVEL_XP_FACTOR * (level + 1) ** 2 };
 }
