@@ -106,8 +106,8 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 ### Git
 
 - Repo: `github.com/hiinguyen/Evolo`.
-- `main` có judge, chấm change set và PR (PR #1 và PR #2, đã merge).
-- Nhánh `feat/push-commit-selection` (`79ea9e8`, đã push, chưa merge): lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định.
+- `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
+- Mọi PR trên đã merge; chưa có nhánh nào đang mở.
 
 ## 4. Việc tiếp theo
 
