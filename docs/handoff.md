@@ -105,10 +105,9 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 
 ### Git
 
-- Mọi thứ nằm trên nhánh `feat/claude-judge`, đã push lên `origin` (`github.com/hiinguyen/Evolo`):
-  `25c6d0f` (code chấm điểm) và `aa48452` (tài liệu).
-  `4ebc82a` (chấm change set và PR) và `b9980ba` (tài liệu).
-  Chưa merge vào `main`.
+- Repo: `github.com/hiinguyen/Evolo`.
+- `main` có judge, chấm change set và PR (PR #1 và PR #2, đã merge).
+- Nhánh `feat/push-commit-selection` (`79ea9e8`, đã push, chưa merge): lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định.
 
 ## 4. Việc tiếp theo
 
