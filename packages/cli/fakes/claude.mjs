@@ -1,6 +1,7 @@
 // Stand-in for `claude -p` in end-to-end tests: logs each call to $FAKE_CLAUDE_LOG and answers like a judge,
 // citing the first changed file from the facts.json it was given, as a stream-json `result` event.
-// While the file $FAKE_CLAUDE_LOG.down exists it fails like a signed-out CLI, without answering.
+// While the file $FAKE_CLAUDE_LOG.down exists it fails like a signed-out CLI, without answering;
+// while $FAKE_CLAUDE_LOG.invalid exists it answers without a summary, which the validator rejects.
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -22,7 +23,7 @@ const answer = {
   rubric_version: "1.0",
   contribution_type: "feature",
   scores: { impact: criterion(2), centrality: criterion(2), difficulty: criterion(2), quality: criterion(2), scope_fit: criterion(3) },
-  summary: `Changed ${facts.files.length} file(s).`,
+  summary: existsSync(`${process.env.FAKE_CLAUDE_LOG}.invalid`) ? "" : `Changed ${facts.files.length} file(s).`,
   flags: [],
   notes: "",
 };

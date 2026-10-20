@@ -1,6 +1,30 @@
-# Hệ thống chấm XP bằng AI (opencode)
+# Hệ thống chấm XP bằng AI
 
-Tài liệu này mô tả cách Evolo dùng opencode để đọc repo, branch, commit và PR, đánh giá mức độ đóng góp của từng thay đổi so với toàn bộ repo, rồi quy đổi thành XP.
+Tài liệu này mô tả cách Evolo dùng một AI judge để đọc repo, commit và PR, đánh giá mức độ đóng góp của từng thay đổi so với toàn bộ repo, rồi quy đổi thành XP.
+Đây là thiết kế gốc, viết khi Evolo còn nhắm tới nhiều người dùng và chạy bằng opencode.
+Evolo hiện là công cụ cá nhân, judge mặc định là Claude, nên một số phần đã được xây khác đi hoặc để dành; bảng dưới cho biết phần nào đã có.
+
+## Trạng thái (2026-10-19)
+
+| Mục | Trạng thái |
+|---|---|
+| 2. Nguyên tắc: AI chấm rubric, code tính XP, dữ liệu đo được là sự thật | Đã xây |
+| 3. Đơn vị đánh giá | Đã đổi: một lần push lên nhánh mặc định hoặc một PR đã merge (`docs/architecture.md` mục 3); chưa chấm review; chưa chia XP cho co-author |
+| 4. Collector | Một phần: diff, phân loại file, commit, revert, tiêu đề và mô tả PR. Chưa có CI, review, issue liên kết, thời gian merge |
+| 4. Repo Context | Một phần: bản đồ module (số file, số dòng source và test), số sao, trích README. Chưa có criticality, baseline, cache |
+| 4. Triage | Đã xây: docs dưới 20 dòng; chỉ lockfile hoặc file generated |
+| 4. Sandbox | Đã đổi: judge mặc định là `claude -p --restricted` trong git worktree tạm (`docs/auto-scoring.md` mục 5); opencode là backend thay thế; không có container |
+| 4. Validator | Đã xây, khác chi tiết: xem mục 4 [5] |
+| 4. Lưu trữ | Đã đổi: mỗi đơn vị một file JSON trong `~/.evolo/ledger/` (`docs/auto-scoring.md` mục 4) |
+| 5, 6. Agent và rubric cho đóng góp | Đã xây (`packages/cli/judge/xp-judge.md`) |
+| 6.3. Rubric cho review | Chưa làm |
+| 7.1-7.4. Công thức XP | Đã xây, công thức 1.2: XP là bội số của 5, tối thiểu 5 |
+| 7.5. Tín hiệu | Chỉ có revert (XP về 0). CI, merge sạch, issue `bug` chưa thu thập nên hệ số tín hiệu hiện luôn là 1 |
+| 7.6, 7.7. Chuẩn hoá theo repo, giới hạn chống cày | Chưa làm; không cần khi dùng cá nhân |
+| 8. Độ ổn định | Đã có: ghim model, không chấm lại đơn vị đã chấm. Chưa có: chấm 3 lần, golden set, khiếu nại |
+| 9. Bảo mật | Đã có: chống prompt injection, judge chỉ đọc, không chạy code của repo. Khác: không có container |
+| 10. Chi phí | Đã có: triage, trần $1 mỗi lần chấm, timeout 20 phút. Chưa có: cache Repo Context, trần theo ngày |
+| 11. Mô hình dữ liệu | Thay bằng ledger file JSON |
 
 ## 1. Mục tiêu
 
@@ -79,7 +103,9 @@ GitHub webhook (pull_request.closed + merged, push)
 
 ### [1] Collector
 
-Thu thập dữ kiện đo được cho PR, không dùng AI:
+Thu thập dữ kiện đo được cho PR, không dùng AI.
+Đã xây: diff, phân loại file, commit, revert, tiêu đề và mô tả PR (`src/facts.mjs`).
+Chưa xây: issue liên kết, review, CI, thời gian mở đến merge.
 
 - Diff stats: số dòng thêm/xóa, số file, ngôn ngữ.
 - Phân loại file: source, test, docs, config, **generated/vendored/lockfile** (loại khỏi mọi phép tính).
@@ -92,6 +118,8 @@ Thu thập dữ kiện đo được cho PR, không dùng AI:
 ### [2] Repo Context
 
 Đây là phần giúp đánh giá "so với repo".
+Hiện tại `collectRepoContext` chỉ tính bản đồ module (số file, số dòng source và test theo thư mục), số sao và đoạn đầu README, mỗi lần chấm tính lại.
+Phần dưới là thiết kế đầy đủ, chưa xây.
 Evolo xây một bản đồ repo một lần, cache lại và làm mới khi repo thay đổi lớn (ví dụ mỗi 200 commit hoặc mỗi tuần):
 
 - **Tóm tắt repo:** mục đích, các module chính, kiến trúc, do opencode viết từ README và cấu trúc thư mục.
@@ -106,17 +134,20 @@ Các trường hợp sau được chấm bằng luật cố định để tiết
 
 - Chỉ đổi docs hoặc typo, dưới 20 dòng.
 - Chỉ cập nhật dependency hoặc lockfile (ví dụ PR của Dependabot).
-- Chỉ đổi file generated hoặc format code.
+- Chỉ đổi file generated hoặc format code (đã xây cho file generated; chưa nhận ra thay đổi chỉ format).
 
-Tất cả PR còn lại đi tiếp tới opencode.
+Tất cả PR còn lại đi tiếp tới judge.
 
-### [4] Sandbox + opencode
+### [4] Sandbox + judge
+
+Judge mặc định là Claude (`claude -p --restricted`, model `claude-sonnet-5-5`), mô tả ở `docs/auto-scoring.md` mục 5.
+Phần dưới mô tả backend opencode (`--judge opencode`), vẫn còn trong code.
 
 Mỗi lần chấm chạy trong một môi trường cô lập:
 
-1. Tạo một git worktree tại merge commit, để agent thấy repo đúng như lúc thay đổi được merge.
+1. Tạo một git worktree tại commit cuối của đơn vị (`tip`), để agent thấy repo đúng như lúc thay đổi được đưa vào.
 2. Ghi `facts.json`, `repo-context.json` và `change.diff` (bản patch, cắt ở 80 KB) ra một thư mục tạm bên ngoài worktree.
-3. Chạy opencode với agent chuyên chấm điểm:
+3. Chạy judge; với opencode:
 
 ```bash
 OPENCODE_CONFIG_DIR=<evolo>/.opencode \
@@ -150,12 +181,15 @@ Agent **không được** ghi file, truy cập mạng, hay chạy code của rep
 
 ### [5] Validator
 
-Kiểm tra đầu ra của agent trước khi tin dùng:
+Kiểm tra đầu ra của agent trước khi tin dùng (`validateEvaluation` trong `src/score.mjs`):
 
-- Đúng schema JSON, mọi điểm nằm trong 0-4.
-- Mọi dẫn chứng trỏ tới file và commit **có thật** trong diff.
-- Không mâu thuẫn với Facts: ví dụ agent nói "có test đầy đủ" nhưng Facts không có file test nào thì chỉ số `quality` bị giới hạn tối đa 2.
-- Nếu không hợp lệ: chạy lại tối đa 2 lần, sau đó đưa vào hàng đợi duyệt thủ công.
+- Đúng schema JSON, mọi điểm nằm trong 0-4, loại đóng góp hợp lệ.
+- Dẫn chứng phải trỏ tới file có trong repo hoặc trong thay đổi; dẫn chứng trỏ tới file không tồn tại bị bỏ.
+  Tiêu chí (trừ `scope_fit`) không còn dẫn chứng hợp lệ nào thì bị giới hạn tối đa 2.
+- Không mâu thuẫn với Facts: đơn vị không chạm file test nào trong một repo có test thì `quality` bị giới hạn tối đa 3.
+- Judge tự gắn cờ `incomplete_investigation` thì kết quả bị loại.
+- Không hợp lệ thì chấm lại, tổng cộng tối đa 3 lần; vẫn không được thì đơn vị là `failed`.
+- Cờ `suspected_injection` đưa đơn vị vào trạng thái `needs_review`, không cộng XP.
 
 ### [6] XP Calculator
 
@@ -163,8 +197,9 @@ Xem mục 7.
 
 ### [7] Lưu trữ
 
-Mỗi lần chấm lưu một bản ghi bất biến gồm: Facts, điểm tiêu chí, dẫn chứng, phiên bản rubric, phiên bản prompt, model, và XP tính ra.
-Tổng XP của người dùng là tổng các dòng trong `xp_ledger`, nên có thể truy vết từng điểm XP về nguồn gốc.
+Thiết kế gốc: mỗi lần chấm lưu một bản ghi bất biến gồm Facts, điểm tiêu chí, dẫn chứng, phiên bản rubric, phiên bản prompt, model và XP; tổng XP là tổng các dòng trong `xp_ledger`.
+Đã xây: mỗi đơn vị một file JSON trong `~/.evolo/ledger/<owner>/<name>/`, chứa Facts, điểm, dẫn chứng, judge (backend, model), `breakdown` của công thức và trạng thái.
+Khi đơn vị bị revert hoặc bị force-push thay thế, bản ghi được cập nhật trạng thái và XP về 0, kết quả chấm ban đầu vẫn giữ trong `result`.
 
 ## 5. Agent `xp-judge`
 
@@ -302,12 +337,16 @@ Lấy từ Facts, không phụ thuộc AI:
 | Đóng issue có nhãn `bug` hoặc `security` | +10% |
 | PR bị revert trong 14 ngày | XP của PR bị thu hồi toàn bộ (ghi dòng âm vào ledger) |
 
-### 7.6. Chuẩn hóa theo repo
+Đã xây: chỉ tín hiệu revert, không giới hạn 14 ngày.
+Đơn vị bị revert trên nhánh mặc định thì XP về 0 và trạng thái thành `reverted`; không có dòng âm, vì ledger cập nhật bản ghi của chính đơn vị đó.
+Ba tín hiệu còn lại chưa được thu thập, nên `M_signals` hiện luôn là 1.
+
+### 7.6. Chuẩn hóa theo repo (chưa làm)
 
 Sau khi repo có từ 30 PR được chấm trở lên, `value` được hiệu chỉnh nhẹ theo phân vị so với các PR khác trong cùng repo.
 Việc này tránh trường hợp một repo bị agent chấm cao hoặc thấp hệ thống, và thể hiện đúng ý "đóng góp này nổi bật đến đâu **trong repo này**".
 
-### 7.7. Giới hạn chống cày
+### 7.7. Giới hạn chống cày (chưa làm, không cần khi dùng cá nhân)
 
 - Mỗi người tối đa 1.500 XP từ PR trong một ngày, phần vượt giảm còn 25%.
 - PR tự merge không có reviewer trên repo có nhiều contributor: x0.8.
@@ -329,6 +368,9 @@ XP       = 230
 Để so sánh, một PR sửa typo trong README của chính mình nhận khoảng 5-10 XP.
 
 ## 8. Độ ổn định và chất lượng chấm điểm
+
+Đã xây: ghim model theo phiên bản, và không chấm lại đơn vị đã có trong ledger.
+Chưa xây: chấm 3 lần cho PR lớn, golden set (giai đoạn 3 trong `docs/architecture.md`), khiếu nại.
 
 - **Cố định model và tham số:** mỗi phiên bản rubric gắn với một model cụ thể, thay model là tăng phiên bản.
 - **Chấm nhiều lần với PR lớn:** PR có `value` dự kiến cao (hơn 200 XP) được chấm 3 lần độc lập, lấy trung vị từng tiêu chí.
@@ -357,6 +399,9 @@ Biện pháp:
 
 ### 9.2. Cô lập môi trường
 
+Thiết kế gốc dùng container; bản đã xây không dùng.
+Judge chạy trên máy người dùng, trong worktree tạm, với `claude -p --restricted`: chỉ có công cụ đọc file, tìm kiếm và các lệnh git chỉ-đọc, không có MCP, không đọc settings hay `CLAUDE.md` (`docs/auto-scoring.md` mục 5).
+
 - Mỗi lần chấm chạy trong container riêng, hủy sau khi xong.
 - Không có quyền ghi vào repo gốc, không có token GitHub bên trong container.
 - Mạng chỉ mở tới API của nhà cung cấp model.
@@ -380,13 +425,18 @@ Evolo chỉ lưu Facts, điểm, lý do và đường dẫn dẫn chứng, khôn
 
 ## 10. Chi phí
 
+Đã xây: triage, trần $1 mỗi lần chấm (`--max-budget-usd`), timeout 20 phút mỗi lần thử.
+Chưa xây: cache Repo Context, chấm 3 lần, trần chi phí theo ngày, chấm bù lịch sử.
+
 - Triage bỏ qua AI cho phần lớn PR nhỏ.
 - Repo Context được cache và dùng chung cho mọi PR trong repo.
 - Chỉ PR lớn mới được chấm 3 lần.
 - Giới hạn thời gian và số bước của agent cho mỗi lần chấm, ví dụ 5 phút; hết thời gian thì chấm dựa trên diff và Facts.
 - Lần đầu người dùng kết nối, việc chấm lại lịch sử chạy dần trong nền với hàng đợi ưu tiên thấp, PR gần nhất được chấm trước.
 
-## 11. Mô hình dữ liệu tối thiểu
+## 11. Mô hình dữ liệu tối thiểu (thiết kế gốc, chưa dùng)
+
+Bản đã xây lưu ledger dạng file JSON thay cho các bảng dưới; xem `docs/auto-scoring.md` mục 4.
 
 ```
 repositories        (id, github_id, stars, criticality_map, context_version, ...)
@@ -402,6 +452,6 @@ Chấm lại hoặc thu hồi XP đều tạo bản ghi mới.
 
 ## 12. Các câu hỏi còn mở
 
-- Chọn model nào cho `xp-judge` để cân bằng giữa chất lượng và chi phí, cần thử trên golden set.
+- ~~Chọn model nào cho `xp-judge`~~: đã chọn Sonnet (`docs/auto-scoring.md` mục 5); vẫn cần kiểm lại trên golden set.
 - Có nên cho người dùng xem toàn bộ lý do chấm điểm, hay chỉ tóm tắt, để giảm việc "tối ưu theo prompt".
 - Khi nào bắt đầu hỗ trợ GitLab và cách đánh giá đóng góp ngoài code (thiết kế, quản lý issue).

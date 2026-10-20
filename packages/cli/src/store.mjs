@@ -1,6 +1,6 @@
 // Evolo's state on this machine: one JSON file per record, under ~/.evolo (or $EVOLO_HOME).
 // Every write goes to a temporary file that is then renamed, so a reader never sees a half-written file.
-import { mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -18,10 +18,16 @@ export function readJson(path, fallback) {
   }
 }
 
+// A file that already exists keeps its permissions: Claude Code's settings.json, for one, may hold tokens and be 0600.
 export function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   const temporary = join(dirname(path), `.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`);
   writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  try {
+    chmodSync(temporary, statSync(path).mode & 0o7777);
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
   renameSync(temporary, path);
 }
 

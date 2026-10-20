@@ -27,7 +27,7 @@ function makeSandbox() {
   sandboxes.push(dir);
   const [home, bin, remote, work] = ["home", "bin", "remote.git", "work"].map((name) => join(dir, name));
   mkdirSync(bin);
-  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"]]) {
+  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec '${process.execPath}' '${join(FAKES, script)}' "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -40,7 +40,10 @@ function makeSandbox() {
   };
   writeFileSync(ghState, JSON.stringify(github));
   const claudeLog = join(dir, "claude.log");
-  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, EVOLO_HOME: home, FAKE_GH: ghState, FAKE_CLAUDE_LOG: claudeLog };
+  const notifyLog = join(dir, "notify.log");
+  const env = {
+    ...process.env, PATH: `${bin}:${process.env.PATH}`, EVOLO_HOME: home, FAKE_GH: ghState, FAKE_CLAUDE_LOG: claudeLog, FAKE_NOTIFY_LOG: notifyLog,
+  };
   delete env.EVOLO_JUDGE;
 
   execFileSync("git", ["init", "-q", "--bare", "-b", "main", remote]);
@@ -63,6 +66,8 @@ function makeSandbox() {
   const judgeCalls = () => (existsSync(claudeLog) ? readFileSync(claudeLog, "utf8").split("\n").filter(Boolean).length : 0);
 
   const setClaudeDown = (down) => (down ? writeFileSync(`${claudeLog}.down`, "") : rmSync(`${claudeLog}.down`, { force: true }));
+  const setClaudeInvalid = (invalid) => (invalid ? writeFileSync(`${claudeLog}.invalid`, "") : rmSync(`${claudeLog}.invalid`, { force: true }));
+  const notifications = () => (existsSync(notifyLog) ? readFileSync(notifyLog, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
   const lockPath = join(home, "worker.lock");
 
   // Polls `check` until it returns something truthy, failing with the log after WAIT_MS.
@@ -104,7 +109,10 @@ function makeSandbox() {
     listJobs(home).forEach((job) => updateJob(home, { ...job, notBefore: 0 }));
     spawn(process.execPath, [BIN, "worker"], { cwd: work, env, stdio: "ignore", detached: true }).unref();
   };
-  return { home, remote, work, git, commit, push, evolo, setGithub, setClaudeDown, judgeCalls, settled, retrying, crashWorker, retryNow, lockPath };
+  return {
+    home, remote, work, git, commit, push, evolo, setGithub, setClaudeDown, setClaudeInvalid, judgeCalls, notifications,
+    settled, retrying, crashWorker, retryNow, lockPath, waitFor,
+  };
 }
 
 const short = (sha) => sha.slice(0, 7);
@@ -320,4 +328,129 @@ test("a force push over commits this clone never fetched scores only this clone'
   assert.equal(box.push(["--force", "origin", "main"]).status, 0);
   const record = await box.settled(`push-${short(base)}-${short(mine)}`);
   assert.deepEqual(record.result.facts.commits.map((commit) => commit.subject), ["feat: mine"]);
+});
+
+test("a scored push raises a desktop notification, shows in the status line and is explained by why", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const sha = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  const record = await box.settled(`push-root-${short(sha)}`);
+
+  const [shown, ...more] = box.notifications();
+  assert.deepEqual(more, []);
+  assert.match(shown.title, new RegExp(`^Evolo \\+${record.xp} XP · level \\d+!$`), "the first score is a level up");
+  assert.equal(shown.body, `proj push ..${short(sha)}: feature\nChanged 1 file(s).`);
+  assert.match(box.evolo("statusline").trim(), new RegExp(`^Lv \\d+ · ${record.xp} XP · \\+${record.xp} today$`));
+  assert.match(box.evolo("status"), new RegExp(`^today \\+${record.xp} XP  last 7 days \\+${record.xp} XP$`, "m"));
+
+  const explained = box.evolo("why", short(sha));
+  assert.match(explained, new RegExp(`^me/proj push \\.\\.${short(sha)}  ${record.xp} XP`));
+  assert.match(explained, /^impact {6}2  Fake judgement\.$/m);
+  assert.match(explained, /^ {15}evidence: app\.js$/m);
+  assert.match(explained, new RegExp(`^XP = 60 base \\(feature\\) × .* = [\\d.]+ -> ${record.xp}  \\[formula 1\\.2\\]$`, "m"));
+  assert.equal(box.evolo("why"), explained, "without a ref, why explains the latest unit");
+  assert.equal(box.evolo("why", "HEAD"), explained, "a ref is resolved in the clone");
+});
+
+test("a unit the judge keeps answering wrongly is failed, notified, and scored by retry", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+
+  box.setClaudeInvalid(true);
+  const tip = box.commit("feat: more", { "more.js": lines(30, "more") });
+  box.push(["origin", "main"]);
+  const id = `push-${short(base)}-${short(tip)}`;
+  const failed = await box.settled(id, ["failed"]);
+  assert.match(failed.summary, /summary is missing/);
+  assert.equal(box.notifications().at(-1).title, "Evolo Scoring failed");
+  assert.match(box.evolo("status"), /^1 failed: `evolo retry`/m);
+  assert.match(box.evolo("why", id), /attempt 3: invalid output: summary is missing/);
+
+  box.setClaudeInvalid(false);
+  assert.equal(box.evolo("retry").trim(), `me/proj ${id}: queued again`);
+  const record = await box.settled(id);
+  assert.ok(record.xp > 0);
+  assert.equal(box.evolo("retry").trim(), "nothing to retry");
+});
+
+test("sync --background prints nothing and leaves the sync and the scoring to a worker", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+  box.git("checkout", "-q", "-b", "feature");
+  const head = box.commit("feat: pr work", { "pr.js": lines(15, "pr") });
+  box.git("checkout", "-q", "main");
+  box.git("merge", "-q", "--no-ff", "-m", "Merge pull request #3", "feature");
+  // Merged on GitHub: the remote has the merge, and nothing was pushed from here.
+  box.git("push", "-q", "--no-verify", "origin", "main");
+  box.setGithub({
+    prs: [
+      {
+        number: 3, title: "PR work", body: "", url: "https://github.com/me/proj/pull/3", state: "MERGED",
+        mergedAt: new Date().toISOString(), baseRefName: "main", baseRefOid: base, headRefOid: head, mergeCommit: { oid: box.git("rev-parse", "HEAD") },
+      },
+    ],
+  });
+
+  assert.equal(box.evolo("sync", "--background"), "");
+  const record = await box.settled("pr-3");
+  assert.ok(record.xp > 0);
+  assert.match(box.evolo("why", "#3"), /^me\/proj PR #3  \d+ XP/);
+  assert.match(box.evolo("why", short(head)), /^me\/proj PR #3 /, "a commit is explained by the unit that counted it");
+});
+
+test("sync --background reaches a worker that is waiting to retry a job", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+  box.setClaudeDown(true);
+  const tip = box.commit("feat: more", { "more.js": lines(10, "more") });
+  box.push(["origin", "main"]);
+  await box.retrying(1, /judge unavailable/);
+  box.setGithub({
+    prs: [
+      {
+        number: 4, title: "Old PR", body: "", url: "https://github.com/me/proj/pull/4", state: "MERGED",
+        mergedAt: new Date().toISOString(), baseRefName: "main", baseRefOid: base, headRefOid: tip, mergeCommit: null,
+      },
+    ],
+  });
+
+  assert.equal(box.evolo("sync", "--background"), "");
+  await box.waitFor(
+    () => listJobs(box.home).some((job) => job.type === "pr" && job.number === 4),
+    () => `PR #4 was not queued: ${JSON.stringify(listJobs(box.home))}`,
+  );
+  assert.ok(existsSync(box.lockPath), "the waiting worker did the sync");
+  box.setClaudeDown(false);
+  box.retryNow();
+  await box.settled("pr-4");
+});
+
+test("retrying a failed push that a force push removed ends it at once instead of waiting for it to land", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+  box.setClaudeInvalid(true);
+  const gone = box.commit("feat: gone", { "gone.js": lines(30, "gone") });
+  box.push(["origin", "main"]);
+  const id = `push-${short(base)}-${short(gone)}`;
+  await box.settled(id, ["failed"]);
+  box.setClaudeInvalid(false);
+  box.git("reset", "-q", "--hard", base);
+  box.git("push", "-q", "--no-verify", "--force", "origin", "main");
+
+  box.evolo("retry");
+  const record = await box.settled(id, ["push_failed"]);
+  assert.match(record.reason, new RegExp(`${short(gone)} is no longer on origin refs/heads/main`));
 });

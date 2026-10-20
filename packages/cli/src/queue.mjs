@@ -1,7 +1,7 @@
 // The queue of units waiting to be scored, and the lock that keeps one worker per machine.
 // A job is one file in <home>/queue, named so that sorting the names gives the order jobs were added.
 import { execFileSync, spawn } from "node:child_process";
-import { closeSync, openSync, readFileSync, statSync, utimesSync, writeSync } from "node:fs";
+import { closeSync, existsSync, openSync, readFileSync, statSync, utimesSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { jsonFiles, readJson, removeFile, writeJson } from "./store.mjs";
@@ -30,8 +30,30 @@ export function listJobs(home) {
     .filter(Boolean);
 }
 
+// Returns false when the job is no longer queued: another process (`evolo retry`) must not bring back a job the worker
+// has just finished.
 export function updateJob(home, job) {
-  writeJson(join(queueDir(home), `${job.id}.json`), job);
+  const path = join(queueDir(home), `${job.id}.json`);
+  if (!existsSync(path)) return false;
+  writeJson(path, job);
+  return true;
+}
+
+// A request for the running worker to sync once it is idle, left by `evolo sync --background`: a worker that holds the
+// lock while it waits to retry a job would otherwise not sync, and the new worker gives up on the lock.
+const syncRequestPath = (home) => join(home, "sync-requested");
+
+export function requestSync(home) {
+  writeJson(syncRequestPath(home), { at: new Date().toISOString() });
+}
+
+export const hasSyncRequest = (home) => existsSync(syncRequestPath(home));
+
+// True, once, when a sync was requested since the last call.
+export function takeSyncRequest(home) {
+  if (!existsSync(syncRequestPath(home))) return false;
+  removeFile(syncRequestPath(home));
+  return true;
 }
 
 export function removeJob(home, job) {
