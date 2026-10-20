@@ -44,6 +44,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Chi phí | Trần theo ngày `budget.daily-usd` (mặc định $5), tính từ `costUsd` trong ledger và review; hết thì đơn vị cần judge chờ sang ngày sau, có một thông báo mỗi ngày; `status` in chi phí hôm nay | #7 |
 | CI và bảo vệ `main` | `.github/workflows/test.yml` chạy test trên Node 20, 22 và 24; ruleset `main` bắt buộc PR và ba check xanh, cấm force push và xoá | #8; ruleset tạo trên web |
 | Analytics | `evolo stats [week\|month\|quarter] [--previous]`: XP, cơ cấu, trung bình rubric, kỷ luật test, revert, repo, thư mục, nhịp làm việc theo kỳ lịch, so với kỳ trước, và streak ngày làm việc; bản ghi có `landedAt` (lúc push hoặc merge), `summary.json` tính XP theo ngày đó | #9 |
+| Achievement | `evolo achievements`: 33 achievement hiện nhiều bậc (cột mốc, XP, loại việc, chất lượng, đều đặn, phạm vi, thói quen, commit) kèm tiến độ, và một nhóm achievement ẩn; thông báo desktop khi mở bậc mới; `evolo stats` có dòng `unlocked` | #10 |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -52,7 +53,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 |---|---|---|
 | Thao tác | `preview` (chấm thử commit chưa push), duyệt `needs_review` | `auto-scoring.md` mục 6 |
 | Thông báo khi mất XP | Đơn vị thành `reverted` hoặc `superseded` khi sync chưa có thông báo | `auto-scoring.md` mục 6 |
-| Game hoá | Còn B achievement, C dashboard, D performance review (`evolo report`), làm theo thứ tự này, mỗi phần một spec và một PR | `architecture.md` mục 6, 8, 9 |
+| Game hoá | Còn C dashboard, D performance review (`evolo report`), làm theo thứ tự này, mỗi phần một spec và một PR | `architecture.md` mục 8, 9 |
 | Hiệu chỉnh | Golden set có repo lớn, chấm nhiều lần, chỉnh hằng số level | `architecture.md` mục 11 |
 | Tần suất sync | Hook `SessionStart` chạy ở mọi phiên Claude Code, ở bất kỳ thư mục nào, và mỗi lần gọi `gh` cho từng repo đã đăng ký; chưa có giới hạn kiểu "bỏ qua nếu vừa sync vài phút trước" | `auto-scoring.md` mục 6 |
 | Rủi ro đã biết | Diff cho judge bị cắt ở 80 KB, dễ chạm hơn ở chế độ `per-commit` vì patch nối nhau | `auto-scoring.md` mục 4 |
@@ -71,8 +72,10 @@ Code trong `packages/cli/`:
 | `src/worker.mjs` | Ghi push vào hàng đợi, xác nhận push tới remote, chấm, thử lại, sync PR đã merge, gửi thông báo, `retry` |
 | `src/ledger.mjs` | Bản ghi kết quả từng đơn vị và trạng thái (`scored`, `superseded`, `reverted`...), `landedAt(record)` (ngày của một đơn vị), `summary.json` (XP theo ngày) |
 | `src/stats.mjs` | Analytics: `periodOf` (tuần, tháng, quý theo lịch), `computeStats`, `streakOf`; hàm thuần trên bản ghi, cho `evolo stats` và các phần Game hoá sau |
+| `src/achievements.mjs` | Achievement: `achievementsOf` (bậc, tiến độ, ngày mở bằng tìm kiếm nhị phân trên ledger xếp theo `landedAt`), `unlockedIn`, `notifyUnlocks` (`achievements.json`) |
+| `src/achievements/` | `catalog.mjs` (achievement hiện và hàm đọc bản ghi dùng chung), `secret.mjs` và `secret.test.mjs` (achievement ẩn: đừng nêu tên hay điều kiện với người dùng), `fixtures.mjs` (bản ghi giả cho test) |
 | `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic (giữ quyền của file cũ), `evolo.log` |
-| `src/views.mjs` | Nội dung thông báo, status line, `why` và `stats`; tìm đơn vị theo mã, `#PR` hoặc commit |
+| `src/views.mjs` | Nội dung thông báo, status line, `why`, `stats` và `achievements`; tìm đơn vị theo mã, `#PR` hoặc commit |
 | `src/review.mjs` | `evolo review`: kiểm tra đầu ra (đường dẫn và số dòng), lưu và in review |
 | `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`review.language`, `budget.daily-usd`) |
 | `src/signals.mjs` | Tín hiệu XP từ CI, review và issue; tính lại XP của bản ghi từ điểm rubric đã lưu |
@@ -95,7 +98,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 141 test, đều pass (26 test E2E, khoảng 40 giây); CI chạy cùng lệnh
+cd packages/cli && npm test                      # 177 test, đều pass (27 test E2E, khoảng 40 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -236,6 +239,20 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   Đã kiểm tra test bắt được lỗi khi gỡ từng phần (lọc `method`, cuối tuần, `superseded`, `landedAt` trong worker, retry và `summarize`).
 - Agent review: không có CRITICAL hay HIGH; đã sửa `landedAt` không đọc được và stack trace khi gõ sai cờ; giữ nguyên hai điểm (bản ghi `scored` thiếu `result` không xảy ra vì `scoredRecord` luôn ghi nó, lọc âm thầm sẽ làm `stats` lệch `status`; nhịp làm việc đếm commit của đơn vị trong kỳ là đúng thiết kế).
 
+### Achievement (2026-10-20, PR #10)
+
+- Phần B Game hoá; thiết kế: `docs/superpowers/specs/2026-10-20-evolo-achievements-design.md`, plan cùng ngày trong `docs/superpowers/plans/`.
+  Người dùng đã chốt: achievement tính lại từ ledger và có thể mất khi đơn vị bị revert; nhiều bậc kèm tiến độ; hiện ở `evolo achievements`, thông báo desktop và `evolo stats`.
+- Người dùng muốn có achievement ẩn và không muốn biết trước chúng là gì: đừng nêu tên, điều kiện hay gợi ý về chúng trong chat, docs, commit hay PR; chúng chỉ nằm trong `src/achievements/secret.mjs` và test của nó.
+- Mỗi luật là `{ id, name, description, tiers, value(records) }` với `value` không giảm khi thêm bản ghi vào cuối danh sách xếp theo `landedAt`; nhờ đó ngày mở của mỗi bậc tìm được bằng tìm kiếm nhị phân, và test kiểm tra tính chất này cho mọi luật.
+- Worker kiểm tra achievement sau mỗi bản ghi `scored`, gửi một thông báo gộp sau thông báo XP; `achievements.json` chỉ nhớ bậc đã báo, lỗi đọc file chỉ ghi log.
+- Test E2E không giả định achievement ẩn nào mở, vì vài cái phụ thuộc giờ chạy test; chỉ Contributor I là chắc chắn.
+- Chạy thật trên `~/.evolo` (chỉ đọc, 6 đơn vị): 9 trong 33 achievement hiện đã mở (Contributor I, Merge Master I, Builder I, Test Believer I, Hat Trick I, Explorer I, Polyglot II, Overdrive II, By the Book I), và hai achievement ẩn.
+- Không có achievement cho `signals.cleanMerge`: tín hiệu này cần người khác approve PR, repo chỉ có một người.
+- Test: 19 test `achievements.test.mjs`, 13 test `secret.test.mjs`, 3 test view, một E2E; đã kiểm tra test bắt được lỗi khi gỡ tìm kiếm nhị phân, lọc `method`, ghi `achievements.json`, giờ địa phương và lời gọi thông báo trong worker.
+- Agent review: không có CRITICAL hay HIGH; đã sửa bản ghi thiếu `facts.files`, `achievements.json` sai dạng và một khẳng định E2E có thể đỏ khi test chạy qua mốc giờ.
+  Giữ nguyên việc worker đọc lại ledger sau mỗi đơn vị `scored`: `writeRecords` vốn đã làm vậy để dựng `summary.json`, 5.000 bản ghi mất khoảng 90 ms, nhỏ so với một lần gọi judge.
+
 ### Git
 
 - Repo: `github.com/hiinguyen/Evolo`.
@@ -243,7 +260,8 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
 - Thông báo, `why`, `retry`, status line và tích hợp Claude Code (PR #5, merge 2026-10-20).
 - `evolo review` (PR #6), tín hiệu XP và trần chi phí theo ngày (PR #7, merge 2026-10-20), CI chạy test trên mỗi PR và ruleset bảo vệ `main` (PR #8, merge 2026-10-20).
-- `evolo stats`, `landedAt` và lộ trình Game hoá; `CLAUDE.md` với quy tắc cho agent (PR #9).
+- `evolo stats`, `landedAt` và lộ trình Game hoá; `CLAUDE.md` với quy tắc cho agent (PR #9, merge 2026-10-20).
+- `evolo achievements` và achievement ẩn (PR #10).
 
 ## 4. Việc tiếp theo
 
@@ -258,7 +276,7 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
    Người dùng đã quyết định không làm `backfill` (2026-10-20); còn `preview`.
 3. **Review code:** `evolo review` xong, PR #6 đã merge (2026-10-20).
    Việc có thể làm tiếp: số dòng của vấn đề đôi khi vẫn là vị trí trong diff (validator đưa về mức file); judge chưa lần theo nơi gọi bằng `git grep` (`docs/review.md` mục 9).
-4. **Game hoá:** A analytics xong (`evolo stats`, PR #9); tiếp theo B achievement (luật khai báo dựa trên `stats.mjs`, `achievements.json` chỉ để thông báo lần mở khoá đầu), rồi C dashboard (trang HTML tĩnh đọc ledger và `~/.evolo/reviews/`, review là dữ liệu đầu tiên người dùng muốn xem), rồi D performance review (`evolo report`).
+4. **Game hoá:** A analytics xong (`evolo stats`, PR #9); B achievement xong (`evolo achievements`, PR #10); tiếp theo C dashboard (trang HTML tĩnh đọc ledger và `~/.evolo/reviews/`, review là dữ liệu đầu tiên người dùng muốn xem), rồi D performance review (`evolo report`).
    Mỗi phần: brainstorm, spec trong `docs/superpowers/specs/`, plan, PR riêng.
 5. Sau đó: hiệu chỉnh bằng golden set (giai đoạn 3).
 
