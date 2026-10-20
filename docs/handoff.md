@@ -1,6 +1,6 @@
 # Evolo: bàn giao để tiếp tục ở session mới
 
-Cập nhật: 2026-10-19.
+Cập nhật: 2026-10-20.
 Mở session mới và bảo Claude: "đọc `docs/handoff.md` rồi làm tiếp bước tiếp theo".
 
 ## 1. Evolo là gì
@@ -32,7 +32,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Chọn commit | Bỏ commit của người khác và commit thuộc PR đã merge; chọn đúng remote cho PR; chỉ chấm PR vào nhánh mặc định | #3 |
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
 | XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
-| Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | nhánh `feat/display` |
+| Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 (đang mở) |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -41,12 +41,12 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 |---|---|---|
 | Thao tác | `backfill` (chấm bù lịch sử, cần chốt thiết kế ở mục 9), `preview` (chấm thử commit chưa push), duyệt `needs_review` | `auto-scoring.md` mục 6 |
 | Thông báo khi mất XP | Đơn vị thành `reverted` hoặc `superseded` khi sync chưa có thông báo | `auto-scoring.md` mục 6 |
-| Cài cho Claude Code | `evolo claude install` chưa chạy trên cấu hình thật; status line hiện là của Orca, nên `install` sẽ giữ nó | `auto-scoring.md` mục 6 |
 | Tín hiệu XP | CI pass ngay, merge sạch, đóng issue `bug`: chưa thu thập, nên `M_signals` luôn là 1 | `xp-evaluation.md` mục 7.5 |
 | Chi phí | Trần chi phí theo ngày | `auto-scoring.md` mục 7 |
 | Game hoá | Achievement, analytics, performance review, dashboard | `architecture.md` mục 6-9 |
 | Hiệu chỉnh | Golden set có repo lớn, chấm nhiều lần, chỉnh hằng số level | `architecture.md` mục 11 |
 | Kiểm chứng | Chưa thử push thật lên GitHub với hook đã cài | |
+| Tần suất sync | Hook `SessionStart` chạy ở mọi phiên Claude Code, ở bất kỳ thư mục nào, và mỗi lần gọi `gh` cho từng repo đã đăng ký; chưa có giới hạn kiểu "bỏ qua nếu vừa sync vài phút trước" | `auto-scoring.md` mục 6 |
 | Rủi ro đã biết | Diff cho judge bị cắt ở 80 KB, dễ chạm hơn ở chế độ `per-commit` vì patch nối nhau | `auto-scoring.md` mục 4 |
 | Giới hạn đã biết | Lần push đầu chấm cả lịch sử; đổi bản Node phải `evolo init` lại; `core.hooksPath` dùng chung | `auto-scoring.md` mục 7 |
 
@@ -161,7 +161,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   sync tìm đúng PR #5 (bỏ PR #4 vì merge vào nhánh feature), worker chấm 162 XP (I3 C2 D3 Q4 S3), $0.16, 17 giây, khớp lần chấm tay; sync lần hai báo "nothing new".
   Chưa thử push thật lên GitHub, vì đó là thao tác ra bên ngoài.
 
-### Hiển thị (2026-10-19, nhánh `feat/display`)
+### Hiển thị (2026-10-19, PR #5)
 
 - Worker gửi `notify-send` cho `scored` (kèm `level N!` khi lên level), `needs_review` và `failed`; máy không có `notify-send` thì bỏ qua.
 - `evolo why [<commit>|#<pr>|<unit id>]` in từng điểm rubric kèm lý do và bằng chứng, cảnh báo của validator, commit bị bỏ, và dòng công thức `XP = base × value × size × repo × signals = raw -> XP`.
@@ -176,20 +176,24 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   Các test mới đã được kiểm tra là bắt được lỗi khi đưa bản sửa ra.
 - Chạy thật trên clone tạm của lightrag với `gh` và `claude` thật: `sync --background` chấm PR #5 được 160 XP ($0.12, 24 giây); `why #5`, `why 86e74d3` (merge commit), `status` và `statusline` đều đúng; một thông báo thật đã hiện trên desktop.
 - Sửa thêm: `git worktree add --quiet`, để `evolo.log` không còn dòng "Preparing worktree".
+- 2026-10-20: đã chạy `evolo claude install` trên máy thật (người dùng yêu cầu).
+  `~/.claude/settings.json` chỉ thêm một nhóm `SessionStart` chạy `'/usr/bin/node' '.../packages/cli/bin/evolo.mjs' sync --background`; status line của Orca được giữ; skill là symlink `~/.claude/skills/evolo`.
+  Chạy tay đúng lệnh của hook: thoát 0, không in gì.
+  Gỡ bằng `evolo claude uninstall`.
 
 ### Git
 
 - Repo: `github.com/hiinguyen/Evolo`.
 - `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
 - Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
-- Nhánh `feat/display` có phần hiển thị, chưa commit, cùng các thay đổi docs của phiên trước.
+- Nhánh `feat/display` (PR #5, đang mở, chưa merge): commit `docs: mark what the XP evaluation design has built so far` và `feat: show scores through notifications, why, retry and Claude Code`.
 
 ## 4. Việc tiếp theo
 
 Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 
-1. **Dùng thật vài ngày:** `evolo init` trong các repo cá nhân, theo dõi `~/.evolo/evolo.log` và `evolo status`; lần push thật đầu tiên là lần đầu hook chạy với GitHub.
-2. **Hiển thị:** xong trên nhánh `feat/display`; chạy `evolo claude install` khi muốn có `/evolo` và sync lúc mở phiên.
+1. **Dùng thật vài ngày:** `evolo init` trong các repo cá nhân (chưa repo nào được đăng ký), theo dõi `~/.evolo/evolo.log` và `evolo status`; lần push thật đầu tiên là lần đầu hook chạy với GitHub.
+2. **Hiển thị:** xong, chờ người dùng merge PR #5; `evolo claude install` đã chạy trên máy thật.
    Còn `backfill` (chốt thiết kế ở mục 9 trước) và `preview`.
 3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 
@@ -227,7 +231,8 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 - Clone thử nghiệm của Friday và lightrag, và các file kết quả JSON, nằm trong scratchpad của session cũ, có thể đã mất.
   Clone lại bằng `git clone https://github.com/hiinguyen/Friday` hoặc `https://github.com/hiinguyen/lightrag`.
 - Lệnh `evolo` là symlink `~/.local/bin/evolo`; thư mục global của npm là `/usr` (cần sudo), nên không dùng `npm link`.
-- `~/.evolo` chưa có repo nào được đăng ký trên máy này, và `evolo claude install` chưa chạy.
+- `~/.evolo` chưa có repo nào được đăng ký trên máy này: hook `SessionStart` chạy nhưng chưa có gì để sync, `evolo status` báo level 0.
+- `evolo claude install` đã chạy (2026-10-20); bản sao lưu `settings.json` trước khi cài nằm trong scratchpad của session cũ, có thể đã mất, nhưng `uninstall` trả về đúng như cũ.
 
 ## 8. Cách làm việc với người dùng
 
@@ -242,8 +247,11 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 - Có chấm repo của công ty không? Nếu có cần tuỳ chọn tắt gửi code theo từng remote.
 - Có cần `/evolo preview` (chấm thử commit chưa push) ngay ở giai đoạn 1 không?
 - Thông báo desktop có làm phiền không? Hiện chưa có cách tắt.
-- `backfill`: GitHub không giữ lịch sử push (Events API chỉ 90 ngày và 300 sự kiện, với lightrag đã trống).
+- `backfill`: Evolo chỉ chấm push đi qua hook và PR merge sau mốc `evolo init` (`repo.since`), nên lịch sử trước đó không có XP.
+  GitHub không giữ lịch sử push (Events API chỉ 90 ngày và 300 sự kiện, với lightrag đã trống).
   PR cũ thì dễ (`gh pr list` từ mốc N ngày).
   Push cũ có ba cách: (A) reflog của `refs/remotes/<remote>/<branch>`, đúng từng lần push từ clone này, các lần push từ máy khác gộp theo mỗi lần fetch, chỉ trong thời hạn của reflog; (B) gộp commit của mình trên nhánh mặc định theo ngày; (C) A khi có reflog, B khi không.
   Đề xuất A, vì đơn vị khớp với cách hook chấm; cần chốt trước khi làm, vì chấm bù tốn tiền judge cho mỗi đơn vị.
+  Nên có bước xem trước: in danh sách đơn vị và ước tính chi phí rồi mới chấm.
+- Có cần giới hạn tần suất sync của hook `SessionStart` (ví dụ bỏ qua nếu lần sync gần nhất cách đây dưới vài phút) không?
 - Lần push đầu của nhánh mặc định đang chấm cả lịch sử thành một đơn vị: có muốn bỏ qua lần đó không?
