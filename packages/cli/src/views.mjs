@@ -81,8 +81,8 @@ function judgedLines(result) {
 }
 
 // The full account of one record for `evolo why`: what was scored, every rubric score with its reason and evidence,
-// and how the XP formula turned them into XP.
-export function explain(record) {
+// how the XP formula turned them into XP, and whether the unit has a review (`reviewed`).
+export function explain(record, { reviewed = false } = {}) {
   const result = record.result;
   const worth = record.status === "scored" ? `${record.xp} XP` : record.status;
   const was = record.previousStatus ? ` (was ${record.previousStatus})` : "";
@@ -107,6 +107,7 @@ export function explain(record) {
   if (facts.excluded.length > 0) {
     lines.push("left out:", ...facts.excluded.map((commit) => `  ${short(commit.sha)} ${commit.subject} (${commit.reason})`));
   }
+  lines.push("", reviewed ? `review: saved, see \`evolo review ${record.id}\`` : `review: none yet, \`evolo review ${record.id}\` writes one`);
   return lines.join("\n");
 }
 

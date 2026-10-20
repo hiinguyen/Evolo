@@ -159,3 +159,17 @@ export function fetchPullRequest(repoDir, number, { remote } = {}) {
   }
   return pullRequestUnit(repoDir, pr, { defaultBranch: repo.defaultBranchRef.name });
 }
+
+// Makes sure the clone has the tip of a unit recorded earlier: a branch deleted after its PR merged, or a clone reset
+// past a push, can leave the commits only on `remote`. Throws when the remote does not have them either.
+export function ensureCommit(repoDir, remote, facts) {
+  if (hasCommit(repoDir, facts.tip)) return;
+  const wanted = facts.kind === "pr" ? `refs/pull/${facts.pr.number}/head` : facts.tip;
+  try {
+    git(repoDir, ["fetch", "--quiet", remote, wanted]);
+  } catch {
+    // Some servers refuse to send a commit asked for by its sha: fetch the branches instead.
+    git(repoDir, ["fetch", "--quiet", remote]);
+  }
+  if (!hasCommit(repoDir, facts.tip)) throw new Error(`commit ${facts.tip} is neither in ${repoDir} nor on ${remote}`);
+}

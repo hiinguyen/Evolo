@@ -1,121 +1,14 @@
 // End to end: a real clone with a bare repository as its remote, the real pre-push hook and a real background
-// worker. Only `gh` and `claude` are stand-ins (fakes/gh.mjs, fakes/claude.mjs), put first on PATH.
+// worker, from the sandbox in sandbox.mjs.
 import assert from "node:assert/strict";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { execFileSync } from "node:child_process";
+import { chmodSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
-import { fileURLToPath } from "node:url";
-import { after, test } from "node:test";
+import { test } from "node:test";
 import { listRecords, readRecord } from "./ledger.mjs";
-import { listJobs, updateJob } from "./queue.mjs";
+import { listJobs } from "./queue.mjs";
 import { loadRepos } from "./repos.mjs";
-
-const BIN = fileURLToPath(new URL("../bin/evolo.mjs", import.meta.url));
-const FAKES = fileURLToPath(new URL("../fakes/", import.meta.url));
-const REPO = "me/proj";
-const WAIT_MS = 30 * 1000;
-
-const sandboxes = [];
-after(() => sandboxes.forEach((dir) => rmSync(dir, { recursive: true, force: true })));
-
-const lines = (count, tag) => Array.from({ length: count }, (_, index) => `${tag} ${index}`).join("\n") + "\n";
-
-function makeSandbox() {
-  const dir = mkdtempSync(join(tmpdir(), "evolo-e2e-"));
-  sandboxes.push(dir);
-  const [home, bin, remote, work] = ["home", "bin", "remote.git", "work"].map((name) => join(dir, name));
-  mkdirSync(bin);
-  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"]]) {
-    writeFileSync(join(bin, name), `#!/bin/sh\nexec '${process.execPath}' '${join(FAKES, script)}' "$@"\n`);
-    chmodSync(join(bin, name), 0o755);
-  }
-  const ghState = join(dir, "gh.json");
-  const github = {
-    repo: { nameWithOwner: REPO, url: "https://github.com/me/proj", defaultBranchRef: { name: "main" }, stargazerCount: 3 },
-    login: "me",
-    prs: [],
-    commitPrs: {},
-  };
-  writeFileSync(ghState, JSON.stringify(github));
-  const claudeLog = join(dir, "claude.log");
-  const notifyLog = join(dir, "notify.log");
-  const env = {
-    ...process.env, PATH: `${bin}:${process.env.PATH}`, EVOLO_HOME: home, FAKE_GH: ghState, FAKE_CLAUDE_LOG: claudeLog, FAKE_NOTIFY_LOG: notifyLog,
-  };
-  delete env.EVOLO_JUDGE;
-
-  execFileSync("git", ["init", "-q", "--bare", "-b", "main", remote]);
-  execFileSync("git", ["init", "-q", "-b", "main", work]);
-  const git = (...args) => execFileSync("git", args, { cwd: work, env, encoding: "utf8" }).trim();
-  git("config", "user.name", "Dev");
-  git("config", "user.email", "dev@example.com");
-  git("config", "commit.gpgsign", "false");
-  git("remote", "add", "origin", remote);
-
-  const commit = (message, files) => {
-    for (const [path, content] of Object.entries(files)) writeFileSync(join(work, path), content);
-    git("add", ...Object.keys(files));
-    git("commit", "-q", "-m", message);
-    return git("rev-parse", "HEAD");
-  };
-  const push = (args, extraEnv = {}) => spawnSync("git", ["push", "-q", ...args], { cwd: work, env: { ...env, ...extraEnv }, encoding: "utf8" });
-  const evolo = (...args) => execFileSync(process.execPath, [BIN, ...args], { cwd: work, env, encoding: "utf8" });
-  const setGithub = (change) => writeFileSync(ghState, JSON.stringify({ ...github, ...change }));
-  const judgeCalls = () => (existsSync(claudeLog) ? readFileSync(claudeLog, "utf8").split("\n").filter(Boolean).length : 0);
-
-  const setClaudeDown = (down) => (down ? writeFileSync(`${claudeLog}.down`, "") : rmSync(`${claudeLog}.down`, { force: true }));
-  const setClaudeInvalid = (invalid) => (invalid ? writeFileSync(`${claudeLog}.invalid`, "") : rmSync(`${claudeLog}.invalid`, { force: true }));
-  const notifications = () => (existsSync(notifyLog) ? readFileSync(notifyLog, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
-  const lockPath = join(home, "worker.lock");
-
-  // Polls `check` until it returns something truthy, failing with the log after WAIT_MS.
-  const waitFor = async (check, what) => {
-    const deadline = Date.now() + WAIT_MS;
-    for (;;) {
-      const found = check();
-      if (found) return found;
-      if (Date.now() > deadline) {
-        const log = existsSync(join(home, "evolo.log")) ? readFileSync(join(home, "evolo.log"), "utf8") : "(no log)";
-        assert.fail(`${what()}; log:\n${log}`);
-      }
-      await sleep(100);
-    }
-  };
-  // Waits until the background worker has written `id` with one of `statuses`, and has then finished and exited.
-  const settled = (id, statuses = ["scored"]) =>
-    waitFor(
-      () => {
-        const record = readRecord(home, REPO, id);
-        const idle = listJobs(home).length === 0 && !existsSync(lockPath);
-        return record && statuses.includes(record.status) && idle && record;
-      },
-      () => `${id} did not reach ${statuses.join("/")} (now ${readRecord(home, REPO, id)?.status ?? "absent"})`,
-    );
-  // Waits until the only queued job has failed `attempts` times with an error matching `pattern`.
-  const retrying = (attempts, pattern) =>
-    waitFor(
-      () => {
-        const [job, ...others] = listJobs(home);
-        return others.length === 0 && job?.attempts === attempts && pattern.test(job.lastError) && job;
-      },
-      () => `no job retrying for the ${attempts} time with ${pattern}: ${JSON.stringify(listJobs(home))}`,
-    );
-  // Kills the worker the way a crash or a power cut would, leaving its lock behind.
-  const crashWorker = () => process.kill(Number(readFileSync(lockPath, "utf8")), "SIGKILL");
-  // Makes every queued job due now, and starts a worker in the background, as the next push would.
-  const retryNow = () => {
-    listJobs(home).forEach((job) => updateJob(home, { ...job, notBefore: 0 }));
-    spawn(process.execPath, [BIN, "worker"], { cwd: work, env, stdio: "ignore", detached: true }).unref();
-  };
-  return {
-    home, remote, work, git, commit, push, evolo, setGithub, setClaudeDown, setClaudeInvalid, judgeCalls, notifications,
-    settled, retrying, crashWorker, retryNow, lockPath, waitFor,
-  };
-}
-
-const short = (sha) => sha.slice(0, 7);
+import { lines, makeSandbox, REPO, short } from "./sandbox.mjs";
 
 test("init chains an existing pre-push hook, every push still reaches it, and uninstall restores it", async () => {
   const box = makeSandbox();
