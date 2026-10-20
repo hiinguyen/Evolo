@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 import { REVIEW_TASK } from "./judges/common.mjs";
-import { CATEGORIES, formatReview, readReview, REVIEW_FLAGS, SEVERITIES, validateReview, writeReview } from "./review.mjs";
+import { CATEGORIES, formatReview, lineCounter, readReview, REVIEW_FLAGS, SEVERITIES, validateReview, writeReview } from "./review.mjs";
 
 const known = new Set(["src/app.js", "src/old.js"]);
 const finding = (overrides = {}) => ({
@@ -35,6 +35,31 @@ test("a review with a missing or malformed part is rejected so the judge is aske
     assert.equal(result.ok, false);
     assert.match(result.problems.join("; "), problem);
   }
+});
+
+test("flags and notes of the wrong type are rejected instead of crashing the validator", () => {
+  for (const raw of [answer({ flags: {} }), answer({ flags: "incomplete_investigation" }), answer({ notes: 3 })]) {
+    const result = validateReview(raw, known);
+    assert.equal(result.ok, false);
+    assert.match(result.problems.join("; "), /flags must be a list of text|notes must be text/);
+  }
+});
+
+test("line counts come only from regular files inside the checkout, counted as an editor shows them", () => {
+  const dir = mkdtempSync(join(tmpdir(), "evolo-lines-"));
+  after(() => rmSync(dir, { recursive: true, force: true }));
+  writeFileSync(join(dir, "two.txt"), "a\nb\n");
+  writeFileSync(join(dir, "open.txt"), "a\nb");
+  writeFileSync(join(dir, "empty.txt"), "");
+  mkdirSync(join(dir, "sub"));
+  symlinkSync("/etc/hostname", join(dir, "link"));
+  const count = lineCounter(dir);
+  assert.equal(count("two.txt"), 2);
+  assert.equal(count("open.txt"), 2);
+  assert.equal(count("empty.txt"), 0);
+  assert.equal(count("sub"), null, "a directory (a submodule) has no lines");
+  assert.equal(count("link"), null, "a symlink is not followed out of the checkout");
+  assert.equal(count("missing.txt"), null);
 });
 
 test("a reviewer that admits it did not read the change is rejected", () => {

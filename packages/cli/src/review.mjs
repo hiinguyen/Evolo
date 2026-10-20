@@ -1,7 +1,7 @@
 // Code review of one unit (docs/review.md): a separate judge task (judge/xp-review.md) that reads the change the way
 // a reviewer reads a pull request. Reviews never affect XP, and live apart from the ledger, in
 // <home>/reviews/<owner>/<name>/<unit id>.json, so scoring a unit again leaves its review in place.
-import { readFileSync } from "node:fs";
+import { lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs";
 import { REVIEW_TASK } from "./judges/common.mjs";
@@ -45,6 +45,8 @@ function checkShape(raw) {
     ...(isText(raw.overview) ? [] : ["overview is missing"]),
     ...["strengths", "improvements"].filter((field) => !isTextList(raw[field])).map((field) => `${field} must be a list of text`),
     ...(Array.isArray(raw.findings) ? raw.findings.flatMap(checkFinding) : ["findings must be a list"]),
+    ...(raw.flags === undefined || isTextList(raw.flags) ? [] : ["flags must be a list of text"]),
+    ...(raw.notes === undefined || typeof raw.notes === "string" ? [] : ["notes must be text"]),
   ];
 }
 
@@ -54,14 +56,24 @@ const lastLine = (location) => {
   return match ? Number(match[2] ?? match[1]) : null;
 };
 
-// The number of lines of each file in `checkoutDir`, or null for a file that is not there (deleted by the change).
-// Only called with paths the validator already knows, so it never reads outside the checkout.
+// Files larger than this are not read for their line count; their findings keep their line numbers unchecked.
+const MAX_COUNTED_BYTES = 4 * 1024 * 1024;
+
+// The number of lines of each file in `checkoutDir` (a final newline does not start a line), or null for a path
+// that is not a regular file there: deleted by the change, a directory (submodule), or a symlink, which is never
+// followed, since a tracked link can point anywhere on the machine. Called only with paths the validator knows.
 export const lineCounter = (checkoutDir) => (path) => {
+  const file = join(checkoutDir, path);
+  let stats;
   try {
-    return readFileSync(join(checkoutDir, path), "utf8").split("\n").length;
+    stats = lstatSync(file);
   } catch {
     return null;
   }
+  if (!stats.isFile()) return null;
+  if (stats.size > MAX_COUNTED_BYTES) return Infinity;
+  const text = readFileSync(file, "utf8");
+  return text === "" ? 0 : text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
 };
 
 // A finding's location with line numbers the file at the tip cannot have removed (a reviewer can quote line numbers
@@ -97,8 +109,8 @@ export function validateReview(raw, knownPaths, lineCount = () => Infinity) {
       return false;
     })
     .map((finding) => checkLines(finding, lineCount, issues));
-  const flags = (Array.isArray(raw.flags) ? raw.flags : []).filter((flag) => REVIEW_FLAGS.includes(flag));
-  return { ok: true, review: { ...raw, findings, flags, notes: typeof raw.notes === "string" ? raw.notes : "" }, issues };
+  const flags = (raw.flags ?? []).filter((flag) => REVIEW_FLAGS.includes(flag));
+  return { ok: true, review: { ...raw, findings, flags, notes: raw.notes ?? "" }, issues };
 }
 
 const reviewTask = (facts, language) =>

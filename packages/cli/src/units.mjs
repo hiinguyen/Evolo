@@ -16,6 +16,9 @@ function resolveCommit(repoDir, rev) {
   }
 }
 
+// How long `evolo review` waits for the remote before giving up on fetching a unit's missing commits.
+const FETCH_TIMEOUT_MS = 2 * 60 * 1000;
+
 // Thrown when every commit of a change set is someone else's or a merge commit: nothing to judge, and no retry helps.
 export class NothingToScoreError extends Error {}
 
@@ -165,11 +168,12 @@ export function fetchPullRequest(repoDir, number, { remote } = {}) {
 export function ensureCommit(repoDir, remote, facts) {
   if (hasCommit(repoDir, facts.tip)) return;
   const wanted = facts.kind === "pr" ? `refs/pull/${facts.pr.number}/head` : facts.tip;
+  const fetch = (...refs) => git(repoDir, ["fetch", "--quiet", "--no-write-fetch-head", "--", remote, ...refs], { timeout: FETCH_TIMEOUT_MS });
   try {
-    git(repoDir, ["fetch", "--quiet", remote, wanted]);
+    fetch(wanted);
   } catch {
     // Some servers refuse to send a commit asked for by its sha: fetch the branches instead.
-    git(repoDir, ["fetch", "--quiet", remote]);
+    fetch();
   }
   if (!hasCommit(repoDir, facts.tip)) throw new Error(`commit ${facts.tip} is neither in ${repoDir} nor on ${remote}`);
 }

@@ -17,7 +17,8 @@ Chỉ dùng cho bản thân, nên **không có chống gian lận, server hay le
 | `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Có cột trạng thái cho từng tính năng và giai đoạn |
 | `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Đã xây, trừ phần hiển thị (mục 6) |
 | `docs/xp-evaluation.md` | Thiết kế gốc của rubric, judge, công thức XP | Có bảng phần nào đã xây, xây khác hoặc chưa làm |
-| `docs/review.md` | Review code cho từng push và PR: `evolo review`, cấu hình ngôn ngữ, lưu trữ | Đã thiết kế, chưa xây |
+| `docs/review.md` | Review code cho từng push và PR: `evolo review`, cấu hình ngôn ngữ, lưu trữ, kết quả chạy thật | Đã xây (nhánh `feat/review`) |
+| `docs/superpowers/plans/2026-10-20-evolo-review.md` | Kế hoạch triển khai `evolo review` | Đã làm xong |
 | `docs/handoff.md` | File này | |
 
 Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `auto-scoring.md`.
@@ -34,13 +35,14 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
 | XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
 | Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
+| Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | nhánh `feat/review` |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
 
 | Phần | Nội dung | Ở đâu trong docs |
 |---|---|---|
-| Thao tác | `backfill` (chấm bù lịch sử, cần chốt thiết kế ở mục 9), `preview` (chấm thử commit chưa push), duyệt `needs_review` | `auto-scoring.md` mục 6 |
+| Thao tác | `preview` (chấm thử commit chưa push), duyệt `needs_review` | `auto-scoring.md` mục 6 |
 | Thông báo khi mất XP | Đơn vị thành `reverted` hoặc `superseded` khi sync chưa có thông báo | `auto-scoring.md` mục 6 |
 | Tín hiệu XP | CI pass ngay, merge sạch, đóng issue `bug`: chưa thu thập, nên `M_signals` luôn là 1 | `xp-evaluation.md` mục 7.5 |
 | Chi phí | Trần chi phí theo ngày | `auto-scoring.md` mục 7 |
@@ -65,6 +67,9 @@ Code trong `packages/cli/`:
 | `src/ledger.mjs` | Bản ghi kết quả từng đơn vị và trạng thái (`scored`, `superseded`, `reverted`...), `summary.json` (XP theo ngày) |
 | `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic (giữ quyền của file cũ), `evolo.log` |
 | `src/views.mjs` | Nội dung thông báo, status line và `why`; tìm đơn vị theo mã, `#PR` hoặc commit |
+| `src/review.mjs` | `evolo review`: kiểm tra đầu ra (đường dẫn và số dòng), lưu và in review |
+| `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`review.language`) |
+| `src/sandbox.mjs` | Sandbox E2E dùng chung (repo tạm, remote bare, `gh` và `claude` giả) |
 | `src/claude.mjs` | `evolo claude install` / `uninstall`: skill, hook `SessionStart`, status line trong `$CLAUDE_CONFIG_DIR/settings.json` |
 | `claude/skills/evolo/SKILL.md` | Skill `/evolo`: chỉ người dùng gọi được, chỉ chạy `evolo status`, `why`, `retry` |
 | `fakes/` | `gh`, `claude` và `notify-send` giả cho test E2E |
@@ -82,7 +87,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 72 test, đều pass (15 test E2E, khoảng 23 giây)
+cd packages/cli && npm test                      # 96 test, đều pass (20 test E2E, khoảng 25 giây)
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -197,8 +202,11 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
    Lần push thật đầu tiên lên `main` là lần đầu hook chạy với GitHub; PR #5 merge trước mốc `since` nên không được chấm.
    Các repo cá nhân khác (friday, map-tour, Tunnel_Security) chưa được đăng ký.
 2. **Hiển thị:** xong, PR #5 đã merge (2026-10-20); `evolo claude install` đã chạy trên máy thật.
-   Còn `backfill` (chốt thiết kế ở mục 9 trước) và `preview`.
-3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
+   Người dùng đã quyết định không làm `backfill` (2026-10-20); còn `preview`.
+3. **Review code:** `evolo review` xong trên nhánh `feat/review`, chờ mở PR và merge.
+   Việc có thể làm tiếp: số dòng của vấn đề đôi khi vẫn là vị trí trong diff (validator đưa về mức file); judge chưa lần theo nơi gọi bằng `git grep` (`docs/review.md` mục 9).
+4. **Dashboard:** trang HTML tĩnh đọc ledger và `~/.evolo/reviews/` (`docs/architecture.md` mục 9); review là dữ liệu đầu tiên người dùng muốn xem trên đó.
+5. Sau đó: achievement, analytics, performance review (`evolo report`), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 
 ## 5. Quyết định đã chốt và lý do
 
@@ -250,7 +258,7 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 - Có chấm repo của công ty không? Nếu có cần tuỳ chọn tắt gửi code theo từng remote.
 - Có cần `/evolo preview` (chấm thử commit chưa push) ngay ở giai đoạn 1 không?
 - Thông báo desktop có làm phiền không? Hiện chưa có cách tắt.
-- `backfill`: Evolo chỉ chấm push đi qua hook và PR merge sau mốc `evolo init` (`repo.since`), nên lịch sử trước đó không có XP.
+- `backfill` (đã quyết định không làm, 2026-10-20; giữ lại để biết lý do): Evolo chỉ chấm push đi qua hook và PR merge sau mốc `evolo init` (`repo.since`), nên lịch sử trước đó không có XP.
   GitHub không giữ lịch sử push (Events API chỉ 90 ngày và 300 sự kiện, với lightrag đã trống).
   PR cũ thì dễ (`gh pr list` từ mốc N ngày).
   Push cũ có ba cách: (A) reflog của `refs/remotes/<remote>/<branch>`, đúng từng lần push từ clone này, các lần push từ máy khác gộp theo mỗi lần fetch, chỉ trong thời hạn của reflog; (B) gộp commit của mình trên nhánh mặc định theo ngày; (C) A khi có reflog, B khi không.

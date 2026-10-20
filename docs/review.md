@@ -3,7 +3,7 @@
 Tài liệu này mô tả lệnh `evolo review`: một judge riêng đọc lại một đơn vị đã chấm (một lần push hoặc một PR đã merge) và viết review code cho nó.
 Review được lưu lại để xem lại trong terminal, và sau này trên dashboard.
 
-Trạng thái (2026-10-20): đã chốt thiết kế, chưa xây.
+Trạng thái (2026-10-20): đã xây trên nhánh `feat/review`, có test unit và E2E, đã chạy thật một lần (mục 9).
 
 ## 1. Quyết định chính
 
@@ -113,6 +113,9 @@ Commit `tip` không còn trong clone thì được tải lại từ remote đã 
 
 - Sai cấu trúc, hoặc có cờ `incomplete_investigation`: thử lại, tối đa 3 lần như khi chấm điểm.
 - Vấn đề có `location` trỏ tới file không có trong repo tại `tip` và không có trong change: bỏ vấn đề đó, ghi lý do vào `issues`, không thử lại.
+- Số dòng vượt quá độ dài file tại `tip`, hoặc số dòng của file không còn ở `tip`: bỏ phần số dòng, giữ vấn đề ở mức file, ghi vào `issues`.
+  Lý do ở mục 9: judge hay lấy số dòng của `change.diff` thay vì của file.
+  Độ dài chỉ đo trên file thường trong worktree tạm: symlink không bao giờ bị đọc theo (nó có thể trỏ ra ngoài repo), thư mục cho kết quả không có, file trên 4 MB không bị kiểm tra.
 - Có cờ `suspected_injection`: vẫn lưu, và khi in review thì có cảnh báo ở đầu.
 - Judge không chạy được (chưa đăng nhập, mất mạng, hết hạn mức), hoặc cả 3 lần đều sai: báo lỗi, thoát mã khác 0, không lưu gì, review cũ (nếu có) giữ nguyên.
 
@@ -157,3 +160,18 @@ Mỗi đơn vị một file `~/.evolo/reviews/<owner>/<repo>/<unit id>.json`, gh
 - Tự động review sau mỗi lần chấm.
 - Dashboard: sẽ đọc `~/.evolo/reviews/` cùng ledger khi được làm (`docs/architecture.md` mục 9).
 - Lịch sử nhiều lần review cho cùng một đơn vị.
+
+## 9. Chạy thật (2026-10-20)
+
+Clone tạm của `hiinguyen/lightrag`, `EVOLO_HOME` riêng, `claude` thật, `review.language vi`, đơn vị PR #5 (21 file, +2075 -16).
+
+- Chấm điểm sau khi tách prompt chung (`judge/shared.md`): 160 XP, khớp các lần chấm trước (160-162), nên việc tách task spec không làm lệch điểm.
+- Review: 28-34 giây, $0.26 mỗi lần, khoảng gấp đôi chi phí chấm điểm vì đầu ra dài hơn.
+- Nội dung bằng tiếng Việt, đúng cấu trúc, các vấn đề có thật và cụ thể: endpoint đọc tài liệu chỉ bằng secret dùng chung, bỏ qua RBAC; `hmac.compare_digest` ném `TypeError` với header không phải ASCII; đọc cả file txt vào RAM rồi mới cắt.
+- Lần 1 và 2: mọi số dòng đều là vị trí trong `change.diff` (ví dụ `n8n_agent.py:1337-1352` trong khi file có 159 dòng), vì judge chỉ đọc diff.
+  Nhắc trong mục "What to write" là chưa đủ.
+- Đã sửa bằng hai lớp: quy trình bắt buộc mở file (hoặc `git grep -n`) để lấy số dòng, và validator bỏ số dòng vượt quá độ dài file.
+  Lần 3: 4/5 vấn đề có số dòng đúng (đã đối chiếu với file tại `tip`), vấn đề còn lại bị validator đưa về mức file.
+- Judge chỉ dùng 4-5 tool mỗi lần (đọc facts, diff, rồi `cat -n` các file bị sửa); chưa lần theo nơi gọi bằng `git grep` như quy trình yêu cầu.
+- Không còn worktree tạm nào sau khi chạy.
+
