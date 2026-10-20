@@ -5,8 +5,13 @@
 //       registers the clone and installs the pre-push hook; from then on every push to the default branch
 //       and every merged PR of yours is scored in the background
 //   evolo uninstall [--repo <clone>]      removes the hook and the registration, keeps the scores
-//   evolo sync                            queues newly merged PRs, re-checks the ledger, starts the worker
-//   evolo status                          the queue and the latest scores
+//   evolo sync [--background]             queues newly merged PRs, re-checks the ledger, starts the worker;
+//                                         --background leaves all of it to a detached worker and prints nothing
+//   evolo status                          level, XP, the queue and the latest scores
+//   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
+//   evolo retry                           scores the failed units again, and retries waiting jobs now
+//   evolo statusline                      one line for Claude Code's status line
+//   evolo claude install|uninstall        the /evolo skill, a SessionStart sync hook and the status line in Claude Code
 //   evolo worker                          scores the queue until it is empty (started by the hook and by sync)
 //   evolo enqueue push --pusher PID -- <remote> <url>   called by the hook, with git's pre-push input on stdin
 //   evolo evaluate --repo <clone> --out <results dir> [--judge claude|opencode] [--model M]
@@ -26,17 +31,21 @@ import { levelFor } from "../src/score.mjs";
 import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
-import { listRecords } from "../src/ledger.mjs";
-import { listJobs, spawnWorker } from "../src/queue.mjs";
-import { initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
+import { installClaude, uninstallClaude } from "../src/claude.mjs";
+import { listAllRecords, listRecords, readSummary, writeSummary } from "../src/ledger.mjs";
+import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
+import { findRepo, initRepo, uninstallRepo } from "../src/repos.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
-import { enqueuePush, runWorker, syncAll } from "../src/worker.mjs";
+import { explain, findByRef, recentXp, statusLine } from "../src/views.mjs";
+import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|why|retry|statusline|claude|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
-  evolo sync | evolo status | evolo worker
+  evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
+  evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
+  evolo claude install|uninstall
   evolo evaluate --repo <dir> --out <dir> [--judge claude|opencode] [--model M] [--budget USD]
                  [--url U] [--stars N] [--own] [--author EMAIL]... [--range <from>..<to>]... [--pr <number>]... [<sha>...]`;
 
@@ -176,8 +185,20 @@ async function worker() {
   if (!(await runWorker(home))) logLine(home, "another worker is running");
 }
 
-function sync() {
+function sync(argv) {
+  const { values } = parseArgs({ args: argv, options: { background: { type: "boolean", default: false } } });
   const home = evoloHome();
+  // From Claude Code's SessionStart hook: whatever a hook prints there goes into the coding agent's context,
+  // and the session must not wait on GitHub. A new worker syncs first, then scores what the sync queued.
+  if (values.background) {
+    try {
+      requestSync(home);
+      spawnWorker(home);
+    } catch (error) {
+      logLine(home, `background sync failed to start: ${error.message}`);
+    }
+    return;
+  }
   const notes = syncAll(home);
   notes.forEach((note) => console.log(note));
   if (listJobs(home).length > 0) spawnWorker(home);
@@ -185,6 +206,8 @@ function sync() {
 }
 
 const STATUS_RECORDS = 15;
+
+const newestFirst = (records) => records.sort((a, b) => b.at.localeCompare(a.at));
 
 function status() {
   const home = evoloHome();
@@ -194,11 +217,16 @@ function status() {
     const what = job.type === "pr" ? `PR #${job.number}` : `push ${job.to.slice(0, 7)}`;
     console.log(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`);
   }
-  const all = Object.keys(loadRepos(home)).flatMap((key) => listRecords(home, key));
-  const total = all.filter((record) => record.status === "scored").reduce((sum, record) => sum + record.xp, 0);
-  const { level, next } = levelFor(total);
-  console.log(`level ${level}  ${total} XP  (${next - total} XP to level ${level + 1})`);
-  const records = all.sort((a, b) => b.at.localeCompare(a.at)).slice(0, STATUS_RECORDS);
+  // Rebuilt rather than read: status is where a summary left behind by two concurrent writers is put right.
+  const summary = writeSummary(home);
+  const { level, next } = levelFor(summary.total);
+  const { today, week } = recentXp(summary);
+  console.log(`level ${level}  ${summary.total} XP  (${next - summary.total} XP to level ${level + 1})`);
+  console.log(`today +${today} XP  last 7 days +${week} XP`);
+  const all = listAllRecords(home);
+  const failed = all.filter((record) => record.status === "failed").length;
+  if (failed > 0) console.log(`${failed} failed: \`evolo retry\` scores them again, \`evolo why <unit>\` shows why`);
+  const records = newestFirst(all).slice(0, STATUS_RECORDS);
   console.log(records.length === 0 ? "no scores yet" : "latest:");
   for (const record of records) {
     const xp = record.status === "scored" ? `${record.xp} XP` : record.status;
@@ -206,7 +234,63 @@ function status() {
   }
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, evaluate };
+// The unit `ref` names, searched in the registered clone `--repo` (default: the current directory) when it is one,
+// else in every repository; a commit given by name ("HEAD~2", a branch) is resolved in that clone.
+function why(argv) {
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { repo: { type: "string", default: "." } } });
+  const home = evoloHome();
+  let repo = null;
+  try {
+    repo = findRepo(home, values.repo);
+  } catch {
+    // Not inside a git repository: search every repository.
+  }
+  const records = newestFirst(repo ? listRecords(home, repo.key) : listAllRecords(home));
+  const [ref] = positionals;
+  let record = ref ? findByRef(records, ref) : records[0];
+  if (!record && ref && repo) {
+    try {
+      record = findByRef(records, git(repo.path, ["rev-parse", "--verify", "--quiet", "--end-of-options", `${ref}^{commit}`]).trim());
+    } catch {
+      // Not a commit in this clone either.
+    }
+  }
+  if (!record) {
+    console.error(ref ? `no scored unit matches ${ref}${repo ? ` in ${repo.key}` : ""}` : "no scores yet");
+    process.exit(1);
+  }
+  console.log(explain(record));
+}
+
+function retry() {
+  const home = evoloHome();
+  const notes = retryFailed(home);
+  if (notes.length === 0) {
+    console.log("nothing to retry");
+    return;
+  }
+  notes.forEach((note) => console.log(note));
+  spawnWorker(home);
+}
+
+// Claude Code runs this on every refresh of the status line: it reads one small file, and never fails loudly.
+function statusline() {
+  const home = evoloHome();
+  try {
+    console.log(statusLine(readSummary(home), listJobs(home).length));
+  } catch (error) {
+    logLine(home, `statusline: ${error.message}`);
+  }
+}
+
+function claude(argv) {
+  const [action] = argv;
+  if (action === "install") installClaude(SELF).forEach((note) => console.log(note));
+  else if (action === "uninstall") uninstallClaude().forEach((note) => console.log(note));
+  else usageError("expected: evolo claude install|uninstall");
+}
+
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, retry, statusline, claude, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();

@@ -78,7 +78,7 @@ async function withCheckout(repoDir, sha, work) {
   // Signals end the process without running `finally`, so the same cleanup is also registered for exit.
   process.once("exit", cleanup);
   try {
-    git(repoDir, ["worktree", "add", "--detach", "--force", checkoutDir, sha]);
+    git(repoDir, ["worktree", "add", "--quiet", "--detach", "--force", checkoutDir, sha]);
     return await work(checkoutDir, inputsDir);
   } finally {
     process.removeListener("exit", cleanup);

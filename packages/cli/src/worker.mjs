@@ -1,16 +1,18 @@
 // The background half of Evolo: the pre-push hook adds a job, one worker per machine scores the queue,
 // and a sync after the queue drains picks up merged PRs and re-checks the ledger (docs/auto-scoring.md sections 2-4).
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
 import { createJudge } from "./judges/index.mjs";
-import { isJudged, listRecords, readRecord, refreshLedger, scoredRecord, writeRecord } from "./ledger.mjs";
-import { acquireLock, addJob, isAlive, listJobs, removeJob, updateJob } from "./queue.mjs";
+import { isJudged, listRecords, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord } from "./ledger.mjs";
+import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
+import { notification } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;
@@ -22,6 +24,8 @@ const RETRY_DELAYS_MS = [60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000];
 const MAX_IDLE_MS = 5 * 1000;
 // Bound on every call to a remote, which can hang on a dead network.
 const REMOTE_TIMEOUT_MS = 2 * 60 * 1000;
+// A notification daemon that does not answer must not hold the queue up.
+const NOTIFY_TIMEOUT_MS = 5 * 1000;
 
 const ZERO_SHA = /^0+$/;
 const short = (sha) => (sha ? sha.slice(0, 7) : "root");
@@ -61,22 +65,36 @@ export function remoteHead(repoDir, remote, branch) {
 
 const unitIdOf = (job) => (job.type === "pr" ? `pr-${job.number}` : `push-${short(job.from)}-${short(job.to)}`);
 
+// Best effort: a machine without notify-send or without a desktop session still scores, and the log has every result.
+function notify(home, message) {
+  if (!message) return;
+  try {
+    const args = ["--app-name=Evolo", "--", `Evolo ${message.title}`, message.body];
+    execFileSync("notify-send", args, { stdio: "ignore", timeout: NOTIFY_TIMEOUT_MS });
+  } catch (error) {
+    if (error.code !== "ENOENT") logLine(home, `notification failed: ${error.message}`);
+  }
+}
+
 function finish(home, job, record) {
+  const totalBefore = readSummary(home).total;
   writeRecord(home, job.repo, record);
   removeJob(home, job);
   const xp = record.status === "scored" ? ` +${record.xp} XP` : "";
   logLine(home, `${job.repo} ${record.id}: ${record.status}${xp} ${record.summary ?? record.reason ?? ""}`);
+  notify(home, notification({ ...record, repo: job.repo }, totalBefore));
 }
 
 const endRecord = (job, status, reason) => ({ id: unitIdOf(job), kind: job.type, status, xp: 0, reason, at: new Date().toISOString(), job });
 
 // Returns "landed", "pending" or "failed". `git push` has finished once its process is gone, so a push that is not on
 // the remote by then never will be. The process is checked before the remote, or a push finishing in between would
-// look failed.
+// look failed. A job marked `pushed` (`evolo retry`) is for a push that ended long ago.
 function landing(repo, job) {
   const pushing = job.pusher !== null && isAlive(job.pusher);
   const head = remoteHead(repo.path, job.remote, repo.defaultBranch);
   if (head && isAncestor(repo.path, job.to, head)) return "landed";
+  if (job.pushed) return "failed";
   const expired = Date.now() - Date.parse(job.enqueuedAt) > LAND_TIMEOUT_MS;
   return (job.pusher === null || pushing) && !expired ? "pending" : "failed";
 }
@@ -104,7 +122,10 @@ function ensureReplacedCommit(repo, job) {
 async function processPush(home, job, repo, judge) {
   const state = landing(repo, job);
   if (state === "pending") return updateJob(home, { ...job, notBefore: Date.now() + LAND_POLL_MS });
-  if (state === "failed") return finish(home, job, endRecord(job, "push_failed", `${short(job.to)} never reached ${job.remote} ${job.ref}`));
+  if (state === "failed") {
+    const where = `${job.remote} ${job.ref}`;
+    return finish(home, job, endRecord(job, "push_failed", job.pushed ? `${short(job.to)} is no longer on ${where}` : `${short(job.to)} never reached ${where}`));
+  }
   if (!ensureReplacedCommit(repo, job)) {
     return finish(home, job, endRecord(job, "failed", `the push replaced ${short(job.from)}, which neither this clone nor ${job.remote} has`));
   }
@@ -132,6 +153,35 @@ async function processJob(home, job, judge) {
     logLine(home, `${job.repo} ${unitIdOf(job)}: attempt ${attempts} failed, retrying: ${error.message}`);
     return updateJob(home, { ...job, attempts, lastError: error.message, notBefore: Date.now() + RETRY_DELAYS_MS[attempts - 1] });
   }
+}
+
+// The job that scores a failed record again, from the job the record came from or else from the unit it judged.
+// The push ended long ago, so the job does not wait for it to land.
+function retryJob(key, repo, record) {
+  const facts = record.result?.facts;
+  if (record.kind === "pr") return { type: "pr", repo: key, number: record.job?.number ?? facts.pr.number };
+  const [from, to] = record.job ? [record.job.from, record.job.to] : [facts.base, facts.tip];
+  return { type: "push", repo: key, remote: repo.remote, ref: `refs/heads/${repo.defaultBranch}`, from, to, pusher: null, pushed: true };
+}
+
+// `evolo retry`: makes the jobs waiting to retry after an error due now, and queues every failed unit of the
+// registered repositories again. Returns what it did.
+export function retryFailed(home) {
+  const notes = [];
+  const jobs = listJobs(home);
+  for (const job of jobs.filter((queued) => queued.attempts > 0)) {
+    if (updateJob(home, { ...job, notBefore: Date.now() })) notes.push(`${job.repo} ${unitIdOf(job)}: retrying now`);
+  }
+  const queued = new Set(jobs.map((job) => `${job.repo} ${unitIdOf(job)}`));
+  for (const [key, repo] of Object.entries(loadRepos(home))) {
+    for (const record of listRecords(home, key).filter((candidate) => candidate.status === "failed")) {
+      const job = retryJob(key, repo, record);
+      if (queued.has(`${key} ${unitIdOf(job)}`)) continue;
+      addJob(home, job);
+      notes.push(`${key} ${record.id}: queued again`);
+    }
+  }
+  return notes;
 }
 
 // For one repository: re-checks the ledger against the remote branch, and queues the user's PRs merged since
@@ -171,8 +221,11 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
   const release = acquireLock(home);
   if (!release) return false;
   try {
+    // A new worker syncs once, which is how `evolo sync --background` works; a pending request is part of that sync.
+    takeSyncRequest(home);
     let worked = true;
     for (;;) {
+      if (takeSyncRequest(home)) worked = true;
       const jobs = listJobs(home);
       const ready = jobs.find((job) => job.notBefore <= Date.now());
       const inFlight = jobs.some((job) => job.attempts === 0);
@@ -192,7 +245,8 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
   } finally {
     release();
   }
-  // A job queued while this worker was finishing found the lock taken, and its own worker gave up: look once more.
-  if (listJobs(home).length > 0) await runWorker(home, { judge });
+  // A job queued or a sync requested while this worker was finishing found the lock taken, and its own worker gave up:
+  // look once more.
+  if (listJobs(home).length > 0 || hasSyncRequest(home)) await runWorker(home, { judge });
   return true;
 }
