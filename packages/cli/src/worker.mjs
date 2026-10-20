@@ -3,19 +3,20 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { achievementsOf, notifyUnlocks } from "./achievements.mjs";
 import { BudgetExceededError, assertWithinBudget, isWithinBudget, nextLocalDay } from "./budget.mjs";
 import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
 import { createJudge } from "./judges/index.mjs";
-import { isJudged, isLive, landedAt, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
+import { isJudged, isLive, landedAt, listAllRecords, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
 import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
 import { terminalSafe } from "./safe-text.mjs";
 import { collectSignals, withSignals, withUnreadableSignals } from "./signals.mjs";
-import { budgetNotification, notification } from "./views.mjs";
+import { achievementNotification, budgetNotification, notification } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;
@@ -106,6 +107,20 @@ function finish(home, job, record) {
   const xp = record.status === "scored" ? ` +${record.xp} XP` : "";
   logLine(home, `${job.repo} ${record.id}: ${record.status}${xp} ${record.summary ?? record.reason ?? ""}`);
   notify(home, { ...record, repo: job.repo }, totalBefore);
+  if (record.status === "scored") announceAchievements(home);
+}
+
+// Tells the user about the achievement tiers the ledger reaches that were never announced. Best effort, like every
+// notification: the record is written, so an unreadable achievements.json is only logged.
+function announceAchievements(home) {
+  try {
+    const unlocks = notifyUnlocks(home, achievementsOf(listAllRecords(home)));
+    if (unlocks.length === 0) return;
+    logLine(home, `achievement unlocked: ${unlocks.map(({ label }) => label).join(", ")}`);
+    send(home, achievementNotification(unlocks, { markup: supportsBodyMarkup() }));
+  } catch (error) {
+    logLine(home, `achievements failed: ${error.message}`);
+  }
 }
 
 const endRecord = (job, status, reason) => ({ id: unitIdOf(job), kind: job.type, status, xp: 0, reason, at: new Date().toISOString(), job });

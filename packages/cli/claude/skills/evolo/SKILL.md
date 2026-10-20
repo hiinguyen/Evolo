@@ -1,9 +1,9 @@
 ---
 name: evolo
-description: Show the user's Evolo XP and analytics, explain how a push or PR was scored, review a push or PR, or retry failed scoring.
-argument-hint: "[stats [week|month|quarter] [--previous]] | [why <commit|#pr|unit id>] | [review <commit|#pr|unit id> [--again]] | [retry]"
+description: Show the user's Evolo XP, analytics and achievements, explain how a push or PR was scored, review a push or PR, or retry failed scoring.
+argument-hint: "[stats [week|month|quarter] [--previous]] | [achievements] | [why <commit|#pr|unit id>] | [review <commit|#pr|unit id> [--again]] | [retry]"
 disable-model-invocation: true
-allowed-tools: Bash(evolo status:*), Bash(evolo stats:*), Bash(evolo why:*), Bash(evolo review:*), Bash(evolo retry:*)
+allowed-tools: Bash(evolo status:*), Bash(evolo stats:*), Bash(evolo achievements:*), Bash(evolo why:*), Bash(evolo review:*), Bash(evolo retry:*)
 ---
 
 # Evolo
@@ -21,7 +21,10 @@ Arguments: `$ARGUMENTS`
 - `stats [week|month|quarter] [--previous]`: run `evolo stats` with the same arguments; the period defaults to this week.
   Report the XP and units against the previous period, the streak, the mix of work, the rubric averages and their
   changes, the share of units that touched tests, reverts, and where the work went (repositories, directories, hours).
-  Point out the largest changes; do not judge the work beyond what the numbers say.
+  Point out the largest changes and the achievements unlocked in the period; do not judge the work beyond what the numbers say.
+- `achievements`: run `evolo achievements`.
+  Report the tiers reached, the achievements closest to their next tier, and how many secrets are found and still hidden.
+  Never guess or hint at what a hidden achievement is for.
 - `why <ref>`: run `evolo why <ref>`, where `<ref>` is a commit, `#<pr number>` or a unit id such as `push-89fd4e3-8c68e65`.
   Without a ref it explains the latest unit.
   Explain which rubric scores drove the XP, quoting the judge's reasons and evidence, and how the formula line turned them into XP.

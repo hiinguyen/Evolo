@@ -237,8 +237,9 @@ test("a scored push raises a desktop notification, shows in the status line and 
   box.push(["origin", "main"]);
   const record = await box.settled(`push-root-${short(sha)}`);
 
+  // The XP comes first; the achievements it unlocked follow, which hidden ones among them depends on the clock.
   const [shown, ...more] = box.notifications();
-  assert.deepEqual(more, []);
+  assert.ok(more.every((other) => /^Evolo (achievement unlocked: |\d+ achievements unlocked$)/.test(other.title)), JSON.stringify(more));
   assert.match(shown.title, new RegExp(`^Evolo \\+${record.xp} XP · level \\d+!$`), "the first score is a level up");
   assert.equal(shown.body, `proj push ..${short(sha)}: feature\nChanged 1 file(s).`);
   assert.match(box.evolo("statusline").trim(), new RegExp(`^Lv \\d+ · ${record.xp} XP · \\+${record.xp} today$`));
@@ -402,7 +403,8 @@ test("signals: a push gains XP for the bug issue it closes at once, and for CI t
     [true, [12], false, "PENDING", false],
   );
   assert.equal(scored.result.breakdown.mSignals, 1.1);
-  assert.match(box.notifications().at(-1).title, new RegExp(`^Evolo \\+${scored.xp} XP`), "the notification has the XP with the signals so far");
+  const xpShown = box.notifications().filter((shown) => shown.title.startsWith("Evolo +"));
+  assert.match(xpShown.at(-1).title, new RegExp(`^Evolo \\+${scored.xp} XP`), "the notification has the XP with the signals so far");
   assert.match(box.evolo("why", scored.id), /^signals: closes bug issue #12 \+10%; read again at the next sync \(CI: pending\)$/m);
 
   box.setGithub({ checks: { [fix]: "SUCCESS" }, issues });
@@ -498,6 +500,35 @@ test("once the day's judge budget is spent, units wait for the next day while un
   await box.settled(`push-${short(second)}-${short(third)}`);
   assert.equal(readRecord(box.home, REPO, `push-${short(base)}-${short(second)}`).status, "scored");
   assert.equal(box.judgeCalls(), 3);
+});
+
+test("the first scored unit announces Contributor I once, and achievements and stats list it", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const first = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(first)}`);
+  const announced = () => box.notifications().filter((shown) => /^Evolo (achievement unlocked|\d+ achievements unlocked)/.test(shown.title));
+  const [unlock, ...others] = announced();
+  assert.deepEqual(others, [], "every tier reached at once is in one notification");
+  assert.ok(
+    unlock.title === "Evolo achievement unlocked: Contributor I" || /^Contributor I: scored units$/m.test(unlock.body),
+    JSON.stringify(unlock),
+  );
+  assert.match(readFileSync(join(box.home, "evolo.log"), "utf8"), /achievement unlocked: Contributor I/);
+
+  const second = box.commit("feat: more", { "app.js": lines(30, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-${short(first)}-${short(second)}`);
+  // Clock-based secrets may unlock if the test crosses an hour, but Contributor I is never announced again.
+  assert.equal(announced().filter((shown) => /Contributor I\b/.test(`${shown.title}\n${shown.body}`)).length, 1);
+
+  const listed = box.evolo("achievements");
+  assert.match(listed, /^\d+ of \d+ unlocked · \d+ secrets? found, \d+ still hidden$/m);
+  assert.match(listed, /^Contributor +I +2\/10 +scored units$/m);
+  assert.match(listed, /^\?\?\? × \d+$/m);
+  assert.match(box.evolo("stats"), /^unlocked  Contributor I( · .+)?$/m);
+  assert.equal(box.evoloRun("achievements", "extra").status, 2);
 });
 
 test("stats show this week's scored push and today's streak, and refuse an unknown period", async () => {
