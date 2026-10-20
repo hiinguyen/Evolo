@@ -27,6 +27,7 @@ Thiết kế hiện tại không chặn đường làm chúng sau này, vì mọ
 | Level | Tôi đã tích luỹ được bao nhiêu? | Tổng XP trong ledger | Đã có công thức và `evolo status` |
 | Achievement | Tôi đã làm được những cột mốc nào? | Luật tất định trên ledger | Chưa làm |
 | Analytics | Cách tôi làm việc thay đổi thế nào? | Thống kê trên điểm rubric và facts | Chưa làm |
+| Review code | Push hay PR này có vấn đề gì, nên cải thiện gì? | Judge riêng, gọi tay bằng `evolo review` | Đã thiết kế (`docs/review.md`) |
 | Performance review | Tuần, tháng hay quý này tôi đã làm được gì? | LLM viết từ ledger, có trích dẫn | Chưa làm |
 | Dashboard | Xem tất cả ở một chỗ | Trang HTML sinh từ ledger | Chưa làm |
 
@@ -136,7 +137,8 @@ Không có chỉ số "số dòng code mỗi ngày".
 
 ## 8. Performance review (chưa làm)
 
-Bản review được sinh theo yêu cầu qua `/evolo review [tuần|tháng|quý]`.
+Bản review được sinh theo yêu cầu qua `/evolo report [tuần|tháng|quý]`.
+`evolo review` là lệnh khác: review code cho một push hoặc PR (`docs/review.md`).
 
 Quy trình gồm hai bước, giữ đúng nguyên tắc ở mục 2:
 
@@ -194,7 +196,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (PR #1) |
 | **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**, PR #2, #3); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, `status` (**xong**, PR #4); thông báo, `why`, `retry`, skill `/evolo`, status line, hook `SessionStart` (**xong**, PR #5); còn lại: `backfill`, `preview` (chi tiết trong `docs/auto-scoring.md` mục 6) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi (**đạt** cho phần đã xây) |
-| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), achievement, analytics, `/evolo review`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
+| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), achievement, analytics, `/evolo report`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |
 

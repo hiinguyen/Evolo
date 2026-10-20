@@ -17,6 +17,7 @@ Chỉ dùng cho bản thân, nên **không có chống gian lận, server hay le
 | `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Có cột trạng thái cho từng tính năng và giai đoạn |
 | `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Đã xây, trừ phần hiển thị (mục 6) |
 | `docs/xp-evaluation.md` | Thiết kế gốc của rubric, judge, công thức XP | Có bảng phần nào đã xây, xây khác hoặc chưa làm |
+| `docs/review.md` | Review code cho từng push và PR: `evolo review`, cấu hình ngôn ngữ, lưu trữ | Đã thiết kế, chưa xây |
 | `docs/handoff.md` | File này | |
 
 Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `auto-scoring.md`.
@@ -32,7 +33,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Chọn commit | Bỏ commit của người khác và commit thuộc PR đã merge; chọn đúng remote cho PR; chỉ chấm PR vào nhánh mặc định | #3 |
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
 | XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
-| Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 (đang mở) |
+| Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -186,14 +187,16 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Repo: `github.com/hiinguyen/Evolo`.
 - `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
 - Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
-- Nhánh `feat/display` (PR #5, đang mở, chưa merge): commit `docs: mark what the XP evaluation design has built so far` và `feat: show scores through notifications, why, retry and Claude Code`.
+- Thông báo, `why`, `retry`, status line và tích hợp Claude Code (PR #5, merge 2026-10-20).
 
 ## 4. Việc tiếp theo
 
 Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 
-1. **Dùng thật vài ngày:** `evolo init` trong các repo cá nhân (chưa repo nào được đăng ký), theo dõi `~/.evolo/evolo.log` và `evolo status`; lần push thật đầu tiên là lần đầu hook chạy với GitHub.
-2. **Hiển thị:** xong, chờ người dùng merge PR #5; `evolo claude install` đã chạy trên máy thật.
+1. **Dùng thật vài ngày:** Evolo đã được `evolo init` (2026-10-20, mốc `since` 00:30 UTC, tác giả `devnnhai@gmail.com`); theo dõi `~/.evolo/evolo.log` và `evolo status`.
+   Lần push thật đầu tiên lên `main` là lần đầu hook chạy với GitHub; PR #5 merge trước mốc `since` nên không được chấm.
+   Các repo cá nhân khác (friday, map-tour, Tunnel_Security) chưa được đăng ký.
+2. **Hiển thị:** xong, PR #5 đã merge (2026-10-20); `evolo claude install` đã chạy trên máy thật.
    Còn `backfill` (chốt thiết kế ở mục 9 trước) và `preview`.
 3. Sau đó: level, achievement, analytics, review, dashboard (giai đoạn 2), rồi hiệu chỉnh bằng golden set (giai đoạn 3).
 
@@ -231,7 +234,7 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
 - Clone thử nghiệm của Friday và lightrag, và các file kết quả JSON, nằm trong scratchpad của session cũ, có thể đã mất.
   Clone lại bằng `git clone https://github.com/hiinguyen/Friday` hoặc `https://github.com/hiinguyen/lightrag`.
 - Lệnh `evolo` là symlink `~/.local/bin/evolo`; thư mục global của npm là `/usr` (cần sudo), nên không dùng `npm link`.
-- `~/.evolo` chưa có repo nào được đăng ký trên máy này: hook `SessionStart` chạy nhưng chưa có gì để sync, `evolo status` báo level 0.
+- `~/.evolo` có một repo đăng ký là `hiinguyen/Evolo` (2026-10-20); hook `pre-push` nằm ở `.git/hooks/pre-push`.
 - `evolo claude install` đã chạy (2026-10-20); bản sao lưu `settings.json` trước khi cài nằm trong scratchpad của session cũ, có thể đã mất, nhưng `uninstall` trả về đúng như cũ.
 
 ## 8. Cách làm việc với người dùng
