@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { findByRef, notification, recentXp, statusLine, unitLabel } from "./views.mjs";
+import { explain, findByRef, notification, notificationSafe, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -46,4 +46,34 @@ test("a ref finds a unit by id, by PR number, or by a commit it counted before o
   assert.equal(findByRef(records, "fffffff"), pr, "the merge commit names its PR");
   assert.equal(findByRef(records, "abc"), null, "too short to be a commit");
   assert.equal(findByRef(records, "#8"), null);
+});
+
+// Text from the judge and from the repository (commit subjects, PR titles) can carry terminal escape sequences.
+const HOSTILE = "a\u001b[2J\u001b[31mb\u001b]0;title\u0007c\rd\u202ee\u009bf\u007fg";
+
+test("terminalSafe removes control and bidi characters but keeps text, newlines and tabs", () => {
+  assert.equal(terminalSafe(HOSTILE), "a[2J[31mb]0;titlecdefg");
+  assert.equal(terminalSafe("Tiếng Việt\n\tok · 5 XP"), "Tiếng Việt\n\tok · 5 XP");
+});
+
+test("why never prints control characters from the judge or the repository", () => {
+  const scores = Object.fromEntries(["impact", "centrality", "difficulty", "quality", "scope_fit"].map((c) => [c, { score: 1, reason: HOSTILE, evidence: [] }]));
+  const record = {
+    id: "push-root-abc1234", repo: "me/proj", kind: "push", status: "scored", xp: 5, at: "2026-10-20T08:00:00.000Z", summary: HOSTILE,
+    result: {
+      method: "rule",
+      facts: { commits: [{ sha: "abc1234567", subject: HOSTILE }], excluded: [], totals: { files: 1, additions: 1, deletions: 0, countedLines: 1 } },
+      evaluation: { contribution_type: "docs", summary: HOSTILE, scores, flags: [] },
+      xp: 5,
+      breakdown: { base: 25, mValue: 1, mSize: 1, mRepo: 1, mSignals: 1, raw: 5, formula_version: "1.2" },
+    },
+  };
+  const text = explain(record);
+  assert.doesNotMatch(text, /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/);
+  assert.match(text, /abc1234 a\[2J\[31mb\]0;titlecdefg/);
+});
+
+test("notificationSafe shows markup as text and drops control characters", () => {
+  assert.equal(notificationSafe('<a href="x">y</a> & <b>z</b>\u001b[1m\nnext'), '&lt;a href="x"&gt;y&lt;/a&gt; &amp; &lt;b&gt;z&lt;/b&gt;[1m\nnext');
+  assert.equal(notificationSafe("+50 XP · level 1!"), "+50 XP · level 1!");
 });

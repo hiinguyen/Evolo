@@ -9,9 +9,12 @@
 //                                         --background leaves all of it to a detached worker and prints nothing
 //   evolo status                          level, XP, the queue and the latest scores
 //   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
+//   evolo review [<commit>|#<pr>|<unit id>] [--repo <clone>] [--again] [--judge claude|opencode] [--model M]
+//       a code review of a unit by a separate judge, saved under <home>/reviews; the saved one unless --again
 //   evolo retry                           scores the failed units again, and retries waiting jobs now
 //   evolo statusline                      one line for Claude Code's status line
 //   evolo claude install|uninstall        the /evolo skill, a SessionStart sync hook and the status line in Claude Code
+//   evolo config [get <key> | set <key> <value>]   the settings in <home>/config.json; all of them without arguments
 //   evolo worker                          scores the queue until it is empty (started by the hook and by sync)
 //   evolo enqueue push --pusher PID -- <remote> <url>   called by the hook, with git's pre-push input on stdin
 //   evolo evaluate --repo <clone> --out <results dir> [--judge claude|opencode] [--model M]
@@ -32,20 +35,24 @@ import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
+import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
 import { listAllRecords, listRecords, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
-import { findRepo, initRepo, uninstallRepo } from "../src/repos.mjs";
+import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
+import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
-import { commitUnit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
-import { explain, findByRef, recentXp, statusLine } from "../src/views.mjs";
+import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
+import { explain, findByRef, recentXp, statusLine, terminalSafe, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|why|retry|statusline|claude|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
+  evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]
   evolo claude install|uninstall
+  evolo config [get <key> | set <key> <value>]
   evolo evaluate --repo <dir> --out <dir> [--judge claude|opencode] [--model M] [--budget USD]
                  [--url U] [--stars N] [--own] [--author EMAIL]... [--range <from>..<to>]... [--pr <number>]... [<sha>...]`;
 
@@ -63,12 +70,12 @@ function describe(facts) {
 function printRow(result) {
   const { id } = result.facts;
   if (result.status === "failed") {
-    console.log(`${id}  FAILED  ${result.failures.join(" | ")}`);
+    console.log(terminalSafe(`${id}  FAILED  ${result.failures.join(" | ")}`));
     return;
   }
   const s = scoreValues(result.evaluation);
   const cost = result.costUsd ? `$${result.costUsd.toFixed(2)}` : "-";
-  console.log(
+  console.log(terminalSafe(
     [
       id,
       result.method.padEnd(4),
@@ -80,7 +87,7 @@ function printRow(result) {
       `${Math.round(result.durationMs / 1000)}s`.padStart(5),
       describe(result.facts),
     ].join("  "),
-  );
+  ));
 }
 
 async function evaluate(argv) {
@@ -136,7 +143,7 @@ async function evaluate(argv) {
   mkdirSync(values.out, { recursive: true });
 
   for (const unit of units) {
-    const onProgress = (tool, detail) => console.error(`  [${unit.id}] ${tool} ${String(detail).slice(0, 100)}`);
+    const onProgress = (tool, detail) => console.error(terminalSafe(`  [${unit.id}] ${tool} ${String(detail).slice(0, 100)}`));
     const result = await evaluateUnit({ options, judge, unit, onProgress });
     writeFileSync(join(values.out, `${unit.id}.json`), JSON.stringify(result, null, 2));
     printRow(result);
@@ -200,7 +207,7 @@ function sync(argv) {
     return;
   }
   const notes = syncAll(home);
-  notes.forEach((note) => console.log(note));
+  notes.forEach((note) => console.log(terminalSafe(note)));
   if (listJobs(home).length > 0) spawnWorker(home);
   if (notes.length === 0) console.log("nothing new");
 }
@@ -215,7 +222,7 @@ function status() {
   console.log(jobs.length === 0 ? "queue: empty" : `queue: ${jobs.length} job(s)`);
   for (const job of jobs) {
     const what = job.type === "pr" ? `PR #${job.number}` : `push ${job.to.slice(0, 7)}`;
-    console.log(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`);
+    console.log(terminalSafe(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`));
   }
   // Rebuilt rather than read: status is where a summary left behind by two concurrent writers is put right.
   const summary = writeSummary(home);
@@ -230,23 +237,21 @@ function status() {
   console.log(records.length === 0 ? "no scores yet" : "latest:");
   for (const record of records) {
     const xp = record.status === "scored" ? `${record.xp} XP` : record.status;
-    console.log(`  ${record.at.slice(0, 16).replace("T", " ")}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`);
+    console.log(terminalSafe(`  ${record.at.slice(0, 16).replace("T", " ")}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`));
   }
 }
 
-// The unit `ref` names, searched in the registered clone `--repo` (default: the current directory) when it is one,
-// else in every repository; a commit given by name ("HEAD~2", a branch) is resolved in that clone.
-function why(argv) {
-  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { repo: { type: "string", default: "." } } });
-  const home = evoloHome();
+// The record of the unit `ref` names, searched in the registered clone `repoDir` when it is one, else in every
+// repository; a commit given by name ("HEAD~2", a branch) is resolved in that clone. The latest unit without `ref`.
+// Exits with a message when nothing matches.
+function findRecord(home, repoDir, ref) {
   let repo = null;
   try {
-    repo = findRepo(home, values.repo);
+    repo = findRepo(home, repoDir);
   } catch {
     // Not inside a git repository: search every repository.
   }
   const records = newestFirst(repo ? listRecords(home, repo.key) : listAllRecords(home));
-  const [ref] = positionals;
   let record = ref ? findByRef(records, ref) : records[0];
   if (!record && ref && repo) {
     try {
@@ -259,7 +264,73 @@ function why(argv) {
     console.error(ref ? `no scored unit matches ${ref}${repo ? ` in ${repo.key}` : ""}` : "no scores yet");
     process.exit(1);
   }
-  console.log(explain(record));
+  return record;
+}
+
+function why(argv) {
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { repo: { type: "string", default: "." } } });
+  const home = evoloHome();
+  const record = findRecord(home, values.repo, positionals[0]);
+  console.log(explain(record, { reviewed: readReview(home, record.repo, record.id) !== null }));
+}
+
+// Messages can quote the judge or the repository, so they are printed without control characters.
+function fail(message) {
+  console.error(terminalSafe(message));
+  process.exit(1);
+}
+
+// What a review of `record` needs, or an exit with the reason it cannot be reviewed.
+function reviewInputs(home, record) {
+  const facts = record.result?.facts;
+  if (!facts) fail(`${record.repo} ${record.id} has nothing to review: ${record.status}${record.reason ? ` (${record.reason})` : ""}`);
+  const repo = loadRepos(home)[record.repo];
+  if (!repo) fail(`${record.repo} is not registered on this machine: run \`evolo init\` in its clone to review its units`);
+  try {
+    ensureCommit(repo.path, repo.remote, facts);
+    return { facts, repo, language: getConfig(home, "review.language") };
+  } catch (error) {
+    return fail(error.message);
+  }
+}
+
+// Shows the saved review of a unit, or has the judge write one (and saves it) when there is none or with --again.
+async function review(argv) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      repo: { type: "string", default: "." },
+      again: { type: "boolean", default: false },
+      judge: { type: "string", default: "claude" },
+      model: { type: "string" },
+    },
+  });
+  const home = evoloHome();
+  const record = findRecord(home, values.repo, positionals[0]);
+  const saved = readReview(home, record.repo, record.id);
+  if (saved && !values.again) {
+    console.log(formatReview(saved));
+    return;
+  }
+  const { facts, repo, language } = reviewInputs(home, record);
+  const judge = createJudge({ backend: values.judge, model: values.model });
+  console.error(`reviewing ${record.repo} ${unitLabel(record.id)} in ${language} with ${judge.model}...`);
+  const result = await reviewUnit({
+    options: { repo: repo.path, url: repo.url, stars: repo.stars, own: repo.isOwnRepo },
+    judge, facts, language,
+    onProgress: (tool, detail) => console.error(terminalSafe(`  ${tool} ${String(detail).slice(0, 100)}`)),
+  });
+  if (!result.ok) {
+    fail(`review failed${result.unavailable ? " (the judge could not be reached)" : ""}:\n${result.failures.map((failure) => `  ${failure}`).join("\n")}`);
+  }
+  const stored = {
+    unitId: record.id, repo: record.repo, tip: facts.tip, at: new Date().toISOString(), language, judge: result.judge,
+    costUsd: result.costUsd, durationMs: result.durationMs, review: result.review, issues: result.issues,
+  };
+  writeReview(home, stored);
+  logLine(home, `reviewed ${record.repo} ${record.id}: ${result.review.findings.length} finding(s)`);
+  console.log(formatReview(stored));
 }
 
 function retry() {
@@ -269,7 +340,7 @@ function retry() {
     console.log("nothing to retry");
     return;
   }
-  notes.forEach((note) => console.log(note));
+  notes.forEach((note) => console.log(terminalSafe(note)));
   spawnWorker(home);
 }
 
@@ -290,7 +361,29 @@ function claude(argv) {
   else usageError("expected: evolo claude install|uninstall");
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, retry, statusline, claude, evaluate };
+function config(argv) {
+  const home = evoloHome();
+  const [action, key, value, ...extra] = argv;
+  try {
+    if (action === undefined) {
+      for (const [name, current, isDefault] of listConfig(home)) {
+        console.log(`${name} = ${current}${isDefault ? " (default)" : ""}  ${CONFIG_KEYS[name].describe}`);
+      }
+    } else if (action === "get" && key && value === undefined) {
+      console.log(getConfig(home, key));
+    } else if (action === "set" && key && value !== undefined && extra.length === 0) {
+      setConfig(home, key, value);
+      console.log(`${key} = ${value}`);
+    } else {
+      usageError("expected: evolo config [get <key> | set <key> <value>]");
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+}
+
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, review, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();

@@ -16,6 +16,9 @@ function resolveCommit(repoDir, rev) {
   }
 }
 
+// How long `evolo review` waits for the remote before giving up on fetching a unit's missing commits.
+const FETCH_TIMEOUT_MS = 2 * 60 * 1000;
+
 // Thrown when every commit of a change set is someone else's or a merge commit: nothing to judge, and no retry helps.
 export class NothingToScoreError extends Error {}
 
@@ -158,4 +161,19 @@ export function fetchPullRequest(repoDir, number, { remote } = {}) {
     git(repoDir, ["fetch", "--quiet", from, `refs/pull/${number}/head`, ...(hasCommit(repoDir, pr.baseRefOid) ? [] : [pr.baseRefOid])]);
   }
   return pullRequestUnit(repoDir, pr, { defaultBranch: repo.defaultBranchRef.name });
+}
+
+// Makes sure the clone has the tip of a unit recorded earlier: a branch deleted after its PR merged, or a clone reset
+// past a push, can leave the commits only on `remote`. Throws when the remote does not have them either.
+export function ensureCommit(repoDir, remote, facts) {
+  if (hasCommit(repoDir, facts.tip)) return;
+  const wanted = facts.kind === "pr" ? `refs/pull/${facts.pr.number}/head` : facts.tip;
+  const fetch = (...refs) => git(repoDir, ["fetch", "--quiet", "--no-write-fetch-head", "--", remote, ...refs], { timeout: FETCH_TIMEOUT_MS });
+  try {
+    fetch(wanted);
+  } catch {
+    // Some servers refuse to send a commit asked for by its sha: fetch the branches instead.
+    fetch();
+  }
+  if (!hasCommit(repoDir, facts.tip)) throw new Error(`commit ${facts.tip} is neither in ${repoDir} nor on ${remote}`);
 }

@@ -27,11 +27,12 @@ Thiết kế hiện tại không chặn đường làm chúng sau này, vì mọ
 | Level | Tôi đã tích luỹ được bao nhiêu? | Tổng XP trong ledger | Đã có công thức và `evolo status` |
 | Achievement | Tôi đã làm được những cột mốc nào? | Luật tất định trên ledger | Chưa làm |
 | Analytics | Cách tôi làm việc thay đổi thế nào? | Thống kê trên điểm rubric và facts | Chưa làm |
+| Review code | Push hay PR này có vấn đề gì, nên cải thiện gì? | Judge riêng, gọi tay bằng `evolo review` | Đã xây (`docs/review.md`) |
 | Performance review | Tuần, tháng hay quý này tôi đã làm được gì? | LLM viết từ ledger, có trích dẫn | Chưa làm |
 | Dashboard | Xem tất cả ở một chỗ | Trang HTML sinh từ ledger | Chưa làm |
 
 Nguyên tắc xuyên suốt: **AI chỉ đánh giá, code mới tính toán.**
-AI chỉ làm hai việc: chấm rubric cho một đóng góp và viết lời cho bản review.
+AI chỉ làm ba việc: chấm rubric cho một đóng góp, review code cho một đóng góp khi được gọi, và viết lời cho bản performance review.
 Mọi con số (XP, level, achievement, thống kê) đều được tính tất định từ dữ liệu đã lưu, nên có thể tính lại khi đổi công thức mà không gọi AI.
 
 ## 3. Đơn vị chấm: push và PR
@@ -78,7 +79,7 @@ Chi tiết cơ chế (hook `pre-push`, xác nhận push thành công, phát hi�
 
 Lõi `@evolo/core` gồm `units.mjs`, `facts.mjs`, `score.mjs`, `judges/` và `evaluate.mjs`; phần tự chấm gồm `hooks.mjs`, `repos.mjs`, `queue.mjs`, `worker.mjs`, `ledger.mjs` và `store.mjs`, đều nằm trong `packages/cli/src/`.
 Chưa tách thành package riêng vì hiện chỉ có một nơi dùng nó.
-Phần đọc ledger đã có `evolo status`, `why`, skill `/evolo`, status line và thông báo; dashboard và review chưa làm.
+Phần đọc ledger đã có `evolo status`, `why`, `review` (review code từng đơn vị, `docs/review.md`), skill `/evolo`, status line và thông báo; dashboard và performance review chưa làm.
 
 ## 5. Level
 
@@ -136,7 +137,8 @@ Không có chỉ số "số dòng code mỗi ngày".
 
 ## 8. Performance review (chưa làm)
 
-Bản review được sinh theo yêu cầu qua `/evolo review [tuần|tháng|quý]`.
+Bản review được sinh theo yêu cầu qua `/evolo report [tuần|tháng|quý]`.
+`evolo review` là lệnh khác: review code cho một push hoặc PR (`docs/review.md`).
 
 Quy trình gồm hai bước, giữ đúng nguyên tắc ở mục 2:
 
@@ -153,6 +155,7 @@ Ràng buộc cho bước 2:
 ## 9. Dashboard (chưa làm)
 
 `evolo dashboard` sinh một trang HTML tĩnh từ ledger rồi mở trong trình duyệt.
+Trang chi tiết một đóng góp hiện cả review code đã lưu trong `~/.evolo/reviews/` (cùng mã đơn vị với ledger), nếu có.
 Không cần server, không cần đăng nhập, dữ liệu không rời khỏi máy.
 
 Các màn hình: tổng quan (level, XP, streak, achievement mới), dòng thời gian đóng góp, chi tiết một đóng góp (điểm rubric, lý do, bằng chứng, breakdown công thức), analytics, review.
@@ -194,7 +197,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (PR #1) |
 | **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**, PR #2, #3); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, `status` (**xong**, PR #4); thông báo, `why`, `retry`, skill `/evolo`, status line, hook `SessionStart` (**xong**, PR #5); còn lại: `backfill`, `preview` (chi tiết trong `docs/auto-scoring.md` mục 6) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi (**đạt** cho phần đã xây) |
-| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), achievement, analytics, `/evolo review`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
+| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), achievement, analytics, `/evolo report`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |
 

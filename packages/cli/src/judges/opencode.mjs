@@ -1,15 +1,15 @@
-// Judge backend that runs the rubric as an opencode agent.
+// Judge backend that runs a task (scoring or review) as an opencode agent.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JudgeUnavailableError, judgePrompt, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
+import { JudgeUnavailableError, READ_ONLY_COMMANDS, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
 
 // Deny everything (including MCP tools from the user's global config), then allow read-only inspection.
-function agentFrontmatter() {
+function agentFrontmatter(spec) {
   const bashRules = READ_ONLY_COMMANDS.map((command) => `    "${command}*": allow`).join("\n");
   return [
     "---",
-    "description: Scores one git contribution against the Evolo XP rubric and returns JSON. Read-only.",
+    `description: Evolo ${spec.name}: evaluates one git contribution and returns JSON. Read-only.`,
     "mode: primary",
     "temperature: 0.1",
     "steps: 30",
@@ -27,11 +27,11 @@ function agentFrontmatter() {
   ].join("\n");
 }
 
-// The agent is written to a private config dir for each call, so the rubric has one source (judge/xp-judge.md).
-function writeAgentConfig() {
+// The agent is written to a private config dir for each call, so the task prompt has one source (judge/).
+function writeAgentConfig(spec) {
   const configDir = mkdtempSync(join(tmpdir(), "xp-opencode-"));
   mkdirSync(join(configDir, "agent"));
-  writeFileSync(join(configDir, "agent", "xp-judge.md"), agentFrontmatter() + judgePrompt());
+  writeFileSync(join(configDir, "agent", `${spec.name}.md`), agentFrontmatter(spec) + taskPrompt(spec));
   return configDir;
 }
 
@@ -65,11 +65,11 @@ export function createOpencodeJudge({ model } = {}) {
   return {
     backend: "opencode",
     model: model ?? "opencode default",
-    async judge({ checkoutDir, inputs, task, onProgress }) {
-      const configDir = writeAgentConfig();
+    async judge({ checkoutDir, inputs, task, spec = SCORE_TASK, onProgress }) {
+      const configDir = writeAgentConfig(spec);
       try {
         const args = [
-          "run", "--standalone", "--agent", "xp-judge", "--format", "json",
+          "run", "--standalone", "--agent", spec.name, "--format", "json",
           ...(model ? ["--model", model] : []),
           ...Object.values(inputs).flatMap((path) => ["--file", path]),
           "--", task,

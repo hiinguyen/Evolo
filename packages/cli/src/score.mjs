@@ -56,7 +56,8 @@ export function triage(facts) {
   return null;
 }
 
-function evidencePath(reference) {
+// "src/a.js:10-12" -> "src/a.js": the file a reference (evidence, a review finding's location) points at.
+export function evidencePath(reference) {
   return reference.replace(/:\d+(-\d+)?$/, "");
 }
 

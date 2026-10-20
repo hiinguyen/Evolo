@@ -4,6 +4,19 @@ import { CRITERIA, levelFor } from "./score.mjs";
 import { localDay } from "./ledger.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// C0 controls but tab and newline, DEL, C1 controls, and the bidi embedding, override and isolate characters.
+const UNSAFE_FOR_TERMINAL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
+
+// Text from the judge or the repository (reasons, summaries, commit subjects, PR titles), made safe to print:
+// without its control characters, an escape sequence cannot clear the screen, retitle the terminal, or hide text
+// behind a carriage return or a bidi override. Applied when printing, so records saved earlier are covered too.
+export const terminalSafe = (text) => String(text).replace(UNSAFE_FOR_TERMINAL, "");
+
+const MARKUP_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+
+// The same text made safe for the body of a desktop notification, which notification servers may read as markup
+// (freedesktop.org body-markup: <b>, <a href>, <img src>): shown as written, never as a link or an image.
+export const notificationSafe = (text) => terminalSafe(text).replace(/[&<>]/g, (char) => MARKUP_ESCAPES[char]);
 const formatXp = (xp) => xp.toLocaleString("en-US");
 const repoName = (key) => key.split("/").at(-1);
 
@@ -81,8 +94,8 @@ function judgedLines(result) {
 }
 
 // The full account of one record for `evolo why`: what was scored, every rubric score with its reason and evidence,
-// and how the XP formula turned them into XP.
-export function explain(record) {
+// how the XP formula turned them into XP, and whether the unit has a review (`reviewed`).
+export function explain(record, { reviewed = false } = {}) {
   const result = record.result;
   const worth = record.status === "scored" ? `${record.xp} XP` : record.status;
   const was = record.previousStatus ? ` (was ${record.previousStatus})` : "";
@@ -90,7 +103,7 @@ export function explain(record) {
   if (!result) {
     // Ended before judging: a rejected push, a unit with nothing to score, or an error after every retry.
     lines.push(record.reason);
-    return lines.join("\n");
+    return terminalSafe(lines.join("\n"));
   }
   const { facts } = result;
   const judge = result.method === "rule" ? "triaged by rule" : `judge ${result.judge.model ?? result.judge.backend}`;
@@ -107,7 +120,8 @@ export function explain(record) {
   if (facts.excluded.length > 0) {
     lines.push("left out:", ...facts.excluded.map((commit) => `  ${short(commit.sha)} ${commit.subject} (${commit.reason})`));
   }
-  return lines.join("\n");
+  lines.push("", reviewed ? `review: saved, see \`evolo review ${record.id}\`` : `review: none yet, \`evolo review ${record.id}\` writes one`);
+  return terminalSafe(lines.join("\n"));
 }
 
 // The record that `ref` names among `records`: a unit id ("pr-5", "push-89fd4e3-8c68e65"), "#5" for a PR,

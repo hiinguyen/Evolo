@@ -1,0 +1,59 @@
+// The user's settings (<home>/config.json), read and written by `evolo config`: { "review": { "language": "vi" } }.
+// Only known keys are accepted, and every value is checked both when it is set and when it is read,
+// because some values (review.language) are put into the judge's instructions.
+import { join } from "node:path";
+import { readJson, writeJson } from "./store.mjs";
+
+const LANGUAGE_MAX_LENGTH = 40;
+const LANGUAGE_PATTERN = /^\p{L}[\p{L} -]*$/u;
+
+export const CONFIG_KEYS = {
+  "review.language": {
+    default: "en",
+    describe: "the language reviews are written in, as a name or code (vi, Vietnamese, pt-BR)",
+    check: (value) => value.length <= LANGUAGE_MAX_LENGTH && LANGUAGE_PATTERN.test(value),
+    rule: `a language name or code: letters, spaces and "-", at most ${LANGUAGE_MAX_LENGTH} characters`,
+  },
+};
+
+const configPath = (home) => join(home, "config.json");
+
+function settingFor(key) {
+  const setting = CONFIG_KEYS[key];
+  if (!setting) throw new Error(`unknown setting "${key}", expected one of: ${Object.keys(CONFIG_KEYS).join(", ")}`);
+  return setting;
+}
+
+function checked(key, value) {
+  if (typeof value !== "string" || !settingFor(key).check(value)) {
+    throw new Error(`${key} must be ${settingFor(key).rule}, got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+const readConfig = (home) => readJson(configPath(home), {});
+
+// "review.language" -> config.review?.language
+const lookup = (config, key) => key.split(".").reduce((node, part) => node?.[part], config);
+
+export function getConfig(home, key) {
+  settingFor(key);
+  const value = lookup(readConfig(home), key);
+  return value === undefined ? CONFIG_KEYS[key].default : checked(key, value);
+}
+
+export function setConfig(home, key, value) {
+  checked(key, value);
+  const config = readConfig(home);
+  const [section, name] = key.split(".");
+  writeJson(configPath(home), { ...config, [section]: { ...config[section], [name]: value } });
+}
+
+// Every known setting as [key, value, isDefault].
+export function listConfig(home) {
+  const config = readConfig(home);
+  return Object.keys(CONFIG_KEYS).map((key) => {
+    const value = lookup(config, key);
+    return value === undefined ? [key, CONFIG_KEYS[key].default, true] : [key, checked(key, value), false];
+  });
+}

@@ -1,13 +1,13 @@
-// Judge backend that runs the rubric in a sandboxed, headless Claude Code session (`claude -p`).
+// Judge backend that runs a task (scoring or review) in a sandboxed, headless Claude Code session (`claude -p`).
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { FatalJudgeError, JudgeUnavailableError, OUTPUT_SCHEMA_PATH, PROMPT_PATH, READ_ONLY_COMMANDS, runJsonl } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, READ_ONLY_COMMANDS, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
 
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-5-5";
 const DEFAULT_BUDGET_USD = 1;
 const JUDGE_TOOLS = "Read,Grep,Glob,Bash";
 
-export function claudeArgs({ model, budgetUsd, inputsDir, task }) {
+export function claudeArgs({ model, budgetUsd, inputsDir, task, spec = SCORE_TASK }) {
   const settings = { permissions: { allow: READ_ONLY_COMMANDS.map((command) => `Bash(${command}:*)`) } };
   return [
     "-p",
@@ -23,8 +23,8 @@ export function claudeArgs({ model, budgetUsd, inputsDir, task }) {
     "--settings", JSON.stringify(settings),
     // --restricted confines file tools to the working directories, so the inputs dir is added explicitly.
     "--add-dir", inputsDir,
-    "--append-system-prompt-file", PROMPT_PATH,
-    "--json-schema", readFileSync(OUTPUT_SCHEMA_PATH, "utf8"),
+    "--append-system-prompt", taskPrompt(spec),
+    "--json-schema", readFileSync(spec.schemaPath, "utf8"),
     "--max-budget-usd", String(budgetUsd),
     "--output-format", "stream-json",
     "--verbose",
@@ -71,9 +71,9 @@ export function createClaudeJudge({ model = DEFAULT_CLAUDE_MODEL, budgetUsd = DE
   return {
     backend: "claude",
     model,
-    async judge({ checkoutDir, inputs, task, onProgress }) {
+    async judge({ checkoutDir, inputs, task, spec = SCORE_TASK, onProgress }) {
       const inputList = Object.values(inputs).map((path) => `- ${path}`).join("\n");
-      const args = claudeArgs({ model, budgetUsd, inputsDir: dirname(inputs.facts), task: `${task}\n\nInput files:\n${inputList}` });
+      const args = claudeArgs({ model, budgetUsd, inputsDir: dirname(inputs.facts), task: `${task}\n\nInput files:\n${inputList}`, spec });
       // EVOLO_JUDGE marks every process below this one, so Evolo's git hooks ignore anything a judge might trigger.
       const env = { ...process.env, EVOLO_JUDGE: "1" };
       const onEvent = (event) => toolUses(event).forEach((block) => onProgress?.(...describeTool(block)));
