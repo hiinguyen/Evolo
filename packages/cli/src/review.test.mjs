@@ -55,6 +55,25 @@ test("findings at unknown paths are dropped and recorded; unknown flags are igno
   assert.deepEqual(result.issues, ['dropped a finding at an unknown path: src/ghost.js:3 "Unchecked result"']);
 });
 
+test("line numbers past the end of the file at the tip are dropped, keeping the finding at its file", () => {
+  const lineCount = (path) => ({ "src/app.js": 40 })[path] ?? null;
+  const raw = answer({
+    findings: [
+      finding({ location: "src/app.js:10-12" }),
+      finding({ location: "src/app.js:1337-1352", title: "Diff lines" }),
+      finding({ location: "src/old.js:5", title: "Deleted file" }),
+      finding({ location: "src/app.js", title: "Whole file" }),
+    ],
+  });
+  const result = validateReview(raw, known, lineCount);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.review.findings.map((item) => item.location), ["src/app.js:10-12", "src/app.js", "src/old.js", "src/app.js"]);
+  assert.deepEqual(result.issues, [
+    'dropped line numbers past the end of src/app.js (40 lines): src/app.js:1337-1352 "Diff lines"',
+    'dropped line numbers of a file not at the tip: src/old.js:5 "Deleted file"',
+  ]);
+});
+
 test("the output schema allows exactly the severities, categories and flags the validator knows", () => {
   const schema = JSON.parse(readFileSync(REVIEW_TASK.schemaPath, "utf8"));
   const item = schema.properties.findings.items.properties;

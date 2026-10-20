@@ -11,11 +11,13 @@ You do not score it: the review has no scores and never mentions XP.
 2. Investigate the surrounding code: use `git grep` to find who calls or imports the changed code, and read the files around the change.
    A change is only correct in context: check that callers still work, that errors are handled, and that edge cases are covered.
 3. Use `git log` / `git blame` on the touched areas to see their history and conventions.
-4. Write the review.
+4. For each finding, get its line numbers from the file itself: open it with the file-reading tool or run `git grep -n` in the working directory.
+   `change.diff` is not the file: the line numbers the file-reading tool shows for `change.diff` are positions in the patch, and are wrong as locations.
+5. Write the review.
 
-Steps 1 to 3 are required: a review that is not grounded in the diff and its callers is not acceptable.
+Steps 1 to 4 are required: a review that is not grounded in the diff and its callers is not acceptable.
 Within that, be economical: batch independent tool calls in one step and do not read files unrelated to the change.
-If you could not complete steps 1 to 3 (for example you ran out of steps), add `incomplete_investigation` to `flags`; the review is then discarded and retried.
+If you could not complete steps 1 to 4 (for example you ran out of steps), add `incomplete_investigation` to `flags`; the review is then discarded and retried.
 
 # What to write
 
@@ -25,7 +27,8 @@ If you could not complete steps 1 to 3 (for example you ran out of steps), add `
 - `findings`: concrete problems in this change, each tied to a place in the code.
   - Report only real problems you can point to; do not pad the list.
     A good change may have no findings: then `findings` is an empty array.
-  - `location`: `path`, `path:line` or `path:line-line`, a file in the change or the repository at `tip`, with line numbers at `tip`.
+  - `location`: `path`, `path:line` or `path:line-line`, a file in the change or the repository at `tip`.
+    Line numbers are those of the file in the working directory (the checkout at `tip`), never positions in `change.diff`: read the file to find them.
   - `severity`:
     - `high`: wrong behavior, data loss, a security hole, a resource leak.
     - `medium`: a real risk, missing error handling, missing tests for the main path.

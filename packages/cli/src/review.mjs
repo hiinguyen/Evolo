@@ -1,6 +1,7 @@
 // Code review of one unit (docs/review.md): a separate judge task (judge/xp-review.md) that reads the change the way
 // a reviewer reads a pull request. Reviews never affect XP, and live apart from the ledger, in
 // <home>/reviews/<owner>/<name>/<unit id>.json, so scoring a unit again leaves its review in place.
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs";
 import { REVIEW_TASK } from "./judges/common.mjs";
@@ -47,20 +48,55 @@ function checkShape(raw) {
   ];
 }
 
+// "src/a.js:10-12" -> 12, "src/a.js:7" -> 7, "src/a.js" -> null.
+const lastLine = (location) => {
+  const match = /:(\d+)(?:-(\d+))?$/.exec(location);
+  return match ? Number(match[2] ?? match[1]) : null;
+};
+
+// The number of lines of each file in `checkoutDir`, or null for a file that is not there (deleted by the change).
+// Only called with paths the validator already knows, so it never reads outside the checkout.
+export const lineCounter = (checkoutDir) => (path) => {
+  try {
+    return readFileSync(join(checkoutDir, path), "utf8").split("\n").length;
+  } catch {
+    return null;
+  }
+};
+
+// A finding's location with line numbers the file at the tip cannot have removed (a reviewer can quote line numbers
+// of change.diff instead of the file); the finding itself stays, at its file. Records what it changed in `issues`.
+function checkLines(finding, lineCount, issues) {
+  const line = lastLine(finding.location);
+  if (line === null) return finding;
+  const path = evidencePath(finding.location);
+  const count = lineCount(path);
+  if (count !== null && line <= count) return finding;
+  issues.push(
+    count === null
+      ? `dropped line numbers of a file not at the tip: ${finding.location} "${finding.title}"`
+      : `dropped line numbers past the end of ${path} (${count} lines): ${finding.location} "${finding.title}"`,
+  );
+  return { ...finding, location: path };
+}
+
 // Validates the reviewer's raw output. Shape errors and self-reported incomplete investigations are rejected (the caller
-// retries); findings at paths that exist neither in the repository nor in the change are dropped and recorded as issues.
-export function validateReview(raw, knownPaths) {
+// retries); findings at paths that exist neither in the repository nor in the change are dropped, and line numbers
+// past the end of their file (`lineCount(path)`) are removed; both are recorded as issues.
+export function validateReview(raw, knownPaths, lineCount = () => Infinity) {
   const problems = checkShape(raw);
   if (problems.length > 0) return { ok: false, problems };
   if (raw.flags?.includes("incomplete_investigation")) {
     return { ok: false, problems: [`reviewer reported an incomplete investigation: ${raw.notes ?? ""}`.trim()] };
   }
   const issues = [];
-  const findings = raw.findings.filter((finding) => {
-    if (knownPaths.has(evidencePath(finding.location))) return true;
-    issues.push(`dropped a finding at an unknown path: ${finding.location} "${finding.title}"`);
-    return false;
-  });
+  const findings = raw.findings
+    .filter((finding) => {
+      if (knownPaths.has(evidencePath(finding.location))) return true;
+      issues.push(`dropped a finding at an unknown path: ${finding.location} "${finding.title}"`);
+      return false;
+    })
+    .map((finding) => checkLines(finding, lineCount, issues));
   const flags = (Array.isArray(raw.flags) ? raw.flags : []).filter((flag) => REVIEW_FLAGS.includes(flag));
   return { ok: true, review: { ...raw, findings, flags, notes: typeof raw.notes === "string" ? raw.notes : "" }, issues };
 }
@@ -77,7 +113,7 @@ export async function reviewUnit({ options, judge, facts, language, onProgress }
     judgeWithRetries({
       judge, spec: REVIEW_TASK, checkoutDir, facts, inputs, onProgress,
       task: reviewTask(facts, language),
-      validate: validateReview,
+      validate: (output, knownPaths) => validateReview(output, knownPaths, lineCounter(checkoutDir)),
     }),
   );
   const common = { judge: { backend: judge.backend, model: judge.model }, costUsd: judged.costUsd, durationMs: Date.now() - startedAt };
