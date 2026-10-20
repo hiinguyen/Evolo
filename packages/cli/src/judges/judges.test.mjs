@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BASE_XP, CRITERIA } from "../score.mjs";
 import { claudeArgs, readClaudeRun } from "./claude.mjs";
-import { FatalJudgeError, JudgeUnavailableError, OUTPUT_SCHEMA_PATH } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, REVIEW_TASK, SCORE_TASK, taskPrompt } from "./common.mjs";
 
 const answer = { contribution_type: "bugfix" };
 const run = (events, overrides = {}) => ({ events, timedOut: false, code: 0, stderr: "", ...overrides });
@@ -59,7 +59,25 @@ test("claudeArgs sandboxes the judge and allows only read-only git commands", ()
 });
 
 test("the output schema accepts exactly the types and criteria the validator knows", () => {
-  const schema = JSON.parse(readFileSync(OUTPUT_SCHEMA_PATH, "utf8"));
+  const schema = JSON.parse(readFileSync(SCORE_TASK.schemaPath, "utf8"));
   assert.deepEqual([...schema.properties.contribution_type.enum].sort(), Object.keys(BASE_XP).sort());
   assert.deepEqual([...schema.properties.scores.required].sort(), [...CRITERIA].sort());
+});
+
+test("claudeArgs runs the task spec it is given: its prompt and its output schema", () => {
+  const scoring = claudeArgs({ model: "m", budgetUsd: 1, inputsDir: "/in", task: "t" });
+  assert.equal(scoring[scoring.indexOf("--append-system-prompt") + 1], taskPrompt(SCORE_TASK));
+  assert.equal(scoring[scoring.indexOf("--json-schema") + 1], readFileSync(SCORE_TASK.schemaPath, "utf8"));
+  const review = claudeArgs({ model: "m", budgetUsd: 1, inputsDir: "/in", task: "t", spec: REVIEW_TASK });
+  assert.equal(review[review.indexOf("--append-system-prompt") + 1], taskPrompt(REVIEW_TASK));
+  assert.equal(review[review.indexOf("--json-schema") + 1], readFileSync(REVIEW_TASK.schemaPath, "utf8"));
+});
+
+test("every task prompt carries the shared input and trust rules", () => {
+  for (const spec of [SCORE_TASK, REVIEW_TASK]) {
+    const prompt = taskPrompt(spec);
+    assert.match(prompt, /# Trust rules/);
+    assert.match(prompt, /# Inputs/);
+    assert.doesNotMatch(prompt, /\{\{shared\}\}/);
+  }
 });
