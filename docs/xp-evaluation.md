@@ -4,13 +4,13 @@ Tài liệu này mô tả cách Evolo dùng một AI judge để đọc repo, co
 Đây là thiết kế gốc, viết khi Evolo còn nhắm tới nhiều người dùng và chạy bằng opencode.
 Evolo hiện là công cụ cá nhân, judge mặc định là Claude, nên một số phần đã được xây khác đi hoặc để dành; bảng dưới cho biết phần nào đã có.
 
-## Trạng thái (2026-10-19)
+## Trạng thái (2026-10-20)
 
 | Mục | Trạng thái |
 |---|---|
 | 2. Nguyên tắc: AI chấm rubric, code tính XP, dữ liệu đo được là sự thật | Đã xây |
 | 3. Đơn vị đánh giá | Đã đổi: một lần push lên nhánh mặc định hoặc một PR đã merge (`docs/architecture.md` mục 3); chưa chấm review; chưa chia XP cho co-author |
-| 4. Collector | Một phần: diff, phân loại file, commit, revert, tiêu đề và mô tả PR. Chưa có CI, review, issue liên kết, thời gian merge |
+| 4. Collector | Một phần: diff, phân loại file, commit, revert, tiêu đề và mô tả PR; sau khi chấm thì CI, review và issue được đóng, cho mục 7.5. Chưa có thời gian merge |
 | 4. Repo Context | Một phần: bản đồ module (số file, số dòng source và test), số sao, trích README. Chưa có criticality, baseline, cache |
 | 4. Triage | Đã xây: docs dưới 20 dòng; chỉ lockfile hoặc file generated |
 | 4. Sandbox | Đã đổi: judge mặc định là `claude -p --restricted` trong git worktree tạm (`docs/auto-scoring.md` mục 5); opencode là backend thay thế; không có container |
@@ -19,11 +19,11 @@ Evolo hiện là công cụ cá nhân, judge mặc định là Claude, nên mộ
 | 5, 6. Agent và rubric cho đóng góp | Đã xây (`packages/cli/judge/xp-judge.md`) |
 | 6.3. Rubric cho review | Chưa làm |
 | 7.1-7.4. Công thức XP | Đã xây, công thức 1.2: XP là bội số của 5, tối thiểu 5 |
-| 7.5. Tín hiệu | Chỉ có revert (XP về 0). CI, merge sạch, issue `bug` chưa thu thập nên hệ số tín hiệu hiện luôn là 1 |
+| 7.5. Tín hiệu | Đã xây (2026-10-20): CI pass ngay, merge sạch sau review, đóng issue `bug` hoặc `security`, và revert (XP về 0) |
 | 7.6, 7.7. Chuẩn hoá theo repo, giới hạn chống cày | Chưa làm; không cần khi dùng cá nhân |
 | 8. Độ ổn định | Đã có: ghim model, không chấm lại đơn vị đã chấm. Chưa có: chấm 3 lần, golden set, khiếu nại |
 | 9. Bảo mật | Đã có: chống prompt injection, judge chỉ đọc, không chạy code của repo. Khác: không có container |
-| 10. Chi phí | Đã có: triage, trần $1 mỗi lần chấm, timeout 20 phút. Chưa có: cache Repo Context, trần theo ngày |
+| 10. Chi phí | Đã có: triage, trần $1 mỗi lần chấm, timeout 20 phút, trần theo ngày (mặc định $5). Chưa có: cache Repo Context |
 | 11. Mô hình dữ liệu | Thay bằng ledger file JSON |
 
 ## 1. Mục tiêu
@@ -337,9 +337,20 @@ Lấy từ Facts, không phụ thuộc AI:
 | Đóng issue có nhãn `bug` hoặc `security` | +10% |
 | PR bị revert trong 14 ngày | XP của PR bị thu hồi toàn bộ (ghi dòng âm vào ledger) |
 
-Đã xây: chỉ tín hiệu revert, không giới hạn 14 ngày.
-Đơn vị bị revert trên nhánh mặc định thì XP về 0 và trạng thái thành `reverted`; không có dòng âm, vì ledger cập nhật bản ghi của chính đơn vị đó.
-Ba tín hiệu còn lại chưa được thu thập, nên `M_signals` hiện luôn là 1.
+Đã xây cả bốn (2026-10-20), trong `packages/cli/src/signals.mjs`; cách thu thập và khi nào đọc lại ở `docs/auto-scoring.md` mục 4.
+Định nghĩa đã chốt:
+
+- **CI pass ngay lần đầu:** trạng thái gộp của mọi check trên commit cuối của đơn vị là `SUCCESS`, và không commit nào của đơn vị có trạng thái `FAILURE` hay `ERROR`.
+  GitHub chỉ giữ lần chạy mới nhất của mỗi check, nên một check lỗi rồi được chạy lại cho xanh vẫn tính là pass.
+- **Merge sạch sau review:** chỉ cho PR.
+  Có ít nhất một review của người khác tác giả, không review nào `CHANGES_REQUESTED`, và không commit nào có `committedDate` sau review đầu tiên.
+  Review của bot (ví dụ Copilot) cũng là review.
+  PR tự merge không ai review thì không có tín hiệu này.
+- **Đóng issue `bug` hoặc `security`:** nhãn chứa từ `bug` hoặc `security` (`bug`, `type: security`, `kind/bug`).
+  Với PR là các issue GitHub liên kết để đóng (`closingIssuesReferences`).
+  Với push là issue được nhắc bằng từ khoá của GitHub (`fixes #12`, `closes #3`, `resolved #7`) trong commit của đơn vị, và được chính một commit của đơn vị đóng; tối đa 10 issue mỗi đơn vị.
+- **Revert:** không giới hạn 14 ngày.
+  Đơn vị bị revert trên nhánh mặc định thì XP về 0 và trạng thái thành `reverted`; không có dòng âm, vì ledger cập nhật bản ghi của chính đơn vị đó.
 
 ### 7.6. Chuẩn hóa theo repo (chưa làm)
 
@@ -425,8 +436,8 @@ Evolo chỉ lưu Facts, điểm, lý do và đường dẫn dẫn chứng, khôn
 
 ## 10. Chi phí
 
-Đã xây: triage, trần $1 mỗi lần chấm (`--max-budget-usd`), timeout 20 phút mỗi lần thử.
-Chưa xây: cache Repo Context, chấm 3 lần, trần chi phí theo ngày, chấm bù lịch sử.
+Đã xây: triage, trần $1 mỗi lần chấm (`--max-budget-usd`), timeout 20 phút mỗi lần thử, trần chi phí theo ngày (`docs/auto-scoring.md` mục 7).
+Chưa xây: cache Repo Context, chấm 3 lần, chấm bù lịch sử.
 
 - Triage bỏ qua AI cho phần lớn PR nhỏ.
 - Repo Context được cache và dùng chung cho mọi PR trong repo.
