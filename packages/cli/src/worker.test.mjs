@@ -374,3 +374,119 @@ test("a desktop with body markup renders the judge's bold and links, with the li
     `<b>${label}</b>: feature\nAdded <a href="https://evil.example">a link</a> (https://evil.example) &amp; <b>bold</b>[31m&lt;img src="x"&gt;`,
   );
 });
+
+test("signals: a push gains XP for the bug issue it closes at once, and for CI that passes later, read at the next sync", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+
+  const fix = box.commit("fix: crash on start\n\nFixes #12", { "app.js": lines(200, "app") });
+  // GitHub closes the issue as the push lands, and starts CI.
+  const issues = { 12: { state: "closed", labels: ["bug"], closedBy: fix } };
+  box.setGithub({ checks: { [fix]: "PENDING" }, issues });
+  box.push(["origin", "main"]);
+  const scored = await box.settled(`push-${short(base)}-${short(fix)}`);
+  assert.deepEqual(
+    [scored.signals.closesBugIssue, scored.signals.bugIssues, scored.signals.ciFirstPass, scored.signals.ci, scored.signals.final],
+    [true, [12], false, "PENDING", false],
+  );
+  assert.equal(scored.result.breakdown.mSignals, 1.1);
+  assert.match(box.notifications().at(-1).title, new RegExp(`^Evolo \\+${scored.xp} XP`), "the notification has the XP with the signals so far");
+  assert.match(box.evolo("why", scored.id), /^signals: closes bug issue #12 \+10%; read again at the next sync \(CI: pending\)$/m);
+
+  box.setGithub({ checks: { [fix]: "SUCCESS" }, issues });
+  const synced = box.evolo("sync");
+  const settled = readRecord(box.home, REPO, scored.id);
+  assert.deepEqual([settled.signals.ciFirstPass, settled.signals.final], [true, true]);
+  assert.equal(settled.result.breakdown.mSignals, 1.15);
+  assert.ok(settled.xp > scored.xp, `${settled.xp} > ${scored.xp}`);
+  assert.equal(settled.result.xp, settled.xp);
+  assert.match(synced, new RegExp(`${scored.id}: signals, ${scored.xp} -> ${settled.xp} XP`));
+  assert.match(box.evolo("why", scored.id), /^signals: CI passed the first time \+5%, closes bug issue #12 \+10%$/m);
+  assert.match(box.evolo("status"), new RegExp(`^level \\d+  ${readRecord(box.home, REPO, `push-root-${short(base)}`).xp + settled.xp} XP`, "m"));
+
+  box.setGithub({ down: true });
+  assert.equal(box.evolo("sync").trim(), `${REPO}: sync failed: gh pr list failed: error connecting to api.github.com`, "final signals are not read again");
+});
+
+test("a merged PR reviewed without rework, closing a bug issue with CI green, is scored with every signal", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+
+  box.git("checkout", "-q", "-b", "feature");
+  const prCommit = box.commit("fix: pr work", { "pr.js": lines(150, "pr") });
+  box.git("checkout", "-q", "main");
+  box.git("merge", "-q", "--no-ff", "-m", "Merge pull request #7", "feature");
+  const merge = box.git("rev-parse", "HEAD");
+  box.setGithub({
+    checks: { [prCommit]: "SUCCESS" },
+    commitPrs: { [prCommit]: [{ number: 7, merged: true, baseRefOid: base }] },
+    prs: [
+      {
+        number: 7, title: "PR work", body: "Fixes #3", url: "https://github.com/me/proj/pull/7", state: "MERGED",
+        mergedAt: new Date().toISOString(), baseRefName: "main", baseRefOid: base, headRefOid: prCommit, mergeCommit: { oid: merge },
+        author: "me",
+        reviews: [{ author: "friend", state: "APPROVED", submittedAt: new Date(Date.now() + 1000).toISOString() }],
+        commitDates: [new Date().toISOString()],
+        closingIssues: [{ number: 3, labels: ["bug"] }],
+      },
+    ],
+  });
+  box.push(["origin", "main"]);
+  const pr = await box.settled("pr-7");
+  assert.deepEqual(
+    [pr.signals.ciFirstPass, pr.signals.cleanMerge, pr.signals.closesBugIssue, pr.signals.final],
+    [true, true, true, true],
+  );
+  assert.equal(pr.result.breakdown.mSignals, 1.2);
+  assert.ok(box.notifications().some((shown) => shown.title.startsWith(`Evolo +${pr.xp} XP`) && shown.body.startsWith("proj PR #7")));
+  assert.match(
+    box.evolo("why", "#7"),
+    /^signals: CI passed the first time \+5%, merged without rework after review \+5%, closes bug issue #3 \+10%$/m,
+  );
+});
+
+test("once the day's judge budget is spent, units wait for the next day while units triaged by rule are still scored", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  // Every run of the fake judge costs $0.01.
+  box.evolo("config", "set", "budget.daily-usd", "0.01");
+  const base = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(base)}`);
+
+  const second = box.commit("feat: more", { "more.js": lines(30, "more") });
+  box.push(["origin", "main"]);
+  const parked = () => {
+    const jobs = listJobs(box.home);
+    return !existsSync(box.lockPath) && jobs.length > 0 && jobs.every((job) => job.budgetDay) && jobs;
+  };
+  await box.waitFor(parked, () => `the push was not left waiting: ${JSON.stringify(listJobs(box.home))}`);
+  const third = box.commit("feat: even more", { "even.js": lines(30, "even") });
+  box.push(["origin", "main"]);
+  await box.waitFor(() => parked()?.length === 2, () => `the second push was not left waiting: ${JSON.stringify(listJobs(box.home))}`);
+  const docs = box.commit("docs: typo", { "README.md": "hello\n" });
+  box.push(["origin", "main"]);
+  const triaged = await box.waitFor(
+    () => !existsSync(box.lockPath) && readRecord(box.home, REPO, `push-${short(third)}-${short(docs)}`),
+    () => "the docs push was not scored",
+  );
+  assert.equal(triaged.result.method, "rule");
+  assert.equal(box.judgeCalls(), 1);
+  assert.deepEqual(box.notifications().filter((shown) => shown.title === "Evolo Daily budget spent").length, 1, "one notice a day");
+
+  const status = box.evolo("status");
+  assert.match(status, /^ {2}me\/proj push \w{7} {2}\(waits for tomorrow: the daily budget is spent\)$/m);
+  assert.match(status, /^judge spending today \$0\.01 of \$0\.01$/m);
+
+  // Raising the cap, as the notification suggests, has what waited scored at once.
+  box.evolo("config", "set", "budget.daily-usd", "1");
+  await box.settled(`push-${short(second)}-${short(third)}`);
+  assert.equal(readRecord(box.home, REPO, `push-${short(base)}-${short(second)}`).status, "scored");
+  assert.equal(box.judgeCalls(), 3);
+});

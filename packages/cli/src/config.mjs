@@ -1,4 +1,5 @@
-// The user's settings (<home>/config.json), read and written by `evolo config`: { "review": { "language": "vi" } }.
+// The user's settings (<home>/config.json), read and written by `evolo config`:
+// { "review": { "language": "vi" }, "budget": { "daily-usd": "5" } }.
 // Only known keys are accepted, and every value is checked both when it is set and when it is read,
 // because some values (review.language) are put into the judge's instructions.
 import { join } from "node:path";
@@ -6,6 +7,7 @@ import { readJson, writeJson } from "./store.mjs";
 
 const LANGUAGE_MAX_LENGTH = 40;
 const LANGUAGE_PATTERN = /^\p{L}[\p{L} -]*$/u;
+const BUDGET_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
 
 export const CONFIG_KEYS = {
   "review.language": {
@@ -13,6 +15,12 @@ export const CONFIG_KEYS = {
     describe: "the language reviews are written in, as a name or code (vi, Vietnamese, pt-BR)",
     check: (value) => value.length <= LANGUAGE_MAX_LENGTH && LANGUAGE_PATTERN.test(value),
     rule: `a language name or code: letters, spaces and "-", at most ${LANGUAGE_MAX_LENGTH} characters`,
+  },
+  "budget.daily-usd": {
+    default: "5",
+    describe: "the most the background worker spends on the judge per local day, in USD; the rest waits for the next day",
+    check: (value) => BUDGET_PATTERN.test(value) && Number(value) > 0,
+    rule: "a positive amount in USD, such as 5 or 2.50",
   },
 };
 

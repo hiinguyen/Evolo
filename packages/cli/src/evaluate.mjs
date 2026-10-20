@@ -64,6 +64,8 @@ export async function judgeWithRetries({ judge, spec = SCORE_TASK, validate, che
       failures.push(`attempt ${attempt}: invalid output: ${validation.problems.join("; ")}`);
       unavailable = false;
     } catch (error) {
+      // A run that ended in an error after the judge started still cost something (claude stopping at its budget).
+      costUsd += error.costUsd ?? 0;
       failures.push(`attempt ${attempt}: ${error.message}`);
       unavailable &&= error instanceof JudgeUnavailableError;
       if (error instanceof FatalJudgeError) break;
@@ -111,7 +113,8 @@ export function withJudgeInputs(options, facts, work) {
 }
 
 // options: { repo, url, stars, own }. judge: a backend from judges/index.mjs. unit: from units.mjs.
-export async function evaluateUnit({ options, judge, unit, onProgress }) {
+// `beforeJudging` runs once the unit needs the AI judge (triage did not settle it), and may throw to stop it.
+export async function evaluateUnit({ options, judge, unit, onProgress, beforeJudging = () => {} }) {
   const startedAt = Date.now();
   const facts = collectChangeFacts(options.repo, unit);
   const signals = { reverted: facts.reverted };
@@ -123,6 +126,8 @@ export async function evaluateUnit({ options, judge, unit, onProgress }) {
     const { xp, breakdown } = computeXp({ ...xpInput, type: triaged.contribution_type, scores: scoreValues(triaged) });
     return { facts, method: "rule", status: "ok", evaluation: triaged, issues: [], xp, breakdown, ...elapsed() };
   }
+
+  beforeJudging();
 
   const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) =>
     judgeWithRetries({

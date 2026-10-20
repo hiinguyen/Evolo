@@ -1,8 +1,8 @@
 // Code review of one unit (docs/review.md): a separate judge task (judge/xp-review.md) that reads the change the way
 // a reviewer reads a pull request. Reviews never affect XP, and live apart from the ledger, in
 // <home>/reviews/<owner>/<name>/<unit id>.json, so scoring a unit again leaves its review in place.
-import { lstatSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { lstatSync, readFileSync, readdirSync } from "node:fs";
+import { basename, join } from "node:path";
 import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs";
 import { REVIEW_TASK } from "./judges/common.mjs";
 import { evidencePath } from "./score.mjs";
@@ -19,6 +19,22 @@ const reviewPath = (home, key, id) => join(home, "reviews", ...key.split("/"), `
 // The stored review of unit `id` in repository `key`, or null when it has none.
 export function readReview(home, key, id) {
   return readJson(reviewPath(home, key, id), null);
+}
+
+// Every stored review, of every repository.
+export function listAllReviews(home) {
+  const root = join(home, "reviews");
+  let paths;
+  try {
+    paths = readdirSync(root, { recursive: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  return paths
+    .filter((path) => path.endsWith(".json") && !basename(path).startsWith("."))
+    .map((path) => readJson(join(root, path), null))
+    .filter(Boolean);
 }
 
 // stored: { unitId, repo, tip, at, language, judge, costUsd, durationMs, review, issues }

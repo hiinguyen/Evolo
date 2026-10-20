@@ -65,9 +65,29 @@ export function notification(record, totalBefore, { markup = false } = {}) {
   return null;
 }
 
+// The notification the worker sends when the day's judge budget stops it; `reason` says what was spent.
+export function budgetNotification(reason) {
+  return {
+    title: "Daily budget spent",
+    body: terminalSafe(`${reason}. The next units are scored tomorrow; \`evolo config set budget.daily-usd <USD>\` raises the cap.`),
+  };
+}
+
 const short = (sha) => sha.slice(0, 7);
 
-function judgedLines(result) {
+// What the XP signals added, and whether they are still awaited: "signals: CI passed the first time +5%".
+function signalsLine(signals) {
+  if (!signals) return "signals: not read from GitHub yet";
+  const found = [
+    ...(signals.ciFirstPass ? ["CI passed the first time +5%"] : []),
+    ...(signals.cleanMerge ? ["merged without rework after review +5%"] : []),
+    ...(signals.closesBugIssue ? [`closes bug issue ${signals.bugIssues.map((number) => `#${number}`).join(", ")} +10%`] : []),
+  ];
+  const awaited = signals.final ? "" : `; read again at the next sync (CI: ${signals.ci?.toLowerCase() ?? "none yet"})`;
+  return `signals: ${found.length > 0 ? found.join(", ") : "none"}${awaited}`;
+}
+
+function judgedLines(result, signals) {
   const { facts, evaluation, breakdown: b } = result;
   const width = Math.max(...CRITERIA.map((criterion) => criterion.length));
   const lines = [""];
@@ -81,6 +101,7 @@ function judgedLines(result) {
     `XP = ${b.base} base (${evaluation.contribution_type}) × ${b.mValue} value × ${b.mSize} size (${facts.totals.countedLines} lines)` +
       ` × ${b.mRepo} repo × ${b.mSignals} signals = ${b.raw} -> ${result.xp}` +
       `${b.reverted ? " (reverted)" : ""}  [formula ${b.formula_version}]`,
+    signalsLine(signals),
   );
   if (result.issues?.length > 0) lines.push("validator:", ...result.issues.map((issue) => `  ${issue}`));
   if (evaluation.flags?.length > 0) lines.push(`flags: ${evaluation.flags.join(", ")}`);
@@ -106,7 +127,7 @@ export function explain(record, { reviewed = false } = {}) {
   lines.push(`${commits} · ${facts.totals.files} files +${facts.totals.additions} -${facts.totals.deletions} · ${judge}${cost}`);
   if (facts.pr) lines.push(`${facts.pr.title}  ${facts.pr.url}`);
   if (result.evaluation) {
-    lines.push("", result.evaluation.summary, ...judgedLines(result));
+    lines.push("", result.evaluation.summary, ...judgedLines(result, record.signals));
   } else {
     lines.push("", ...result.failures.map((failure) => `  ${failure}`));
   }

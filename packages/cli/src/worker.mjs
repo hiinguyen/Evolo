@@ -3,17 +3,19 @@
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
+import { BudgetExceededError, assertWithinBudget, isWithinBudget, nextLocalDay } from "./budget.mjs";
 import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
 import { createJudge } from "./judges/index.mjs";
-import { isJudged, listRecords, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord } from "./ledger.mjs";
+import { isJudged, isLive, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
 import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
 import { terminalSafe } from "./safe-text.mjs";
-import { notification } from "./views.mjs";
+import { collectSignals, withSignals, withUnreadableSignals } from "./signals.mjs";
+import { budgetNotification, notification } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;
@@ -84,7 +86,10 @@ function supportsBodyMarkup() {
 
 // Best effort: a machine without notify-send or without a desktop session still scores, and the log has every result.
 function notify(home, record, totalBefore) {
-  const message = notification(record, totalBefore, { markup: supportsBodyMarkup() });
+  send(home, notification(record, totalBefore, { markup: supportsBodyMarkup() }));
+}
+
+function send(home, message) {
   if (!message) return;
   try {
     const args = ["--app-name=Evolo", "--", terminalSafe(`Evolo ${message.title}`), message.body];
@@ -117,13 +122,43 @@ function landing(repo, job) {
   return (job.pusher === null || pushing) && !expired ? "pending" : "failed";
 }
 
+// The record with the XP signals GitHub has for it now; when GitHub cannot be asked, see withUnreadableSignals.
+function addSignals(home, key, repo, record) {
+  try {
+    return withSignals(record, collectSignals(repo.path, record.result.facts, record.at), repo);
+  } catch (error) {
+    logLine(home, `${key} ${record.id}: signals not read: ${error.message}`);
+    return withUnreadableSignals(record, error);
+  }
+}
+
 async function scoreUnit(home, job, repo, unit, judge) {
   if (isJudged(readRecord(home, job.repo, unit.id))) return removeJob(home, job);
   const options = { repo: repo.path, url: repo.url, stars: repo.stars, own: repo.isOwnRepo };
-  const result = await evaluateUnit({ options, judge, unit });
+  const result = await evaluateUnit({ options, judge, unit, beforeJudging: () => assertWithinBudget(home) });
   // Nothing is wrong with the unit when the judge could not be reached: keep it queued and try again later.
   if (result.judgeUnavailable) throw new Error(`judge unavailable: ${result.failures.at(-1)}`);
-  return finish(home, job, scoredRecord(result));
+  const record = scoredRecord(result);
+  return finish(home, job, isLive(record) ? addSignals(home, job.repo, repo, record) : record);
+}
+
+// A job waiting for the next local day because the day's judge budget is spent. It is not in flight, so it does not
+// hold the sync back, and no worker stays up for it: the first worker of the next day scores it.
+const isParked = (job, now = new Date()) => job.budgetDay === localDay(now);
+
+// Lets the jobs waiting for tomorrow run now when the day's spending is below the cap again: the cap was raised.
+function releaseParked(home) {
+  const parked = listJobs(home).filter((job) => isParked(job));
+  if (parked.length === 0 || !isWithinBudget(home)) return;
+  for (const job of parked) updateJob(home, { ...job, budgetDay: null, notBefore: Date.now() });
+  logLine(home, `the daily budget allows judging again: ${parked.length} waiting unit(s) released`);
+}
+
+function park(home, job, error) {
+  const first = !listJobs(home).some((queued) => isParked(queued));
+  updateJob(home, { ...job, budgetDay: localDay(new Date()), notBefore: nextLocalDay() });
+  logLine(home, `${job.repo} ${unitIdOf(job)}: waits for tomorrow, ${error.message}`);
+  if (first) send(home, budgetNotification(error.message));
 }
 
 // After a force push the clone may never have had the commit the push replaced; GitHub still serves it by id.
@@ -166,6 +201,7 @@ async function processJob(home, job, judge) {
     return await (job.type === "pr" ? processPr : processPush)(home, job, repo, judge);
   } catch (error) {
     if (error instanceof NothingToScoreError) return finish(home, job, endRecord(job, "skipped", error.message));
+    if (error instanceof BudgetExceededError) return park(home, job, error);
     const attempts = job.attempts + 1;
     if (attempts > RETRY_DELAYS_MS.length) return finish(home, job, endRecord(job, "failed", error.message));
     logLine(home, `${job.repo} ${unitIdOf(job)}: attempt ${attempts} failed, retrying: ${error.message}`);
@@ -202,14 +238,21 @@ export function retryFailed(home) {
   return notes;
 }
 
-// For one repository: re-checks the ledger against the remote branch, and queues the user's PRs merged since
-// the repository was registered that are neither scored nor queued. Returns what it did.
+// For one repository: re-checks the ledger against the remote branch, reads the signals of the live units whose signals
+// are not final yet, and queues the user's PRs merged since the repository was registered that are neither scored nor
+// queued. Returns what it did.
 export function syncRepo(home, key, repo) {
   if (!existsSync(repo.path)) return [`${key}: ${repo.path} no longer exists`];
   const notes = [];
   const head = remoteHead(repo.path, repo.remote, repo.defaultBranch);
   if (head) {
     for (const record of refreshLedger(home, key, repo.path, head)) notes.push(`${key} ${record.id}: ${record.previousStatus} -> ${record.status}`);
+  }
+  const unsettled = listRecords(home, key).filter((record) => isLive(record) && !record.signals?.final);
+  const changed = unsettled.map((record) => [record, addSignals(home, key, repo, record)]).filter(([record, signalled]) => signalled !== record);
+  if (changed.length > 0) writeRecords(home, key, changed.map(([, signalled]) => signalled));
+  for (const [record, signalled] of changed) {
+    if (signalled.xp !== record.xp) notes.push(`${key} ${record.id}: signals, ${record.xp} -> ${signalled.xp} XP`);
   }
   const queued = new Set(listJobs(home).filter((job) => job.repo === key && job.type === "pr").map((job) => job.number));
   const known = new Set(listRecords(home, key).map((record) => record.id));
@@ -231,7 +274,7 @@ export function syncAll(home) {
   });
 }
 
-// Scores the queue until it is empty, then exits. It syncs whenever it has done some work and nothing is in flight
+// Scores the queue until it is empty, or only jobs waiting for tomorrow's budget are left, then exits. It syncs whenever it has done some work and nothing is in flight
 // (no job is new or waiting for its push to land), so a force push is settled before the units it replaced are
 // re-checked; jobs waiting to retry after an error do not hold the sync back.
 // Returns false when another worker already holds the lock.
@@ -244,16 +287,17 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
     let worked = true;
     for (;;) {
       if (takeSyncRequest(home)) worked = true;
+      releaseParked(home);
       const jobs = listJobs(home);
       const ready = jobs.find((job) => job.notBefore <= Date.now());
-      const inFlight = jobs.some((job) => job.attempts === 0);
+      const inFlight = jobs.some((job) => job.attempts === 0 && !isParked(job));
       if (ready) {
         await processJob(home, ready, judge);
         worked = true;
       } else if (worked && !inFlight) {
         syncAll(home).forEach((note) => logLine(home, note));
         worked = false;
-      } else if (jobs.length === 0) {
+      } else if (jobs.every((job) => isParked(job))) {
         break;
       } else {
         const next = Math.min(...jobs.map((job) => job.notBefore)) - Date.now();
@@ -265,6 +309,6 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
   }
   // A job queued or a sync requested while this worker was finishing found the lock taken, and its own worker gave up:
   // look once more.
-  if (listJobs(home).length > 0 || hasSyncRequest(home)) await runWorker(home, { judge });
+  if (listJobs(home).some((job) => !isParked(job)) || hasSyncRequest(home)) await runWorker(home, { judge });
   return true;
 }
