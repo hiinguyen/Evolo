@@ -143,7 +143,7 @@ export function pullRequestUnit(repoDir, pr, { defaultBranch } = {}) {
     kind: "pr",
     id: `pr-${pr.number}`,
     ...changeSet(repoDir, base, tip),
-    pr: { number: pr.number, title: pr.title, body: pr.body, url: pr.url, mergeCommit: pr.mergeCommit?.oid ?? null },
+    pr: { number: pr.number, title: pr.title, body: pr.body, url: pr.url, mergedAt: pr.mergedAt ?? null, mergeCommit: pr.mergeCommit?.oid ?? null },
   };
 }
 

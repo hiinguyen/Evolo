@@ -1,9 +1,9 @@
 ---
 name: evolo
-description: Show the user's Evolo XP, explain how a push or PR was scored, review a push or PR, or retry failed scoring.
-argument-hint: "[why <commit|#pr|unit id>] | [review <commit|#pr|unit id> [--again]] | [retry]"
+description: Show the user's Evolo XP and analytics, explain how a push or PR was scored, review a push or PR, or retry failed scoring.
+argument-hint: "[stats [week|month|quarter] [--previous]] | [why <commit|#pr|unit id>] | [review <commit|#pr|unit id> [--again]] | [retry]"
 disable-model-invocation: true
-allowed-tools: Bash(evolo status:*), Bash(evolo why:*), Bash(evolo review:*), Bash(evolo retry:*)
+allowed-tools: Bash(evolo status:*), Bash(evolo stats:*), Bash(evolo why:*), Bash(evolo review:*), Bash(evolo retry:*)
 ---
 
 # Evolo
@@ -18,6 +18,10 @@ Arguments: `$ARGUMENTS`
 
 - No arguments: run `evolo status`.
   Report the level, total XP, XP today and over the last 7 days, anything queued or failing, and the latest units with their one-line reasons.
+- `stats [week|month|quarter] [--previous]`: run `evolo stats` with the same arguments; the period defaults to this week.
+  Report the XP and units against the previous period, the streak, the mix of work, the rubric averages and their
+  changes, the share of units that touched tests, reverts, and where the work went (repositories, directories, hours).
+  Point out the largest changes; do not judge the work beyond what the numbers say.
 - `why <ref>`: run `evolo why <ref>`, where `<ref>` is a commit, `#<pr number>` or a unit id such as `push-89fd4e3-8c68e65`.
   Without a ref it explains the latest unit.
   Explain which rubric scores drove the XP, quoting the judge's reasons and evidence, and how the formula line turned them into XP.

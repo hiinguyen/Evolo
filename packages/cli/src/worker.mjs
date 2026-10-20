@@ -8,7 +8,7 @@ import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
 import { createJudge } from "./judges/index.mjs";
-import { isJudged, isLive, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
+import { isJudged, isLive, landedAt, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
 import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
@@ -138,7 +138,8 @@ async function scoreUnit(home, job, repo, unit, judge) {
   const result = await evaluateUnit({ options, judge, unit, beforeJudging: () => assertWithinBudget(home) });
   // Nothing is wrong with the unit when the judge could not be reached: keep it queued and try again later.
   if (result.judgeUnavailable) throw new Error(`judge unavailable: ${result.failures.at(-1)}`);
-  const record = scoredRecord(result);
+  // A push lands when the hook queues it, just before it reaches the remote; a retried unit keeps its first landing.
+  const record = scoredRecord(result, { landedAt: result.facts.pr?.mergedAt ?? job.landedAt ?? job.enqueuedAt });
   return finish(home, job, isLive(record) ? addSignals(home, job.repo, repo, record) : record);
 }
 
@@ -215,7 +216,10 @@ function retryJob(key, repo, record) {
   const facts = record.result?.facts;
   if (record.kind === "pr") return { type: "pr", repo: key, number: record.job?.number ?? facts.pr.number };
   const [from, to] = record.job ? [record.job.from, record.job.to] : [facts.base, facts.tip];
-  return { type: "push", repo: key, remote: repo.remote, ref: `refs/heads/${repo.defaultBranch}`, from, to, pusher: null, pushed: true };
+  // The retried unit keeps the day it was pushed on; a record that never reached scoring has only its job.
+  const landed = record.job ? (record.job.landedAt ?? record.job.enqueuedAt) : landedAt(record);
+  const ref = `refs/heads/${repo.defaultBranch}`;
+  return { type: "push", repo: key, remote: repo.remote, ref, from, to, pusher: null, pushed: true, landedAt: landed };
 }
 
 // `evolo retry`: makes the jobs waiting to retry after an error due now, and queues every failed unit of the

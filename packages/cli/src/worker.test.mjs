@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { listRecords, readRecord } from "./ledger.mjs";
 import { listJobs } from "./queue.mjs";
 import { loadRepos } from "./repos.mjs";
+import { periodOf } from "./stats.mjs";
 import { lines, makeSandbox, REPO, short } from "./sandbox.mjs";
 
 test("init chains an existing pre-push hook, every push still reaches it, and uninstall restores it", async () => {
@@ -42,8 +43,12 @@ test("a push to the default branch is scored once it lands, as one change set; o
 
   box.commit("feat: helper", { "helper.js": lines(30, "helper") });
   const tip = box.commit("feat: use helper", { "app.js": lines(25, "app") });
+  const pushStarted = Date.now();
   box.push(["origin", "main"]);
+  const pushEnded = Date.now();
   const record = await box.settled(`push-${short(base)}-${short(tip)}`);
+  const landed = Date.parse(record.landedAt);
+  assert.ok(landed >= pushStarted && landed <= pushEnded, `a push lands when it is pushed, not when it is scored: ${record.landedAt}`);
   assert.equal(record.result.facts.diffMode, "net");
   assert.deepEqual(record.result.facts.commits.map((commit) => commit.subject), ["feat: helper", "feat: use helper"]);
   assert.equal(record.result.facts.totals.countedLines, 35);
@@ -107,12 +112,13 @@ test("a merged PR is found by sync and scored, and its commits are left out of t
   box.git("merge", "-q", "--no-ff", "-m", "Merge pull request #7", "feature");
   const merge = box.git("rev-parse", "HEAD");
   const direct = box.commit("fix: direct", { "app.js": lines(22, "app") });
+  const mergedAt = new Date().toISOString();
   box.setGithub({
     commitPrs: { [prCommit]: [{ number: 7, merged: true, baseRefOid: base }] },
     prs: [
       {
         number: 7, title: "PR work", body: "Adds pr.js", url: "https://github.com/me/proj/pull/7", state: "MERGED",
-        mergedAt: new Date().toISOString(), baseRefName: "main", baseRefOid: base, headRefOid: prCommit, mergeCommit: { oid: merge },
+        mergedAt, baseRefName: "main", baseRefOid: base, headRefOid: prCommit, mergeCommit: { oid: merge },
       },
     ],
   });
@@ -125,6 +131,7 @@ test("a merged PR is found by sync and scored, and its commits are left out of t
   const pr = await box.settled("pr-7");
   assert.deepEqual(pr.result.facts.commits.map((commit) => commit.subject), ["feat: pr work"]);
   assert.equal(pr.result.facts.pr.title, "PR work");
+  assert.equal(pr.landedAt, mergedAt, "a PR lands when GitHub merged it");
 
   assert.equal(box.evolo("sync").trim(), "nothing new", "a scored PR is not queued again");
 });
@@ -267,6 +274,8 @@ test("a unit the judge keeps answering wrongly is failed, notified, and scored b
   assert.equal(box.evolo("retry").trim(), `me/proj ${id}: queued again`);
   const record = await box.settled(id);
   assert.ok(record.xp > 0);
+  assert.equal(record.landedAt, failed.landedAt, "a unit scored again keeps the day it was pushed on");
+  assert.ok(Date.parse(record.landedAt) < Date.parse(failed.at));
   assert.equal(box.evolo("retry").trim(), "nothing to retry");
 });
 
@@ -489,4 +498,27 @@ test("once the day's judge budget is spent, units wait for the next day while un
   await box.settled(`push-${short(second)}-${short(third)}`);
   assert.equal(readRecord(box.home, REPO, `push-${short(base)}-${short(second)}`).status, "scored");
   assert.equal(box.judgeCalls(), 3);
+});
+
+test("stats show this week's scored push and today's streak, and refuse an unknown period", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  const sha = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  const record = await box.settled(`push-root-${short(sha)}`);
+
+  const output = box.evolo("stats");
+  assert.match(output, new RegExp(`^${periodOf("week").label}  \\(vs ${periodOf("week", new Date(), 1).label}\\)$`, "m"));
+  assert.match(output, new RegExp(`^${record.xp} XP  1 unit  level \\d+`, "m"));
+  // The push landed today, and a day with work counts toward the streak whether or not it is a workday.
+  assert.match(output, /^streak 1 workday \(longest 1\)$/m);
+  assert.match(output, /^dirs {6}proj 20$/m);
+  assert.match(box.evolo("stats", "month", "--previous"), /^streak 1 workday/m);
+  const refused = box.evoloRun("stats", "year");
+  assert.equal(refused.status, 2);
+  assert.match(refused.stderr, /expected: evolo stats \[week\|month\|quarter\] \[--previous\]/);
+  const mistyped = box.evoloRun("stats", "--prev");
+  assert.equal(mistyped.status, 2);
+  assert.match(mistyped.stderr, /^Unknown option '--prev'/);
+  assert.doesNotMatch(mistyped.stderr, /    at /, "no stack trace");
 });

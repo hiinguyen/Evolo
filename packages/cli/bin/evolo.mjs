@@ -8,6 +8,8 @@
 //   evolo sync [--background]             queues newly merged PRs, re-checks the ledger, starts the worker;
 //                                         --background leaves all of it to a detached worker and prints nothing
 //   evolo status                          level, XP, the queue and the latest scores
+//   evolo stats [week|month|quarter] [--previous]   analytics of this calendar period (or the previous one) against
+//                                         the one before it, and the streak of workdays
 //   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
 //   evolo review [<commit>|#<pr>|<unit id>] [--repo <clone>] [--again] [--judge claude|opencode] [--model M]
 //       a code review of a unit by a separate judge, saved under <home>/reviews; the saved one unless --again
@@ -40,17 +42,19 @@ import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs
 import { listAllRecords, listRecords, localDay, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
+import { computeStats, PERIODS, periodOf, streakOf } from "../src/stats.mjs";
 import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
 import { terminalSafe } from "../src/safe-text.mjs";
-import { explain, findByRef, recentXp, statusLine, unitLabel } from "../src/views.mjs";
+import { explain, findByRef, formatStats, recentXp, statusLine, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|stats|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
+  evolo stats [week|month|quarter] [--previous]
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
   evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]
   evolo claude install|uninstall
@@ -249,6 +253,18 @@ function status() {
   }
 }
 
+function stats(argv) {
+  const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, options: { previous: { type: "boolean", default: false } } });
+  const [kind = "week", ...extra] = positionals;
+  if (!PERIODS.includes(kind) || extra.length > 0) usageError(`expected: evolo stats [${PERIODS.join("|")}] [--previous]`);
+  const records = listAllRecords(evoloHome());
+  const now = new Date();
+  const back = values.previous ? 1 : 0;
+  const current = computeStats(records, periodOf(kind, now, back));
+  const previous = computeStats(records, periodOf(kind, now, back + 1));
+  console.log(formatStats(current, previous, streakOf(records, now)).join("\n"));
+}
+
 // The record of the unit `ref` names, searched in the registered clone `repoDir` when it is one, else in every
 // repository; a commit given by name ("HEAD~2", a branch) is resolved in that clone. The latest unit without `ref`.
 // Exits with a message when nothing matches.
@@ -393,9 +409,15 @@ function config(argv) {
   }
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, review, retry, statusline, claude, config, evaluate };
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, why, review, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();
 for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => process.exit(130));
-await COMMANDS[command](rest);
+try {
+  await COMMANDS[command](rest);
+} catch (error) {
+  // An unknown or malformed option is a usage mistake, not a crash: say so without a stack trace.
+  if (!error.code?.startsWith("ERR_PARSE_ARGS")) throw error;
+  usageError(error.message);
+}

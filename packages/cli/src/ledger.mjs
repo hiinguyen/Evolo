@@ -1,6 +1,7 @@
 // The ledger: one record per scored unit, in <home>/ledger/<owner>/<name>/<unit id>.json.
-// A record is { id, repo, kind, status, xp, summary, at, result?, reason?, signals? }; `xp` is what the unit is worth
-// now, `result` is evaluateUnit's full output, `signals` what GitHub learnt about the unit after it landed (signals.mjs).
+// A record is { id, repo, kind, status, xp, summary, at, landedAt?, result?, reason?, signals? }; `xp` is what the unit
+// is worth now, `at` when it was scored, `landedAt` when it was pushed or merged, `result` is evaluateUnit's full output,
+// `signals` what GitHub learnt about the unit after it landed (signals.mjs).
 // Records hold facts, scores and reasons, never code.
 //
 // Status       Counts  Meaning
@@ -79,12 +80,22 @@ export function localDay(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-// XP counts on the day the unit was scored; a unit reverted later stops counting on that day.
+// When the unit was pushed or merged, which is the day the work counts on. A unit can be scored much later: a PR merged
+// last night is found by this morning's sync, and a push waits for the next day when the judge budget is spent.
+// Records scored before `landedAt` existed fall back to the PR's merge time, then to their last commit.
+// A time that cannot be read (a record edited by hand) is skipped, so every unit lands on a real day.
+export function landedAt(record) {
+  const facts = record.result?.facts;
+  const candidates = [record.landedAt, facts?.pr?.mergedAt, facts?.commits?.at(-1)?.date];
+  return candidates.find((time) => Number.isFinite(Date.parse(time))) ?? record.at;
+}
+
+// XP counts on the day the unit landed; a unit reverted later stops counting on that day.
 export function summarize(home) {
   const xpByDay = {};
   for (const record of listAllRecords(home)) {
     if (record.status !== "scored") continue;
-    const day = localDay(new Date(record.at));
+    const day = localDay(new Date(landedAt(record)));
     xpByDay[day] = (xpByDay[day] ?? 0) + record.xp;
   }
   const total = Object.values(xpByDay).reduce((sum, xp) => sum + xp, 0);
@@ -107,8 +118,8 @@ export function readSummary(home) {
   }
 }
 
-// The ledger record for evaluateUnit's `result`.
-export function scoredRecord(result) {
+// The ledger record for evaluateUnit's `result`, for a unit that landed at the ISO time `landedAt`.
+export function scoredRecord(result, { landedAt = null } = {}) {
   const { facts } = result;
   const status =
     result.status === "failed" ? "failed"
@@ -122,6 +133,7 @@ export function scoredRecord(result) {
     xp: status === "scored" ? result.xp : 0,
     summary: result.evaluation?.summary ?? result.failures?.join(" | ") ?? "",
     at: new Date().toISOString(),
+    landedAt,
     result,
   };
 }
