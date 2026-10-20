@@ -7,7 +7,7 @@ import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs"
 import { REVIEW_TASK } from "./judges/common.mjs";
 import { evidencePath } from "./score.mjs";
 import { readJson, writeJson } from "./store.mjs";
-import { unitLabel } from "./views.mjs";
+import { terminalSafe, unitLabel } from "./views.mjs";
 
 export const SEVERITIES = ["high", "medium", "low"];
 export const CATEGORIES = ["bug", "security", "performance", "test", "design", "readability", "other"];
@@ -156,5 +156,5 @@ export function formatReview(stored) {
     if (finding.suggestion) lines.push(`      fix: ${finding.suggestion}`);
   }
   if (stored.issues.length > 0) lines.push("", "validator:", ...stored.issues.map((issue) => `  ${issue}`));
-  return lines.join("\n");
+  return terminalSafe(lines.join("\n"));
 }

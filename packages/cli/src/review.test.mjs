@@ -130,6 +130,14 @@ test("a printed review says when there are no findings, and warns about suspecte
   assert.match(text, /validator:\n {2}dropped a finding at an unknown path: x/);
 });
 
+test("a printed review never carries control characters from the reviewer", () => {
+  const hostile = "x\u001b[31my\rz\u202e";
+  const review = answer({ overview: hostile, findings: [finding({ title: hostile, detail: hostile, suggestion: hostile })] });
+  const text = formatReview(stored(review));
+  assert.doesNotMatch(text, /[\u001b\r\u202e]/);
+  assert.match(text, /x\[31myz/);
+});
+
 test("a review is stored per repository and unit, and read back", () => {
   const home = mkdtempSync(join(tmpdir(), "evolo-review-"));
   after(() => rmSync(home, { recursive: true, force: true }));

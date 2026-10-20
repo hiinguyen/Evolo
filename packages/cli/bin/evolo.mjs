@@ -42,7 +42,7 @@ import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
 import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
-import { explain, findByRef, recentXp, statusLine, unitLabel } from "../src/views.mjs";
+import { explain, findByRef, recentXp, statusLine, terminalSafe, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
 const USAGE = `usage: evolo <init|uninstall|sync|status|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
@@ -70,12 +70,12 @@ function describe(facts) {
 function printRow(result) {
   const { id } = result.facts;
   if (result.status === "failed") {
-    console.log(`${id}  FAILED  ${result.failures.join(" | ")}`);
+    console.log(terminalSafe(`${id}  FAILED  ${result.failures.join(" | ")}`));
     return;
   }
   const s = scoreValues(result.evaluation);
   const cost = result.costUsd ? `$${result.costUsd.toFixed(2)}` : "-";
-  console.log(
+  console.log(terminalSafe(
     [
       id,
       result.method.padEnd(4),
@@ -87,7 +87,7 @@ function printRow(result) {
       `${Math.round(result.durationMs / 1000)}s`.padStart(5),
       describe(result.facts),
     ].join("  "),
-  );
+  ));
 }
 
 async function evaluate(argv) {
@@ -143,7 +143,7 @@ async function evaluate(argv) {
   mkdirSync(values.out, { recursive: true });
 
   for (const unit of units) {
-    const onProgress = (tool, detail) => console.error(`  [${unit.id}] ${tool} ${String(detail).slice(0, 100)}`);
+    const onProgress = (tool, detail) => console.error(terminalSafe(`  [${unit.id}] ${tool} ${String(detail).slice(0, 100)}`));
     const result = await evaluateUnit({ options, judge, unit, onProgress });
     writeFileSync(join(values.out, `${unit.id}.json`), JSON.stringify(result, null, 2));
     printRow(result);
@@ -207,7 +207,7 @@ function sync(argv) {
     return;
   }
   const notes = syncAll(home);
-  notes.forEach((note) => console.log(note));
+  notes.forEach((note) => console.log(terminalSafe(note)));
   if (listJobs(home).length > 0) spawnWorker(home);
   if (notes.length === 0) console.log("nothing new");
 }
@@ -222,7 +222,7 @@ function status() {
   console.log(jobs.length === 0 ? "queue: empty" : `queue: ${jobs.length} job(s)`);
   for (const job of jobs) {
     const what = job.type === "pr" ? `PR #${job.number}` : `push ${job.to.slice(0, 7)}`;
-    console.log(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`);
+    console.log(terminalSafe(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`));
   }
   // Rebuilt rather than read: status is where a summary left behind by two concurrent writers is put right.
   const summary = writeSummary(home);
@@ -237,7 +237,7 @@ function status() {
   console.log(records.length === 0 ? "no scores yet" : "latest:");
   for (const record of records) {
     const xp = record.status === "scored" ? `${record.xp} XP` : record.status;
-    console.log(`  ${record.at.slice(0, 16).replace("T", " ")}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`);
+    console.log(terminalSafe(`  ${record.at.slice(0, 16).replace("T", " ")}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`));
   }
 }
 
@@ -274,8 +274,9 @@ function why(argv) {
   console.log(explain(record, { reviewed: readReview(home, record.repo, record.id) !== null }));
 }
 
+// Messages can quote the judge or the repository, so they are printed without control characters.
 function fail(message) {
-  console.error(message);
+  console.error(terminalSafe(message));
   process.exit(1);
 }
 
@@ -318,7 +319,7 @@ async function review(argv) {
   const result = await reviewUnit({
     options: { repo: repo.path, url: repo.url, stars: repo.stars, own: repo.isOwnRepo },
     judge, facts, language,
-    onProgress: (tool, detail) => console.error(`  ${tool} ${String(detail).slice(0, 100)}`),
+    onProgress: (tool, detail) => console.error(terminalSafe(`  ${tool} ${String(detail).slice(0, 100)}`)),
   });
   if (!result.ok) {
     fail(`review failed${result.unavailable ? " (the judge could not be reached)" : ""}:\n${result.failures.map((failure) => `  ${failure}`).join("\n")}`);
@@ -339,7 +340,7 @@ function retry() {
     console.log("nothing to retry");
     return;
   }
-  notes.forEach((note) => console.log(note));
+  notes.forEach((note) => console.log(terminalSafe(note)));
   spawnWorker(home);
 }
 
