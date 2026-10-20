@@ -36,8 +36,8 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
 | Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
 | Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | #6 |
-| Tín hiệu XP | CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug`/`security` +10%; đọc khi chấm và ở mỗi lần sync tới khi chốt (CI xong hoặc sau 24 giờ), XP tính lại từ điểm đã lưu | nhánh `feat/signals-budget` |
-| Chi phí | Trần theo ngày `budget.daily-usd` (mặc định $5), tính từ `costUsd` trong ledger và review; hết thì đơn vị cần judge chờ sang ngày sau, có một thông báo mỗi ngày; `status` in chi phí hôm nay | nhánh `feat/signals-budget` |
+| Tín hiệu XP | CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug`/`security` +10%; đọc khi chấm và ở mỗi lần sync tới khi chốt (CI xong hoặc sau 24 giờ), XP tính lại từ điểm đã lưu | #7 |
+| Chi phí | Trần theo ngày `budget.daily-usd` (mặc định $5), tính từ `costUsd` trong ledger và review; hết thì đơn vị cần judge chờ sang ngày sau, có một thông báo mỗi ngày; `status` in chi phí hôm nay | #7 |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -89,7 +89,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 124 test, đều pass (25 test E2E, khoảng 40 giây)
+cd packages/cli && npm test                      # 124 test, đều pass (25 test E2E, khoảng 40 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -190,18 +190,24 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   Chạy tay đúng lệnh của hook: thoát 0, không in gì.
   Gỡ bằng `evolo claude uninstall`.
 
-### Tín hiệu XP và trần chi phí (2026-10-20, nhánh `feat/signals-budget`)
+### Tín hiệu XP và trần chi phí (2026-10-20, PR #7)
 
 - Định nghĩa tín hiệu: `docs/xp-evaluation.md` mục 7.5; cách đọc và khi nào chốt: `docs/auto-scoring.md` mục 4 "Tín hiệu XP"; trần theo ngày: `docs/auto-scoring.md` mục 7.
 - Hook `evaluateUnit({ beforeJudging })` chạy sau triage và trước khi gọi judge; worker dùng nó để kiểm tra trần, nên đơn vị triage bằng luật không bị chặn.
 - Lỗi của judge sau khi đã chạy giờ mang `costUsd`, và `judgeWithRetries` cộng nó vào chi phí.
 - Test: unit test cho `signals.mjs`, `budget.mjs`, khoá config mới; 3 test E2E (push nhận tín hiệu issue khi chấm và CI khi sync; PR có đủ ba tín hiệu; hết ngân sách thì chờ sang ngày, docs vẫn được chấm, một thông báo).
   Đã kiểm tra test bắt được lỗi khi gỡ từng phần chính (kiểm tra trần, điều kiện thoát của worker, ghi tín hiệu khi sync).
-- Kiểm chứng với `gh` thật: truy vấn chạy đúng trên `hiinguyen/Evolo`, `cli/cli` và `golang/go` (chi tiết ở `docs/auto-scoring.md` mục 4); Evolo chưa có CI nên chưa có điểm cộng CI.
+- Kiểm chứng với `gh` thật: truy vấn chạy đúng trên `hiinguyen/Evolo`, `cli/cli` và `golang/go` (chi tiết ở `docs/auto-scoring.md` mục 4); lúc đó Evolo chưa có CI nên chưa có điểm cộng CI; CI được thêm ngay sau (mục dưới).
 - Bản ghi cũ (chấm trước thay đổi này) được đọc tín hiệu ở lần sync đầu; stars và `isOwnRepo` để tính lại XP lấy từ `repos.json`, giống lúc chấm.
 - Agent review: không có CRITICAL; đã sửa 1 HIGH (nâng trần không giải phóng đơn vị đang chờ), 2 MEDIUM (tín hiệu không đọc được bị hỏi lại mãi; sync ghi từng bản ghi một) và 2 LOW (config sửa tay sai làm hỏng đơn vị; review `DISMISSED` được tính), mỗi lỗi có test.
 - Rủi ro còn lại: chi phí của lần chạy mà judge không trả lời được (`judgeUnavailable`) không được ghi, nên trần có thể bị vượt thêm chút ít; thường là $0 vì API không trả lời.
   Hai tiến trình cùng ghi một bản ghi (sync và worker) vẫn có thể đè nhau, như `refreshLedger` trước đây.
+
+### CI (2026-10-20)
+
+- `.github/workflows/test.yml` chạy `npm test` trong `packages/cli` trên Node 20, 22 và 24, khi push lên `main` và ở mọi PR.
+- Test không cần git identity toàn cục hay dependency nào; đã chạy thử với `HOME` trống và `env -i`, 124 test pass.
+- Có CI thì Evolo nhận được tín hiệu "CI pass ngay" (+5%) cho các push và PR của chính repo này.
 
 ### Git
 
@@ -209,6 +215,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
 - Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
 - Thông báo, `why`, `retry`, status line và tích hợp Claude Code (PR #5, merge 2026-10-20).
+- `evolo review` (PR #6), tín hiệu XP và trần chi phí theo ngày (PR #7, merge 2026-10-20), CI chạy test trên mỗi PR (`.github/workflows/test.yml`).
 
 ## 4. Việc tiếp theo
 
