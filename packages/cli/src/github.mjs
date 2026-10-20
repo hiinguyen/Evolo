@@ -2,7 +2,7 @@
 // `gh` resolves the repository from the clone's remotes, honouring `gh repo set-default`.
 import { execFileSync } from "node:child_process";
 
-const PR_FIELDS = "number,title,body,url,state,baseRefName,baseRefOid,headRefOid,mergeCommit";
+const PR_FIELDS = "number,title,body,url,state,mergedAt,baseRefName,baseRefOid,headRefOid,mergeCommit";
 
 // Every call talks to GitHub, so none may hang forever: the worker would stop scoring.
 const GH_TIMEOUT_MS = 2 * 60 * 1000;

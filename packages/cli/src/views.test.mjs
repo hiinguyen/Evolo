@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { terminalSafe } from "./safe-text.mjs";
-import { explain, findByRef, notification, recentXp, statusLine, unitLabel } from "./views.mjs";
+import { explain, findByRef, formatStats, notification, recentXp, statusLine, unitLabel } from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -96,4 +96,61 @@ test("with body markup the judge's bold and links render, links show their addre
   const failed = notification({ ...scored, status: "failed", reason: "exit <1> & more" }, 0, { markup: true });
   assert.equal(failed.body, "<b>proj PR #12</b>: exit &lt;1&gt; &amp; more\nRun `evolo retry` to try again.");
   assert.equal(notification({ ...scored, title: "x", xp: 5, summary: "\u001b]0;t\u0007ok" }, 0, { markup: true }).title, "+5 XP");
+});
+
+// Stats as stats.mjs's computeStats returns them, for a period given by its label.
+function periodStats(label, overrides = {}) {
+  return {
+    period: { label },
+    units: 3, xp: 300, costUsd: 0.42, level: 5,
+    types: [{ type: "feature", units: 2, xp: 250 }, { type: "bugfix", units: 1, xp: 50 }],
+    rubric: { n: 3, averages: { impact: 3, centrality: 2.5, difficulty: 2, quality: 3.67, scope_fit: 3 } },
+    tests: { touched: 2, eligible: 3 },
+    reverts: { reverted: 0, total: 3 },
+    repos: [{ repo: "me/app", units: 3, xp: 300 }],
+    dirs: [{ repo: "me/app", dir: "src", lines: 120 }, { repo: "me/app", dir: ".", lines: 4 }],
+    hours: Array.from({ length: 24 }, (_, hour) => (hour === 9 ? 4 : hour === 14 ? 2 : 0)),
+    weekdays: [3, 0, 1, 0, 0, 0, 2],
+    ...overrides,
+  };
+}
+
+test("stats show a period against the previous one, with changes only where the previous period has data", () => {
+  const previous = periodStats("week 2026-10-12..2026-10-18", {
+    units: 2, xp: 200, rubric: { n: 2, averages: { impact: 2.5, centrality: 2.5, difficulty: 2.5, quality: 4, scope_fit: 3 } },
+    tests: { touched: 0, eligible: 0 },
+  });
+  const lines = formatStats(periodStats("week 2026-10-19..2026-10-25"), previous, { current: 4, longest: 9 });
+  assert.deepEqual(lines, [
+    "week 2026-10-19..2026-10-25  (vs week 2026-10-12..2026-10-18)",
+    "300 XP (+100)  3 units (+1)  level 5  judge $0.42",
+    "streak 4 workdays (longest 9)",
+    "types     feature 2 (250 XP) · bugfix 1 (50 XP)",
+    "rubric    impact 3.0 (+0.5)  centrality 2.5 (+0.0)  difficulty 2.0 (-0.5)  quality 3.7 (-0.3)  scope_fit 3.0 (+0.0)  (n=3)",
+    "tests     2 of 3 units with code touched tests (67%)",
+    "reverted  0 of 3",
+    "repos     me/app 300 XP (3)",
+    "dirs      app/src 120 · app 4",
+    "hours     ▁▁▁▁▁▁▁▁▁█▁▁▁▁▅▁▁▁▁▁▁▁▁▁  (0-23)",
+    "weekdays  Mon 3  Tue 0  Wed 1  Thu 0  Fri 0  Sat 0  Sun 2",
+  ]);
+});
+
+test("stats without a previous period, or for an empty one, show no changes", () => {
+  const empty = periodStats("2026-09", { units: 0, xp: 0, rubric: { n: 0, averages: {} }, tests: { touched: 0, eligible: 0 } });
+  const lines = formatStats(periodStats("2026-10"), empty, { current: 1, longest: 1 });
+  assert.equal(lines[1], "300 XP  3 units  level 5  judge $0.42");
+  assert.equal(lines[2], "streak 1 workday (longest 1)");
+  assert.equal(lines[4], "rubric    impact 3.0  centrality 2.5  difficulty 2.0  quality 3.7  scope_fit 3.0  (n=3)");
+  assert.deepEqual(formatStats(empty, null, { current: 0, longest: 2 }), ["2026-09", "streak 0 workdays (longest 2)", "no contributions"]);
+});
+
+test("stats print repository names and paths without control characters", () => {
+  const stats = periodStats("2026-10", {
+    repos: [{ repo: "me/\u001b[2Japp", units: 1, xp: 10 }],
+    dirs: [{ repo: "me/app", dir: "src/\u001b]0;x\u0007evil", lines: 1 }],
+  });
+  const printed = formatStats(stats, null, { current: 0, longest: 0 }).join("\n");
+  assert.equal(printed, terminalSafe(printed));
+  assert.match(printed, /me\/\[2Japp/);
 });

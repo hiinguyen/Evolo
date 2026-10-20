@@ -26,7 +26,7 @@ Thiết kế hiện tại không chặn đường làm chúng sau này, vì mọ
 | XP | Đóng góp này đáng giá bao nhiêu? | Judge + công thức | Đã xây, tự chấm sau push và PR |
 | Level | Tôi đã tích luỹ được bao nhiêu? | Tổng XP trong ledger | Đã có công thức và `evolo status` |
 | Achievement | Tôi đã làm được những cột mốc nào? | Luật tất định trên ledger | Chưa làm |
-| Analytics | Cách tôi làm việc thay đổi thế nào? | Thống kê trên điểm rubric và facts | Chưa làm |
+| Analytics | Cách tôi làm việc thay đổi thế nào? | Thống kê trên điểm rubric và facts | Đã xây, `evolo stats` |
 | Review code | Push hay PR này có vấn đề gì, nên cải thiện gì? | Judge riêng, gọi tay bằng `evolo review` | Đã xây (`docs/review.md`) |
 | Performance review | Tuần, tháng hay quý này tôi đã làm được gì? | LLM viết từ ledger, có trích dẫn | Chưa làm |
 | Dashboard | Xem tất cả ở một chỗ | Trang HTML sinh từ ledger | Chưa làm |
@@ -79,7 +79,7 @@ Chi tiết cơ chế (hook `pre-push`, xác nhận push thành công, phát hi�
 
 Lõi `@evolo/core` gồm `units.mjs`, `facts.mjs`, `score.mjs`, `judges/` và `evaluate.mjs`; phần tự chấm gồm `hooks.mjs`, `repos.mjs`, `queue.mjs`, `worker.mjs`, `ledger.mjs` và `store.mjs`, đều nằm trong `packages/cli/src/`.
 Chưa tách thành package riêng vì hiện chỉ có một nơi dùng nó.
-Phần đọc ledger đã có `evolo status`, `why`, `review` (review code từng đơn vị, `docs/review.md`), skill `/evolo`, status line và thông báo; dashboard và performance review chưa làm.
+Phần đọc ledger đã có `evolo status`, `stats` (analytics, mục 7), `why`, `review` (review code từng đơn vị, `docs/review.md`), skill `/evolo`, status line và thông báo; dashboard và performance review chưa làm.
 
 ## 5. Level
 
@@ -121,7 +121,7 @@ Nhóm đề xuất cho bản đầu:
 
 Achievement dựa trên điểm rubric chứ không dựa trên số commit hay số dòng, để chúng thưởng cho chất lượng công việc.
 
-## 7. Analytics (chưa làm)
+## 7. Analytics (đã xây)
 
 Mọi chỉ số đều tính từ facts và điểm rubric đã lưu, theo cửa sổ thời gian (tuần, tháng, quý):
 
@@ -134,6 +134,11 @@ Mọi chỉ số đều tính từ facts và điểm rubric đã lưu, theo cử
 
 Không có chỉ số "số dòng code mỗi ngày".
 Đó là chỉ số dễ đo nhất nhưng ít ý nghĩa nhất, và Evolo được xây chính để thay thế nó.
+
+Đã xây trong `src/stats.mjs` và lệnh `evolo stats [week|month|quarter] [--previous]`, theo `docs/superpowers/specs/2026-10-20-evolo-stats-design.md`.
+Kỳ theo lịch (tuần từ thứ Hai), giờ địa phương; một đơn vị thuộc ngày nó tới nơi (`landedAt`), không phải ngày được chấm.
+Trung bình rubric bỏ đơn vị triage bằng luật; tập trung tính theo thư mục cha của file; streak đếm ngày làm việc, cuối tuần không làm đứt chuỗi.
+Achievement, dashboard và performance review dùng lại các hàm này.
 
 ## 8. Performance review (chưa làm)
 
@@ -169,7 +174,7 @@ Local lưu mỗi bản ghi một file JSON trong `~/.evolo/`, ghi theo kiểu at
 ```
 repos.json                          repo đã đăng ký: path, gitDir, remote, url, defaultBranch, authors[], isOwnRepo, stars, since
 queue/<job-id>.json                 job đang chờ: push {remote, ref, from, to, pusher} hoặc pr {number}, attempts, lastError, notBefore
-ledger/<owner>/<name>/<unit-id>.json   một đơn vị: id, kind, status, xp, summary, at, result (facts, evaluation, judge, breakdown)
+ledger/<owner>/<name>/<unit-id>.json   một đơn vị: id, kind, status, xp, summary, at (lúc chấm), landedAt (lúc push hoặc merge), result (facts, evaluation, judge, breakdown), signals
 worker.lock, evolo.log              lock của worker và log của hook, worker
 ```
 
@@ -197,7 +202,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (PR #1) |
 | **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**, PR #2, #3); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, `status` (**xong**, PR #4); thông báo, `why`, `retry`, skill `/evolo`, status line, hook `SessionStart` (**xong**, PR #5); còn lại: `backfill`, `preview` (chi tiết trong `docs/auto-scoring.md` mục 6) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi (**đạt** cho phần đã xây) |
-| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), achievement, analytics, `/evolo report`, dashboard HTML | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
+| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), analytics (**xong**, `evolo stats`), achievement, dashboard HTML, `/evolo report`; làm theo thứ tự này, mỗi phần một spec và một PR | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |
 

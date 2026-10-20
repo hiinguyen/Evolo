@@ -157,3 +157,63 @@ export function findByRef(records, ref) {
     null
   );
 }
+
+// Rows of `evolo stats` show this many repositories and directories at most.
+const STATS_TOP = 5;
+const SPARK = "▁▂▃▄▅▆▇█";
+const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+const row = (name, text) => `${name.padEnd(10)}${text}`;
+const percent = (part, whole) => Math.round((part / whole) * 100);
+
+// " (+3)", " (-0.4)": the change from the previous period, with `digits` decimals.
+function change(now, before, digits = 0) {
+  const text = Math.abs(now - before).toFixed(digits);
+  const sign = now < before && Number(text) !== 0 ? "-" : "+";
+  return ` (${sign}${text})`;
+}
+
+// One character per hour, the busiest hour full height; an hour without commits is the lowest bar.
+function sparkline(counts) {
+  const most = Math.max(...counts);
+  return counts.map((count) => (count === 0 ? SPARK[0] : SPARK[Math.max(1, Math.round((count / most) * (SPARK.length - 1)))])).join("");
+}
+
+// `evolo stats`: the lines for stats.mjs's computeStats of a period, against the previous period when it has data,
+// and the streak. Repository names and paths come from the ledger, so the lines are printed without control characters.
+export function formatStats(current, previous, streak) {
+  const header = [
+    previous ? `${current.period.label}  (vs ${previous.period.label})` : current.period.label,
+    `streak ${plural(streak.current, "workday")} (longest ${streak.longest})`,
+  ];
+  if (current.units === 0) return [...header, "no contributions"].map(terminalSafe);
+  const before = previous?.units > 0 ? previous : null;
+  const { rubric, tests, reverts } = current;
+  const rubricBefore = previous?.rubric.n > 0 ? previous.rubric.averages : null;
+  const rubricText = rubric.n === 0 ? "no units scored by the judge"
+    : `${CRITERIA.map((criterion) => {
+      const average = rubric.averages[criterion];
+      return `${criterion} ${average.toFixed(1)}${rubricBefore ? change(average, rubricBefore[criterion], 1) : ""}`;
+    }).join("  ")}  (n=${rubric.n})`;
+  const testsBefore = previous?.tests.eligible > 0 ? percent(previous.tests.touched, previous.tests.eligible) : null;
+  const testsShare = tests.eligible > 0 ? percent(tests.touched, tests.eligible) : null;
+  const testsText = testsShare === null ? "no units with code in a repository with tests"
+    : `${tests.touched} of ${plural(tests.eligible, "unit")} with code touched tests (${testsShare}%)${testsBefore === null ? "" : change(testsShare, testsBefore)}`;
+  const dirName = ({ repo, dir }) => (dir === "." ? repoName(repo) : `${repoName(repo)}/${dir}`);
+  return [
+    header[0],
+    `${formatXp(current.xp)} XP${before ? change(current.xp, before.xp) : ""}  ` +
+      `${plural(current.units, "unit")}${before ? change(current.units, before.units) : ""}  ` +
+      `level ${current.level}  judge $${current.costUsd.toFixed(2)}`,
+    header[1],
+    row("types", current.types.map(({ type, units, xp }) => `${type} ${units} (${formatXp(xp)} XP)`).join(" · ")),
+    row("rubric", rubricText),
+    row("tests", testsText),
+    row("reverted", `${reverts.reverted} of ${reverts.total}`),
+    row("repos", current.repos.slice(0, STATS_TOP).map(({ repo, units, xp }) => `${repo} ${formatXp(xp)} XP (${units})`).join(" · ")),
+    row("dirs", current.dirs.slice(0, STATS_TOP).map((dir) => `${dirName(dir)} ${formatXp(dir.lines)}`).join(" · ") || "no code"),
+    row("hours", `${sparkline(current.hours)}  (0-23)`),
+    row("weekdays", WEEKDAYS.map((day, index) => `${day} ${current.weekdays[index]}`).join("  ")),
+  ].map(terminalSafe);
+}

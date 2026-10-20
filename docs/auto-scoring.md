@@ -288,8 +288,15 @@ latest:
 ```
 
 Tổng XP tính trên cả ledger, kể cả repo đã `uninstall`, vì gỡ hook không xoá XP đã kiếm.
-"Hôm nay" theo múi giờ máy, tính theo ngày đơn vị được chấm.
+"Hôm nay" theo múi giờ máy, tính theo ngày đơn vị **tới nơi** (`landedAt`), không phải ngày được chấm: push là lúc hook ghi job, PR là `mergedAt` trên GitHub.
+Nhờ vậy PR merge tối qua mà sáng nay mới sync, hay push phải chờ sang ngày vì hết ngân sách, vẫn tính vào đúng ngày làm.
+Bản ghi chấm trước khi có `landedAt` dùng ngày commit cuối.
 Nhật ký chi tiết của hook và worker nằm ở `~/.evolo/evolo.log`.
+
+### `evolo stats`
+
+`evolo stats [week|month|quarter] [--previous]` in analytics của một kỳ theo lịch, so với kỳ trước: XP, cơ cấu loại việc, trung bình rubric, kỷ luật test, revert, repo, thư mục, nhịp làm việc, và streak ngày làm việc.
+Định nghĩa từng chỉ số: `docs/superpowers/specs/2026-10-20-evolo-stats-design.md`.
 
 ### Thông báo desktop
 
@@ -426,8 +433,9 @@ packages/cli/                 # gói npm "evolo"
   src/signals.mjs             # [có] tín hiệu XP (CI, merge sạch, issue bug) và tính lại XP từ điểm đã lưu
   src/budget.mjs              # [có] chi phí judge theo ngày và trần budget.daily-usd
   src/config.mjs              # [có] ~/.evolo/config.json: review.language, budget.daily-usd
-  src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, summary.json
-  src/views.mjs               # [có] nội dung thông báo, status line, why; tìm đơn vị theo commit, PR hoặc mã
+  src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, landedAt, summary.json
+  src/stats.mjs               # [có] analytics theo kỳ và streak, cho evolo stats
+  src/views.mjs               # [có] nội dung thông báo, status line, why, stats; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line
   fakes/                      # [có] gh, claude, notify-send và gdbus giả cho test E2E (sandbox.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
