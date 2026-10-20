@@ -175,6 +175,24 @@ Bản ghi `push_failed`, `failed` và `skipped` bị ghi đè khi đơn vị đ�
 Sync không tự xếp lại PR đã có bản ghi, kể cả `failed`, để một PR lỗi không tốn tiền sau mỗi lần push.
 Revert một phần (chỉ vài commit trong đơn vị) được ghi lại nhưng chưa đổi XP; cách xử lý để dành cho giai đoạn hiệu chỉnh.
 
+### Tín hiệu XP
+
+Tín hiệu (`docs/xp-evaluation.md` mục 7.5) là những gì GitHub biết về đơn vị sau khi nó tới nơi: CI, review, issue được đóng.
+Chúng không qua AI, và nâng XP qua `M_signals`: CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug` +10%.
+
+- Worker đọc tín hiệu ngay khi chấm xong, trước khi ghi bản ghi và gửi thông báo, nên PR đã merge (CI đã chạy xong) có đủ XP ngay.
+- CI của một push thường chạy sau khi chấm, nên mỗi lần sync đọc lại tín hiệu của các đơn vị đang `scored` hoặc `needs_review` mà tín hiệu chưa chốt, rồi tính lại XP từ điểm rubric đã lưu, không gọi lại judge.
+- Tín hiệu chốt (`signals.final`) khi CI của commit cuối đã xong (`SUCCESS`, `FAILURE`, `ERROR`), hoặc 24 giờ sau khi chấm; repo không có CI thì chốt sau 24 giờ, không có điểm cộng CI.
+  Đã chốt thì không đọc lại, nên mỗi đơn vị tốn vài lời gọi `gh` trong ngày đầu rồi thôi.
+- Mỗi lần đọc là một truy vấn GraphQL (trạng thái CI của mọi commit, và với PR thêm review, ngày commit, issue liên kết), cộng hai lời gọi REST cho mỗi issue mà commit của push nhắc tới.
+- GitHub không trả lời được thì tín hiệu để đó cho lần sync sau; lỗi chỉ ghi vào `evolo.log`, không làm hỏng việc chấm.
+  Quá 24 giờ mà vẫn không đọc được thì tín hiệu đã có được chốt (kèm `unreadable`), để không hỏi lại GitHub ở mọi lần sync.
+  Issue không tồn tại hoặc đã bị xoá (HTTP 404, 410) thì bị bỏ qua.
+- XP tăng vì tín hiệu không có thông báo; `sync` in `<repo> <id>: signals, 95 -> 100 XP`, và `why` có dòng `signals:`.
+- Bản ghi giữ `signals: { ciFirstPass, cleanMerge, closesBugIssue, ci, bugIssues, final, checkedAt }`; `result.breakdown.mSignals` và `xp` là giá trị sau tín hiệu.
+
+Kiểm chứng với `gh` thật (2026-10-20): `hiinguyen/Evolo` chưa có CI nên `ci` là `null`; commit của `cli/cli` có `SUCCESS`; review của PR `cli/cli#14750` gồm cả review của bot Copilot; issue đóng bằng PR có `commit_id` rỗng, còn issue của `golang/go` đóng bằng commit có `commit_id` khớp đúng `closer` của GraphQL.
+
 ## 5. Judge chạy bằng Claude
 
 Lệnh sau đã được kiểm chứng trên Claude Code 2.1.289 và đã cài trong `packages/cli/src/judges/claude.mjs`:
@@ -258,10 +276,11 @@ Mọi cách xem đều chỉ đọc ledger và `~/.evolo/summary.json`, không g
 
 ### `evolo status`
 
-In level, tổng XP, XP hôm nay và 7 ngày gần nhất, hàng đợi (kèm lỗi của job đang thử lại), số đơn vị `failed`, và 15 đơn vị gần nhất:
+In hàng đợi (kèm lỗi của job đang thử lại, hoặc job chờ sang ngày vì hết ngân sách), chi phí judge hôm nay so với trần, level, tổng XP, XP hôm nay và 7 ngày gần nhất, số đơn vị `failed`, và 15 đơn vị gần nhất:
 
 ```
 queue: empty
+judge spending today $0.12 of $5.00
 level 2  160 XP  (20 XP to level 3)
 today +160 XP  last 7 days +160 XP
 latest:
@@ -281,6 +300,7 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 | `scored` | `Evolo +160 XP`, thêm `· level 3!` khi lên level | `lightrag PR #5: feature` và lời tóm tắt của judge |
 | `needs_review` | `Evolo Needs review` | Đơn vị, và gợi ý `evolo why <id>` |
 | `failed` | `Evolo Scoring failed` | Lý do, và gợi ý `evolo retry` |
+| Hết ngân sách ngày | `Evolo Daily budget spent` | Số tiền đã tiêu, và gợi ý `evolo config set budget.daily-usd <USD>`; mỗi ngày một lần |
 
 `push_failed` và `skipped` không có thông báo, vì người dùng đã thấy push lỗi, còn đơn vị bị bỏ qua thì không có gì để báo.
 Không có `notify-send` (máy không có desktop) thì bỏ qua, kết quả vẫn ở log và ledger.
@@ -295,7 +315,10 @@ Giải thích một lần chấm: commit và file, lời tóm tắt, từng đi�
 
 ```
 XP = 60 base (feature) × 2.24 value × 1.5 size (934 lines) × 0.8 repo × 1 signals = 161.55 -> 160  [formula 1.2]
+signals: none
 ```
+
+Dòng `signals:` liệt kê tín hiệu đã cộng (`CI passed the first time +5%, closes bug issue #12 +10%`), và khi chưa chốt thì thêm `read again at the next sync (CI: pending)`.
 
 Không có tham số thì giải thích đơn vị mới nhất.
 Trong một clone đã đăng ký, chỉ tìm trong repo đó, và tham số có thể là bất kỳ tên commit nào git hiểu (`HEAD~2`, SHA rút gọn).
@@ -347,8 +370,21 @@ Lệnh `install` chạy lại được: nó thay mục của Evolo trong `settin
 | Force-push qua mạng chậm | Worker sync sau khi đã chấm xong và không còn job nào mới hay đang chờ push tới nơi, nên đơn vị bị thay luôn thành `superseded` |
 | Hai worker cùng thấy lock cũ | Mỗi worker chỉ xoá lock khi nó vẫn chứa đúng PID đã đọc, và chỉ nhả lock của chính mình |
 | Judge treo | Timeout 20 phút cho mỗi lần thử, giết tiến trình con (`judges/common.mjs`) |
-| Chi phí tăng vọt | `--max-budget-usd` cho mỗi lần chấm. Trần theo ngày trong `~/.evolo/config.json` chưa làm |
+| Chi phí tăng vọt | `--max-budget-usd 1` cho mỗi lần chấm, và trần theo ngày `budget.daily-usd` (mặc định $5): hết ngân sách thì đơn vị cần judge chờ sang ngày sau, đơn vị triage bằng luật vẫn được chấm |
 | Repo bị xoá hoặc di chuyển | Worker bỏ các job của repo đó và ghi lý do vào `evolo.log`; sync báo đường dẫn không còn tồn tại |
+
+Trần theo ngày:
+
+- `evolo config set budget.daily-usd 2.50` đổi trần; nhận số dương, tối đa hai chữ số thập phân.
+  Giá trị sửa tay sai trong `config.json` thì dùng mặc định và ghi vào `evolo.log`, không làm hỏng đơn vị nào.
+- Số đã tiêu là tổng `costUsd` của các bản ghi ledger (kể cả `failed`) và các review đã lưu có thời điểm trong ngày theo múi giờ máy, nên không có bộ đếm riêng phải giữ cho khớp.
+  `evolo review` và `evolo evaluate` không bị chặn, vì người dùng tự gọi, nhưng chi phí của `review` được tính vào ngày.
+- Trần được kiểm tra trước khi gọi judge cho một đơn vị, không kiểm tra giữa chừng: đơn vị bắt đầu dưới trần thì chạy hết, nên một ngày có thể vượt trần tối đa một đơn vị (mỗi lần thử dừng ở $1, tối đa 3 lần thử).
+- Đơn vị bị chặn thì ở lại hàng đợi với `budgetDay` là hôm nay và `notBefore` là nửa đêm; nó không chặn sync, và worker thoát thay vì thức chờ đến sáng.
+  Worker đầu tiên của ngày hôm sau (push mới, hoặc hook `SessionStart`) chấm nó; không có gì tự khởi động worker lúc nửa đêm.
+  Nâng trần bằng `evolo config set budget.daily-usd` thì lệnh khởi động worker, và worker cho các đơn vị đang chờ chạy ngay khi chi phí hôm nay đã dưới trần mới.
+- Chi phí của lần thử bị lỗi sau khi judge đã chạy (ví dụ dừng ở `--max-budget-usd`) giờ được cộng vào `costUsd`.
+  Một đơn vị `failed` được `retry` thay bản ghi cũ, nên chi phí của lần thất bại trước không còn được đếm.
 
 Hàng đợi và ledger là các file JSON, mỗi job hoặc đơn vị một file, ghi theo kiểu atomic (ghi file tạm rồi `rename`).
 Nhờ vậy không cần database, không bao giờ đọc phải file ghi dở, và dễ debug bằng `cat`.
@@ -386,7 +422,10 @@ packages/cli/                 # gói npm "evolo"
   src/repos.mjs               # [có] repos.json, init, uninstall
   src/store.mjs               # [có] ~/.evolo, ghi JSON atomic, log
   src/units.mjs               # [có] dải push, lần push của hook (cả force-push), commit đơn, PR thành change set; chọn commit của push
-  src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, PR đã merge của tôi, chọn remote đúng
+  src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, PR đã merge của tôi, chọn remote đúng, CI, review, issue
+  src/signals.mjs             # [có] tín hiệu XP (CI, merge sạch, issue bug) và tính lại XP từ điểm đã lưu
+  src/budget.mjs              # [có] chi phí judge theo ngày và trần budget.daily-usd
+  src/config.mjs              # [có] ~/.evolo/config.json: review.language, budget.daily-usd
   src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, summary.json
   src/views.mjs               # [có] nội dung thông báo, status line, why; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line

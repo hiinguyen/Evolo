@@ -94,3 +94,66 @@ export function mergedPrsOfCommits(repoDir, shas) {
 export function viewPullRequest(repoDir, number) {
   return JSON.parse(gh(repoDir, ["pr", "view", String(number), "--json", PR_FIELDS]));
 }
+
+// Whether a failed `gh` call means GitHub has no such thing (never had it, or deleted it), rather than that GitHub
+// could not be asked.
+const isNotFound = (error) => /HTTP (404|410)/.test(error.message);
+
+// What GitHub knows about a unit after it landed, for the XP signals (signals.mjs):
+// { checks: Map(sha -> CI state of the commit, or null without CI), pr: { author, reviews, commitDates, closingIssues } | null }.
+// A CI state is GitHub's combined status of every check and status on the commit: SUCCESS, FAILURE, ERROR, PENDING
+// or EXPECTED. `reviews` are [{ author, state, submittedAt }], `closingIssues` [{ number, labels }].
+export function unitActivity(repoDir, { shas, pr }) {
+  const bad = shas.find((sha) => !/^[0-9a-f]{40,64}$/.test(sha));
+  if (bad) throw new Error(`not a full commit id: ${JSON.stringify(bad)}`);
+  if (pr !== null && !Number.isInteger(pr)) throw new Error(`not a PR number: ${JSON.stringify(pr)}`);
+  const [owner, name] = githubRepo(repoDir).nameWithOwner.split("/");
+  const checks = new Map();
+  let pull = null;
+  for (let start = 0; start === 0 || start < shas.length; start += COMMITS_PER_QUERY) {
+    const batch = shas.slice(start, start + COMMITS_PER_QUERY);
+    const fields = batch.map((sha, index) => `c${index}: object(oid: "${sha}") { ... on Commit { statusCheckRollup { state } } }`);
+    if (start === 0 && pr !== null) {
+      fields.push(
+        `pr: pullRequest(number: ${pr}) { author { login } ` +
+          "reviews(first: 100) { nodes { state submittedAt author { login } } } " +
+          "commits(last: 100) { nodes { commit { committedDate } } } " +
+          "closingIssuesReferences(first: 25) { nodes { number labels(first: 25) { nodes { name } } } } }",
+      );
+    }
+    const query = `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields.join("\n")} } }`;
+    const output = gh(repoDir, ["api", "graphql", "-f", `query=${query}`, "-f", `owner=${owner}`, "-f", `name=${name}`]);
+    const repository = JSON.parse(output).data.repository;
+    batch.forEach((sha, index) => checks.set(sha, repository[`c${index}`]?.statusCheckRollup?.state ?? null));
+    if (repository.pr) {
+      pull = {
+        author: repository.pr.author?.login ?? null,
+        reviews: repository.pr.reviews.nodes.map((review) => ({ author: review.author?.login ?? null, state: review.state, submittedAt: review.submittedAt })),
+        commitDates: repository.pr.commits.nodes.map((node) => node.commit.committedDate),
+        closingIssues: repository.pr.closingIssuesReferences.nodes.map((issue) => ({
+          number: issue.number,
+          labels: issue.labels.nodes.map((label) => label.name),
+        })),
+      };
+    }
+  }
+  return { checks, pr: pull };
+}
+
+// The issue `number` as { number, labels, closedBy }, where `closedBy` is the commit whose message closed it (null when it
+// is open or was closed otherwise), or null when the repository has no such issue (a missing number, or a PR).
+export function closedIssue(repoDir, number) {
+  if (!Number.isInteger(number)) throw new Error(`not an issue number: ${JSON.stringify(number)}`);
+  let issue;
+  try {
+    issue = JSON.parse(gh(repoDir, ["api", `repos/{owner}/{repo}/issues/${number}`, "--jq", "{state, labels: [.labels[].name], pr: (.pull_request != null)}"]));
+  } catch (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
+  if (issue.pr) return null;
+  if (issue.state !== "closed") return { number, labels: issue.labels, closedBy: null };
+  // One line per time the issue was closed, oldest first: the commit that closed it, or "" when someone closed it by hand.
+  const closers = gh(repoDir, ["api", "--paginate", `repos/{owner}/{repo}/issues/${number}/events?per_page=100`, "--jq", '.[] | select(.event == "closed") | .commit_id // ""']);
+  return { number, labels: issue.labels, closedBy: closers.trimEnd().split("\n").at(-1).trim() || null };
+}

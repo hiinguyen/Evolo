@@ -1,6 +1,7 @@
 // The ledger: one record per scored unit, in <home>/ledger/<owner>/<name>/<unit id>.json.
-// A record is { id, repo, kind, status, xp, summary, at, result?, reason? }; `xp` is what the unit is worth now,
-// `result` is evaluateUnit's full output. Records hold facts, scores and reasons, never code.
+// A record is { id, repo, kind, status, xp, summary, at, result?, reason?, signals? }; `xp` is what the unit is worth
+// now, `result` is evaluateUnit's full output, `signals` what GitHub learnt about the unit after it landed (signals.mjs).
+// Records hold facts, scores and reasons, never code.
 //
 // Status       Counts  Meaning
 // scored       yes     judged (or triaged by rule)
@@ -29,6 +30,7 @@ const LIVE = new Set(["scored", "needs_review"]);
 const JUDGED = new Set([...LIVE, "superseded", "reverted"]);
 
 export const isJudged = (record) => Boolean(record) && JUDGED.has(record.status);
+export const isLive = (record) => Boolean(record) && LIVE.has(record.status);
 
 export function readRecord(home, key, id) {
   return readJson(join(ledgerDir(home, key), `${id}.json`), null);

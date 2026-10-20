@@ -47,17 +47,19 @@ export function readClaudeRun({ events, timedOut, code, stderr }) {
   if (timedOut) throw new Error("claude timed out");
   const result = events.findLast((event) => event.type === "result");
   if (!result) throw new JudgeUnavailableError(`claude produced no result (exit ${code}): ${stderr.slice(-500)}`);
+  // Every error below came after claude ran, so it carries what the run cost.
+  const costed = (error) => Object.assign(error, { costUsd: result.total_cost_usd ?? 0 });
   if (result.subtype === "error_max_budget_usd") {
-    throw new FatalJudgeError(`claude stopped at the budget limit after $${result.total_cost_usd?.toFixed(2)}`);
+    throw costed(new FatalJudgeError(`claude stopped at the budget limit after $${result.total_cost_usd?.toFixed(2)}`));
   }
   // A run that ends as "success" yet is an error never got an answer from the API: sign-in, network, limits.
   if (result.is_error && result.subtype === "success") {
-    throw new JudgeUnavailableError(`claude: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`);
+    throw costed(new JudgeUnavailableError(`claude: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`));
   }
   if (result.is_error || result.subtype !== "success") {
-    throw new Error(`claude ${result.subtype}: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`);
+    throw costed(new Error(`claude ${result.subtype}: ${String(result.result ?? result.api_error_status ?? "").slice(0, 300)}`));
   }
-  if (!result.structured_output) throw new Error("claude returned no structured output");
+  if (!result.structured_output) throw costed(new Error("claude returned no structured output"));
   return {
     output: result.structured_output,
     toolCalls: events.flatMap(toolUses).length,

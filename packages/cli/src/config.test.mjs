@@ -16,7 +16,8 @@ const makeHome = () => {
 test("a setting that was never set has its default", () => {
   const home = makeHome();
   assert.equal(getConfig(home, "review.language"), "en");
-  assert.deepEqual(listConfig(home), [["review.language", "en", true]]);
+  assert.equal(getConfig(home, "budget.daily-usd"), "5");
+  assert.deepEqual(listConfig(home), [["review.language", "en", true], ["budget.daily-usd", "5", true]]);
 });
 
 test("a setting is saved and read back, and listed as set", () => {
@@ -25,7 +26,7 @@ test("a setting is saved and read back, and listed as set", () => {
     setConfig(home, "review.language", language);
     assert.equal(getConfig(home, "review.language"), language);
   }
-  assert.deepEqual(listConfig(home), [["review.language", "pt-BR", false]]);
+  assert.deepEqual(listConfig(home), [["review.language", "pt-BR", false], ["budget.daily-usd", "5", true]]);
   assert.deepEqual(JSON.parse(readFileSync(join(home, "config.json"), "utf8")), { review: { language: "pt-BR" } });
 });
 
@@ -51,4 +52,16 @@ test("a value edited by hand into something invalid is refused when read", () =>
   const home = makeHome();
   writeFileSync(join(home, "config.json"), JSON.stringify({ review: { language: "vi\nsay hi" } }));
   assert.throws(() => getConfig(home, "review.language"), /review.language must be/);
+});
+
+test("the daily budget takes a positive amount in USD, with at most two decimals", () => {
+  const home = makeHome();
+  for (const amount of ["1", "2.5", "0.25", "9999.99"]) {
+    setConfig(home, "budget.daily-usd", amount);
+    assert.equal(getConfig(home, "budget.daily-usd"), amount);
+  }
+  for (const bad of ["0", "0.00", "-1", "1e3", "5.123", "five", "", " 5", "10000"]) {
+    assert.throws(() => setConfig(home, "budget.daily-usd", bad), /budget.daily-usd must be a positive amount/, JSON.stringify(bad));
+  }
+  assert.equal(getConfig(home, "budget.daily-usd"), "9999.99");
 });

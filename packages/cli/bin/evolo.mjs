@@ -29,6 +29,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { dailyBudget } from "../src/budget.mjs";
 import { evaluateUnit, scoreValues } from "../src/evaluate.mjs";
 import { levelFor } from "../src/score.mjs";
 import { git } from "../src/facts.mjs";
@@ -36,7 +37,7 @@ import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
 import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
-import { listAllRecords, listRecords, readSummary, writeSummary } from "../src/ledger.mjs";
+import { listAllRecords, listRecords, localDay, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
 import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
@@ -221,16 +222,22 @@ function status() {
   const home = evoloHome();
   const jobs = listJobs(home);
   console.log(jobs.length === 0 ? "queue: empty" : `queue: ${jobs.length} job(s)`);
+  const today = localDay(new Date());
   for (const job of jobs) {
     const what = job.type === "pr" ? `PR #${job.number}` : `push ${job.to.slice(0, 7)}`;
-    console.log(terminalSafe(`  ${job.repo} ${what}${job.lastError ? `  (retry ${job.attempts}: ${job.lastError})` : ""}`));
+    const why = job.budgetDay === today ? "  (waits for tomorrow: the daily budget is spent)"
+      : job.lastError ? `  (retry ${job.attempts}: ${job.lastError})`
+      : "";
+    console.log(terminalSafe(`  ${job.repo} ${what}${why}`));
   }
+  const budget = dailyBudget(home);
+  console.log(`judge spending today $${budget.spent.toFixed(2)} of $${budget.limit.toFixed(2)}`);
   // Rebuilt rather than read: status is where a summary left behind by two concurrent writers is put right.
   const summary = writeSummary(home);
   const { level, next } = levelFor(summary.total);
-  const { today, week } = recentXp(summary);
+  const recent = recentXp(summary);
   console.log(`level ${level}  ${summary.total} XP  (${next - summary.total} XP to level ${level + 1})`);
-  console.log(`today +${today} XP  last 7 days +${week} XP`);
+  console.log(`today +${recent.today} XP  last 7 days +${recent.week} XP`);
   const all = listAllRecords(home);
   const failed = all.filter((record) => record.status === "failed").length;
   if (failed > 0) console.log(`${failed} failed: \`evolo retry\` scores them again, \`evolo why <unit>\` shows why`);
@@ -375,6 +382,8 @@ function config(argv) {
     } else if (action === "set" && key && value !== undefined && extra.length === 0) {
       setConfig(home, key, value);
       console.log(`${key} = ${value}`);
+      // A raised cap lets the units waiting for tomorrow be scored now; the worker sees whether it does.
+      if (key === "budget.daily-usd" && listJobs(home).length > 0) spawnWorker(home);
     } else {
       usageError("expected: evolo config [get <key> | set <key> <value>]");
     }
