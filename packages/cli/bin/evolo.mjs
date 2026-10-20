@@ -12,6 +12,7 @@
 //   evolo retry                           scores the failed units again, and retries waiting jobs now
 //   evolo statusline                      one line for Claude Code's status line
 //   evolo claude install|uninstall        the /evolo skill, a SessionStart sync hook and the status line in Claude Code
+//   evolo config [get <key> | set <key> <value>]   the settings in <home>/config.json; all of them without arguments
 //   evolo worker                          scores the queue until it is empty (started by the hook and by sync)
 //   evolo enqueue push --pusher PID -- <remote> <url>   called by the hook, with git's pre-push input on stdin
 //   evolo evaluate --repo <clone> --out <results dir> [--judge claude|opencode] [--model M]
@@ -32,6 +33,7 @@ import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
+import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
 import { listAllRecords, listRecords, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, uninstallRepo } from "../src/repos.mjs";
@@ -40,12 +42,13 @@ import { commitUnit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
 import { explain, findByRef, recentXp, statusLine } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|why|retry|statusline|claude|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|why|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
   evolo claude install|uninstall
+  evolo config [get <key> | set <key> <value>]
   evolo evaluate --repo <dir> --out <dir> [--judge claude|opencode] [--model M] [--budget USD]
                  [--url U] [--stars N] [--own] [--author EMAIL]... [--range <from>..<to>]... [--pr <number>]... [<sha>...]`;
 
@@ -290,7 +293,29 @@ function claude(argv) {
   else usageError("expected: evolo claude install|uninstall");
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, retry, statusline, claude, evaluate };
+function config(argv) {
+  const home = evoloHome();
+  const [action, key, value, ...extra] = argv;
+  try {
+    if (action === undefined) {
+      for (const [name, current, isDefault] of listConfig(home)) {
+        console.log(`${name} = ${current}${isDefault ? " (default)" : ""}  ${CONFIG_KEYS[name].describe}`);
+      }
+    } else if (action === "get" && key && value === undefined) {
+      console.log(getConfig(home, key));
+    } else if (action === "set" && key && value !== undefined && extra.length === 0) {
+      setConfig(home, key, value);
+      console.log(`${key} = ${value}`);
+    } else {
+      usageError("expected: evolo config [get <key> | set <key> <value>]");
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exit(1);
+  }
+}
+
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, why, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();
