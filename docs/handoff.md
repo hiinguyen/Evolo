@@ -87,7 +87,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 103 test, đều pass (22 test E2E, khoảng 25 giây)
+cd packages/cli && npm test                      # 108 test, đều pass (22 test E2E, khoảng 25 giây)
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất

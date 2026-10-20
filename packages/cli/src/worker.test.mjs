@@ -362,15 +362,15 @@ async function notifiedWith(markup) {
   return { body: shown.body, label: `proj push ..${short(sha)}` };
 }
 
-test("a desktop without body markup gets the judge's text as written, without control characters", async () => {
+test("a desktop without body markup gets the judge's text without tags, links as text and URL, and no control characters", async () => {
   const { body, label } = await notifiedWith(false);
-  assert.equal(body, `${label}: feature\nAdded <a href="https://evil.example">a link</a> & <b>bold</b>[31m<img src="x">`);
+  assert.equal(body, `${label}: feature\nAdded a link (https://evil.example) & bold[31m<img src="x">`);
 });
 
-test("a desktop with body markup gets Evolo's formatting, and the judge's markup as text", async () => {
+test("a desktop with body markup renders the judge's bold and links, with the link address, and shows other tags as text", async () => {
   const { body, label } = await notifiedWith(true);
   assert.equal(
     body,
-    `<b>${label}</b>: feature\nAdded &lt;a href="https://evil.example"&gt;a link&lt;/a&gt; &amp; &lt;b&gt;bold&lt;/b&gt;[31m&lt;img src="x"&gt;`,
+    `<b>${label}</b>: feature\nAdded <a href="https://evil.example">a link</a> (https://evil.example) &amp; <b>bold</b>[31m&lt;img src="x"&gt;`,
   );
 });

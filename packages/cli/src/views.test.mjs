@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explain, findByRef, notification, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
+import { terminalSafe } from "./safe-text.mjs";
+import { explain, findByRef, notification, recentXp, statusLine, unitLabel } from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -73,16 +74,16 @@ test("why never prints control characters from the judge or the repository", () 
   assert.match(text, /abc1234 a\[2J\[31mb\]0;titlecdefg/);
 });
 
-test("without body markup a notification is plain text, so the judge's text shows as written", () => {
+test("without body markup a notification is plain text: the judge's tags are dropped and links read as text and URL", () => {
   const scored = {
-    repo: "me/proj", id: "pr-12", status: "scored", xp: 105, summary: "Uses <b>Map</b> & Set\u001b[1m",
+    repo: "me/proj", id: "pr-12", status: "scored", xp: 105, summary: 'Uses <b>Map</b> & <a href="https://ex.com">docs</a>\u001b[1m',
     result: { evaluation: { contribution_type: "bugfix" } },
   };
-  assert.deepEqual(notification(scored, 0), { title: "+105 XP · level 2!", body: "proj PR #12: bugfix\nUses <b>Map</b> & Set[1m" });
+  assert.deepEqual(notification(scored, 0), { title: "+105 XP · level 2!", body: "proj PR #12: bugfix\nUses Map & docs (https://ex.com)[1m" });
   assert.equal(notification({ ...scored, summary: "x", xp: 5, status: "scored" }, 0).title, "+5 XP");
 });
 
-test("with body markup Evolo formats its own part, and the judge's text can add no markup of its own", () => {
+test("with body markup the judge's bold and links render, links show their address, and nothing else renders", () => {
   const scored = {
     repo: "me/proj", id: "pr-12", status: "scored", xp: 105,
     summary: 'Uses <b>Map</b> & <a href="https://evil.example">x</a><img src="y">\u001b[1m',
@@ -90,7 +91,7 @@ test("with body markup Evolo formats its own part, and the judge's text can add 
   };
   assert.deepEqual(notification(scored, 200, { markup: true }), {
     title: "+105 XP",
-    body: '<b>proj PR #12</b>: bugfix\nUses &lt;b&gt;Map&lt;/b&gt; &amp; &lt;a href="https://evil.example"&gt;x&lt;/a&gt;&lt;img src="y"&gt;[1m',
+    body: '<b>proj PR #12</b>: bugfix\nUses <b>Map</b> &amp; <a href="https://evil.example">x</a> (https://evil.example)&lt;img src="y"&gt;[1m',
   });
   const failed = notification({ ...scored, status: "failed", reason: "exit <1> & more" }, 0, { markup: true });
   assert.equal(failed.body, "<b>proj PR #12</b>: exit &lt;1&gt; &amp; more\nRun `evolo retry` to try again.");

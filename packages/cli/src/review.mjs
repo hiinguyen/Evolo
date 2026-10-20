@@ -7,7 +7,8 @@ import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs"
 import { REVIEW_TASK } from "./judges/common.mjs";
 import { evidencePath } from "./score.mjs";
 import { readJson, writeJson } from "./store.mjs";
-import { terminalSafe, unitLabel } from "./views.mjs";
+import { terminalSafe } from "./safe-text.mjs";
+import { unitLabel } from "./views.mjs";
 
 export const SEVERITIES = ["high", "medium", "low"];
 export const CATEGORIES = ["bug", "security", "performance", "test", "design", "readability", "other"];

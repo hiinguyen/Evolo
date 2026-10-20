@@ -284,8 +284,9 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 
 `push_failed` và `skipped` không có thông báo, vì người dùng đã thấy push lỗi, còn đơn vị bị bỏ qua thì không có gì để báo.
 Không có `notify-send` (máy không có desktop) thì bỏ qua, kết quả vẫn ở log và ledger.
-Trình hiện thông báo báo có `body-markup` (hỏi qua `gdbus`) thì tên đơn vị được in đậm; chữ của judge và của repo luôn bị thoát `&`, `<`, `>` và bỏ ký tự điều khiển, nên không chèn được link hay ảnh.
-Không có `body-markup` thì gửi chữ thường, không thoát, để không hiện `&amp;`.
+Trình hiện thông báo báo có `body-markup` (hỏi qua `gdbus`) thì tên đơn vị được in đậm, và chữ của judge giữ lại `<b>`, `<i>`, `<u>` và `<a href>` tới địa chỉ `http(s)`, mỗi link kèm địa chỉ trong ngoặc; mọi thẻ khác (kể cả `<img>`) bị thoát, ký tự điều khiển bị bỏ (`src/safe-text.mjs`).
+Không có `body-markup` thì bỏ các thẻ đó, link thành `chữ (địa chỉ)`.
+SwayNotificationCenter 0.12.6 render `<b>`, `<i>`, `<u>` nhưng hiện thẻ `<a>` nguyên văn (2026-10-20).
 Đơn vị bị `reverted` hay `superseded` khi sync chưa có thông báo; `status` vẫn hiện chúng.
 
 ### `evolo why [<commit>|#<pr>|<unit id>]`

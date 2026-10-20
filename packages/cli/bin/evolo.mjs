@@ -42,7 +42,8 @@ import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
 import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
-import { explain, findByRef, recentXp, statusLine, terminalSafe, unitLabel } from "../src/views.mjs";
+import { terminalSafe } from "../src/safe-text.mjs";
+import { explain, findByRef, recentXp, statusLine, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
 const USAGE = `usage: evolo <init|uninstall|sync|status|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]

@@ -12,7 +12,8 @@ import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, take
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
-import { notification, terminalSafe } from "./views.mjs";
+import { terminalSafe } from "./safe-text.mjs";
+import { notification } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;

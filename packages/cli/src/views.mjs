@@ -2,17 +2,9 @@
 // Pure functions of ledger records and the summary, so every view is tested without a terminal or a desktop.
 import { CRITERIA, levelFor } from "./score.mjs";
 import { localDay } from "./ledger.mjs";
+import { escapeMarkup, richText, terminalSafe } from "./safe-text.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// C0 controls but tab and newline, DEL, C1 controls, and the bidi embedding, override and isolate characters.
-const UNSAFE_FOR_TERMINAL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g;
-
-// Text from the judge or the repository (reasons, summaries, commit subjects, PR titles), made safe to print:
-// without its control characters, an escape sequence cannot clear the screen, retitle the terminal, or hide text
-// behind a carriage return or a bidi override. Applied when printing, so records saved earlier are covered too.
-export const terminalSafe = (text) => String(text).replace(UNSAFE_FOR_TERMINAL, "");
-
-const MARKUP_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
 
 const formatXp = (xp) => xp.toLocaleString("en-US");
 const repoName = (key) => key.split("/").at(-1);
@@ -50,8 +42,9 @@ export function statusLine(summary, queued, now = new Date()) {
 // `totalBefore` is the user's total before the record, to tell a level up. `markup`: the notification server reads
 // the body as markup (freedesktop.org body-markup); the title is always plain text. Text never has control characters.
 export function notification(record, totalBefore, { markup = false } = {}) {
-  // With markup, Evolo's own part is bold and every other text is escaped, so the judge's text cannot add markup.
-  const text = (value) => (markup ? terminalSafe(value).replace(/[&<>]/g, (char) => MARKUP_ESCAPES[char]) : terminalSafe(value));
+  // Evolo's own part is bold with markup; the judge's text keeps only the markup richText allows.
+  const text = (value) => (markup ? escapeMarkup(terminalSafe(value)) : terminalSafe(value));
+  const judged = (value) => richText(value, { markup });
   const label = text(`${repoName(record.repo)} ${unitLabel(record.id)}`);
   const where = markup ? `<b>${label}</b>` : label;
   if (record.status === "scored") {
@@ -60,14 +53,14 @@ export function notification(record, totalBefore, { markup = false } = {}) {
     const type = record.result?.evaluation?.contribution_type;
     return {
       title: `+${record.xp} XP${after > before ? ` · level ${after}!` : ""}`,
-      body: `${where}${type ? `: ${text(type)}` : ""}\n${text(record.summary)}`,
+      body: `${where}${type ? `: ${text(type)}` : ""}\n${judged(record.summary)}`,
     };
   }
   if (record.status === "needs_review") {
     return { title: "Needs review", body: `${where}: the judge suspected prompt injection. See \`evolo why ${text(record.id)}\`.` };
   }
   if (record.status === "failed") {
-    return { title: "Scoring failed", body: `${where}: ${text(record.reason ?? record.summary)}\nRun \`evolo retry\` to try again.` };
+    return { title: "Scoring failed", body: `${where}: ${judged(record.reason ?? record.summary)}\nRun \`evolo retry\` to try again.` };
   }
   return null;
 }
