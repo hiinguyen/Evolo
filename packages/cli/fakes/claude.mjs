@@ -4,6 +4,7 @@
 // while $FAKE_CLAUDE_LOG.invalid exists it answers without a summary, which the validator rejects.
 // Given the review schema (judge/review.schema.json) it answers like a reviewer instead, with one finding in the first
 // changed file; while $FAKE_CLAUDE_LOG.badpath exists it adds a finding in a file that does not exist.
+// While $FAKE_CLAUDE_LOG.summary exists, its content is the judge's summary.
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -37,7 +38,11 @@ const answer = {
   rubric_version: "1.0",
   contribution_type: "feature",
   scores: { impact: criterion(2), centrality: criterion(2), difficulty: criterion(2), quality: criterion(2), scope_fit: criterion(3) },
-  summary: existsSync(`${process.env.FAKE_CLAUDE_LOG}.invalid`) ? "" : `Changed ${facts.files.length} file(s).`,
+  summary: existsSync(`${process.env.FAKE_CLAUDE_LOG}.invalid`)
+    ? ""
+    : existsSync(`${process.env.FAKE_CLAUDE_LOG}.summary`)
+      ? readFileSync(`${process.env.FAKE_CLAUDE_LOG}.summary`, "utf8")
+      : `Changed ${facts.files.length} file(s).`,
   flags: [],
   notes: "",
 };

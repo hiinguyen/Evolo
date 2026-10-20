@@ -347,3 +347,18 @@ test("retrying a failed push that a force push removed ends it at once instead o
   const record = await box.settled(id, ["push_failed"]);
   assert.match(record.reason, new RegExp(`${short(gone)} is no longer on origin refs/heads/main`));
 });
+
+test("a notification shows the judge's text as plain text: no markup, no control characters", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  box.setClaudeSummary('Added <a href="https://evil.example">a link</a> & <b>bold</b>\u001b[31m<img src="x">');
+  const sha = box.commit("feat: start", { "app.js": lines(20, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(sha)}`);
+  const [shown] = box.notifications();
+  assert.match(shown.title, /^Evolo \+\d+ XP/);
+  assert.equal(
+    shown.body,
+    'proj push ..' + short(sha) + ': feature\nAdded &lt;a href="https://evil.example"&gt;a link&lt;/a&gt; &amp; &lt;b&gt;bold&lt;/b&gt;[31m&lt;img src="x"&gt;',
+  );
+});

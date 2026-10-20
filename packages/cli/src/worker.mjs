@@ -12,7 +12,7 @@ import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, take
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
-import { notification } from "./views.mjs";
+import { notification, notificationSafe, terminalSafe } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;
@@ -69,7 +69,8 @@ const unitIdOf = (job) => (job.type === "pr" ? `pr-${job.number}` : `push-${shor
 function notify(home, message) {
   if (!message) return;
   try {
-    const args = ["--app-name=Evolo", "--", `Evolo ${message.title}`, message.body];
+    // The summary (title) is plain text to notification servers; only the body can be read as markup.
+    const args = ["--app-name=Evolo", "--", terminalSafe(`Evolo ${message.title}`), notificationSafe(message.body)];
     execFileSync("notify-send", args, { stdio: "ignore", timeout: NOTIFY_TIMEOUT_MS });
   } catch (error) {
     if (error.code !== "ENOENT") logLine(home, `notification failed: ${error.message}`);

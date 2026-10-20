@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explain, findByRef, notification, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
+import { explain, findByRef, notification, notificationSafe, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -71,4 +71,9 @@ test("why never prints control characters from the judge or the repository", () 
   const text = explain(record);
   assert.doesNotMatch(text, /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/);
   assert.match(text, /abc1234 a\[2J\[31mb\]0;titlecdefg/);
+});
+
+test("notificationSafe shows markup as text and drops control characters", () => {
+  assert.equal(notificationSafe('<a href="x">y</a> & <b>z</b>\u001b[1m\nnext'), '&lt;a href="x"&gt;y&lt;/a&gt; &amp; &lt;b&gt;z&lt;/b&gt;[1m\nnext');
+  assert.equal(notificationSafe("+50 XP · level 1!"), "+50 XP · level 1!");
 });

@@ -11,6 +11,12 @@ const UNSAFE_FOR_TERMINAL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u202a-\u20
 // without its control characters, an escape sequence cannot clear the screen, retitle the terminal, or hide text
 // behind a carriage return or a bidi override. Applied when printing, so records saved earlier are covered too.
 export const terminalSafe = (text) => String(text).replace(UNSAFE_FOR_TERMINAL, "");
+
+const MARKUP_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
+
+// The same text made safe for the body of a desktop notification, which notification servers may read as markup
+// (freedesktop.org body-markup: <b>, <a href>, <img src>): shown as written, never as a link or an image.
+export const notificationSafe = (text) => terminalSafe(text).replace(/[&<>]/g, (char) => MARKUP_ESCAPES[char]);
 const formatXp = (xp) => xp.toLocaleString("en-US");
 const repoName = (key) => key.split("/").at(-1);
 
