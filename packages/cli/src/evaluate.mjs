@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { changeDiff, collectChangeFacts, collectRepoContext, diffBase, git } from "./facts.mjs";
-import { FatalJudgeError, JudgeUnavailableError } from "./judges/common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, SCORE_TASK } from "./judges/common.mjs";
 import { computeXp, triage, validateEvaluation } from "./score.mjs";
 
 const MAX_ATTEMPTS = 3;
@@ -17,7 +17,8 @@ function writeDiff(repoDir, facts, path) {
   writeFileSync(path, diff.slice(0, MAX_DIFF_BYTES) + note);
 }
 
-function knownPathsFor(checkoutDir, facts) {
+// Paths a judge may cite: every file at the tip, plus the files the change touched (deleted ones included).
+export function knownPathsFor(checkoutDir, facts) {
   const tracked = git(checkoutDir, ["ls-files", "-z"]).split("\0").filter(Boolean);
   return new Set([...tracked, ...facts.files.map((file) => file.path)]);
 }
@@ -26,8 +27,8 @@ export function scoreValues(evaluation) {
   return Object.fromEntries(Object.entries(evaluation.scores).map(([criterion, entry]) => [criterion, entry.score]));
 }
 
-// The judge's instruction names the unit; everything it needs to know about the unit is in facts.json.
-function taskFor(facts) {
+// Names the unit for a judge's instruction; everything it needs to know about the unit is in facts.json.
+export function describeUnit(facts) {
   const range = `${facts.base ?? "(root)"}..${facts.tip}`;
   const commits = `${facts.commits.length} commit${facts.commits.length === 1 ? "" : "s"}`;
   const unit =
@@ -40,11 +41,15 @@ function taskFor(facts) {
     ? ` ${left} other commit${left === 1 ? " is" : "s are"} in that range but not part of this contribution (see \`excluded\` in facts.json); ` +
       "change.diff holds only the counted commits, one after another."
     : "";
-  return `Evaluate ${unit}${leftOut} Judge the change set as one contribution. Answer with the JSON object defined in your instructions.`;
+  return `${unit}${leftOut}`;
 }
 
-async function judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress }) {
-  const task = taskFor(facts);
+const scoringTask = (facts) =>
+  `Evaluate ${describeUnit(facts)} Judge the change set as one contribution. Answer with the JSON object defined in your instructions.`;
+
+// Runs `spec` on the judge until `validate(output, knownPaths)` accepts its answer, at most MAX_ATTEMPTS times.
+// Returns the validation and the run, or { ok: false, failures, unavailable } when no attempt was accepted.
+export async function judgeWithRetries({ judge, spec = SCORE_TASK, validate, checkoutDir, facts, inputs, task, onProgress }) {
   const knownPaths = knownPathsFor(checkoutDir, facts);
   const failures = [];
   let costUsd = 0;
@@ -52,9 +57,9 @@ async function judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress 
   let unavailable = true;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const run = await judge.judge({ checkoutDir, inputs, task, onProgress });
+      const run = await judge.judge({ checkoutDir, inputs, task, spec, onProgress });
       costUsd += run.costUsd ?? 0;
-      const validation = validateEvaluation(run.output, facts, knownPaths);
+      const validation = validate(run.output, knownPaths);
       if (validation.ok) return { ...validation, ...run, attempts: attempt, failures, costUsd };
       failures.push(`attempt ${attempt}: invalid output: ${validation.problems.join("; ")}`);
       unavailable = false;
@@ -86,6 +91,25 @@ async function withCheckout(repoDir, sha, work) {
   }
 }
 
+// Runs `work(checkoutDir, inputs)` with a worktree at the unit's tip and the judge's input files
+// (facts.json, repo-context.json, change.diff), and removes both however it ends. options: { repo, url, stars, own }.
+export function withJudgeInputs(options, facts, work) {
+  return withCheckout(options.repo, facts.tip, (checkoutDir, inputsDir) => {
+    const context = collectRepoContext(checkoutDir, {
+      name: basename(options.repo), url: options.url, stars: options.stars, isOwnRepo: options.own,
+    });
+    const inputs = {
+      facts: join(inputsDir, "facts.json"),
+      context: join(inputsDir, "repo-context.json"),
+      diff: join(inputsDir, "change.diff"),
+    };
+    writeFileSync(inputs.facts, JSON.stringify(facts, null, 2));
+    writeFileSync(inputs.context, JSON.stringify(context, null, 2));
+    writeDiff(options.repo, facts, inputs.diff);
+    return work(checkoutDir, inputs);
+  });
+}
+
 // options: { repo, url, stars, own }. judge: a backend from judges/index.mjs. unit: from units.mjs.
 export async function evaluateUnit({ options, judge, unit, onProgress }) {
   const startedAt = Date.now();
@@ -100,20 +124,13 @@ export async function evaluateUnit({ options, judge, unit, onProgress }) {
     return { facts, method: "rule", status: "ok", evaluation: triaged, issues: [], xp, breakdown, ...elapsed() };
   }
 
-  const judged = await withCheckout(options.repo, facts.tip, (checkoutDir, inputsDir) => {
-    const context = collectRepoContext(checkoutDir, {
-      name: basename(options.repo), url: options.url, stars: options.stars, isOwnRepo: options.own,
-    });
-    const inputs = {
-      facts: join(inputsDir, "facts.json"),
-      context: join(inputsDir, "repo-context.json"),
-      diff: join(inputsDir, "change.diff"),
-    };
-    writeFileSync(inputs.facts, JSON.stringify(facts, null, 2));
-    writeFileSync(inputs.context, JSON.stringify(context, null, 2));
-    writeDiff(options.repo, facts, inputs.diff);
-    return judgeWithRetries({ judge, checkoutDir, facts, inputs, onProgress });
-  });
+  const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) =>
+    judgeWithRetries({
+      judge, checkoutDir, facts, inputs, onProgress,
+      task: scoringTask(facts),
+      validate: (output, knownPaths) => validateEvaluation(output, facts, knownPaths),
+    }),
+  );
 
   const judgeInfo = { backend: judge.backend, model: judge.model };
   const common = { facts, method: "ai", judge: judgeInfo, failures: judged.failures, costUsd: judged.costUsd };
