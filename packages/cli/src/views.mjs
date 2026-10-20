@@ -14,9 +14,6 @@ export const terminalSafe = (text) => String(text).replace(UNSAFE_FOR_TERMINAL, 
 
 const MARKUP_ESCAPES = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
 
-// The same text made safe for the body of a desktop notification, which notification servers may read as markup
-// (freedesktop.org body-markup: <b>, <a href>, <img src>): shown as written, never as a link or an image.
-export const notificationSafe = (text) => terminalSafe(text).replace(/[&<>]/g, (char) => MARKUP_ESCAPES[char]);
 const formatXp = (xp) => xp.toLocaleString("en-US");
 const repoName = (key) => key.split("/").at(-1);
 
@@ -50,23 +47,27 @@ export function statusLine(summary, queued, now = new Date()) {
 
 // The desktop notification for a record the worker has just written, as { title, body }, or null when there is
 // nothing worth interrupting the user for (a rejected push or a skipped unit: the user already knows).
-// `totalBefore` is the user's total before the record, to tell a level up.
-export function notification(record, totalBefore) {
-  const where = `${repoName(record.repo)} ${unitLabel(record.id)}`;
+// `totalBefore` is the user's total before the record, to tell a level up. `markup`: the notification server reads
+// the body as markup (freedesktop.org body-markup); the title is always plain text. Text never has control characters.
+export function notification(record, totalBefore, { markup = false } = {}) {
+  // With markup, Evolo's own part is bold and every other text is escaped, so the judge's text cannot add markup.
+  const text = (value) => (markup ? terminalSafe(value).replace(/[&<>]/g, (char) => MARKUP_ESCAPES[char]) : terminalSafe(value));
+  const label = text(`${repoName(record.repo)} ${unitLabel(record.id)}`);
+  const where = markup ? `<b>${label}</b>` : label;
   if (record.status === "scored") {
     const before = levelFor(totalBefore).level;
     const after = levelFor(totalBefore + record.xp).level;
     const type = record.result?.evaluation?.contribution_type;
     return {
       title: `+${record.xp} XP${after > before ? ` · level ${after}!` : ""}`,
-      body: `${where}${type ? `: ${type}` : ""}\n${record.summary}`,
+      body: `${where}${type ? `: ${text(type)}` : ""}\n${text(record.summary)}`,
     };
   }
   if (record.status === "needs_review") {
-    return { title: "Needs review", body: `${where}: the judge suspected prompt injection. See \`evolo why ${record.id}\`.` };
+    return { title: "Needs review", body: `${where}: the judge suspected prompt injection. See \`evolo why ${text(record.id)}\`.` };
   }
   if (record.status === "failed") {
-    return { title: "Scoring failed", body: `${where}: ${record.reason ?? record.summary}\nRun \`evolo retry\` to try again.` };
+    return { title: "Scoring failed", body: `${where}: ${text(record.reason ?? record.summary)}\nRun \`evolo retry\` to try again.` };
   }
   return null;
 }

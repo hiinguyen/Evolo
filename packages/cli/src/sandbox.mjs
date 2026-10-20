@@ -27,7 +27,7 @@ export function makeSandbox() {
   sandboxes.push(dir);
   const [home, bin, remote, work] = ["home", "bin", "remote.git", "work"].map((name) => join(dir, name));
   mkdirSync(bin);
-  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"]]) {
+  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"], ["gdbus", "gdbus.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec '${process.execPath}' '${join(FAKES, script)}' "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -69,6 +69,8 @@ export function makeSandbox() {
 
   const setClaudeDown = (down) => (down ? writeFileSync(`${claudeLog}.down`, "") : rmSync(`${claudeLog}.down`, { force: true }));
   const setClaudeInvalid = (invalid) => (invalid ? writeFileSync(`${claudeLog}.invalid`, "") : rmSync(`${claudeLog}.invalid`, { force: true }));
+  // Whether the fake desktop (fakes/gdbus.mjs) says its notifications support body markup; by default they do not.
+  const setNotifyMarkup = (markup) => (markup ? writeFileSync(`${notifyLog}.markup`, "") : rmSync(`${notifyLog}.markup`, { force: true }));
   const setClaudeSummary = (summary) => writeFileSync(`${claudeLog}.summary`, summary);
   const setClaudeBadPath = (bad) => (bad ? writeFileSync(`${claudeLog}.badpath`, "") : rmSync(`${claudeLog}.badpath`, { force: true }));
   // The first line of every task the fake judge was given, in order.
@@ -116,7 +118,7 @@ export function makeSandbox() {
     spawn(process.execPath, [BIN, "worker"], { cwd: work, env, stdio: "ignore", detached: true }).unref();
   };
   return {
-    home, remote, work, git, commit, push, evolo, evoloRun, setGithub, setClaudeDown, setClaudeInvalid, setClaudeBadPath, setClaudeSummary, judgeCalls, judgeTasks,
+    home, remote, work, git, commit, push, evolo, evoloRun, setGithub, setClaudeDown, setClaudeInvalid, setClaudeBadPath, setClaudeSummary, setNotifyMarkup, judgeCalls, judgeTasks,
     notifications,
     settled, retrying, crashWorker, retryNow, lockPath, waitFor,
   };

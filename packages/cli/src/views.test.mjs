@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { explain, findByRef, notification, notificationSafe, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
+import { explain, findByRef, notification, recentXp, statusLine, terminalSafe, unitLabel } from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -73,7 +73,26 @@ test("why never prints control characters from the judge or the repository", () 
   assert.match(text, /abc1234 a\[2J\[31mb\]0;titlecdefg/);
 });
 
-test("notificationSafe shows markup as text and drops control characters", () => {
-  assert.equal(notificationSafe('<a href="x">y</a> & <b>z</b>\u001b[1m\nnext'), '&lt;a href="x"&gt;y&lt;/a&gt; &amp; &lt;b&gt;z&lt;/b&gt;[1m\nnext');
-  assert.equal(notificationSafe("+50 XP · level 1!"), "+50 XP · level 1!");
+test("without body markup a notification is plain text, so the judge's text shows as written", () => {
+  const scored = {
+    repo: "me/proj", id: "pr-12", status: "scored", xp: 105, summary: "Uses <b>Map</b> & Set\u001b[1m",
+    result: { evaluation: { contribution_type: "bugfix" } },
+  };
+  assert.deepEqual(notification(scored, 0), { title: "+105 XP · level 2!", body: "proj PR #12: bugfix\nUses <b>Map</b> & Set[1m" });
+  assert.equal(notification({ ...scored, summary: "x", xp: 5, status: "scored" }, 0).title, "+5 XP");
+});
+
+test("with body markup Evolo formats its own part, and the judge's text can add no markup of its own", () => {
+  const scored = {
+    repo: "me/proj", id: "pr-12", status: "scored", xp: 105,
+    summary: 'Uses <b>Map</b> & <a href="https://evil.example">x</a><img src="y">\u001b[1m',
+    result: { evaluation: { contribution_type: "bugfix" } },
+  };
+  assert.deepEqual(notification(scored, 200, { markup: true }), {
+    title: "+105 XP",
+    body: '<b>proj PR #12</b>: bugfix\nUses &lt;b&gt;Map&lt;/b&gt; &amp; &lt;a href="https://evil.example"&gt;x&lt;/a&gt;&lt;img src="y"&gt;[1m',
+  });
+  const failed = notification({ ...scored, status: "failed", reason: "exit <1> & more" }, 0, { markup: true });
+  assert.equal(failed.body, "<b>proj PR #12</b>: exit &lt;1&gt; &amp; more\nRun `evolo retry` to try again.");
+  assert.equal(notification({ ...scored, title: "x", xp: 5, summary: "\u001b]0;t\u0007ok" }, 0, { markup: true }).title, "+5 XP");
 });

@@ -12,7 +12,7 @@ import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, take
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
-import { notification, notificationSafe, terminalSafe } from "./views.mjs";
+import { notification, terminalSafe } from "./views.mjs";
 
 // While `git push` is still running the remote cannot have the commits yet, so landing is checked this often.
 const LAND_POLL_MS = 1000;
@@ -65,12 +65,28 @@ export function remoteHead(repoDir, remote, branch) {
 
 const unitIdOf = (job) => (job.type === "pr" ? `pr-${job.number}` : `push-${short(job.from)}-${short(job.to)}`);
 
+// Whether the desktop's notification server reads the body as markup (freedesktop.org "body-markup").
+// Servers without it show markup as written, so it is used only when the server says so; no answer means no.
+function supportsBodyMarkup() {
+  try {
+    const capabilities = execFileSync(
+      "gdbus",
+      ["call", "--session", "--dest", "org.freedesktop.Notifications", "--object-path", "/org/freedesktop/Notifications",
+        "--method", "org.freedesktop.Notifications.GetCapabilities"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: NOTIFY_TIMEOUT_MS },
+    );
+    return capabilities.includes("'body-markup'");
+  } catch {
+    return false;
+  }
+}
+
 // Best effort: a machine without notify-send or without a desktop session still scores, and the log has every result.
-function notify(home, message) {
+function notify(home, record, totalBefore) {
+  const message = notification(record, totalBefore, { markup: supportsBodyMarkup() });
   if (!message) return;
   try {
-    // The summary (title) is plain text to notification servers; only the body can be read as markup.
-    const args = ["--app-name=Evolo", "--", terminalSafe(`Evolo ${message.title}`), notificationSafe(message.body)];
+    const args = ["--app-name=Evolo", "--", terminalSafe(`Evolo ${message.title}`), message.body];
     execFileSync("notify-send", args, { stdio: "ignore", timeout: NOTIFY_TIMEOUT_MS });
   } catch (error) {
     if (error.code !== "ENOENT") logLine(home, `notification failed: ${error.message}`);
@@ -83,7 +99,7 @@ function finish(home, job, record) {
   removeJob(home, job);
   const xp = record.status === "scored" ? ` +${record.xp} XP` : "";
   logLine(home, `${job.repo} ${record.id}: ${record.status}${xp} ${record.summary ?? record.reason ?? ""}`);
-  notify(home, notification({ ...record, repo: job.repo }, totalBefore));
+  notify(home, { ...record, repo: job.repo }, totalBefore);
 }
 
 const endRecord = (job, status, reason) => ({ id: unitIdOf(job), kind: job.type, status, xp: 0, reason, at: new Date().toISOString(), job });

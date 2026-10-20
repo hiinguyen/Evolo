@@ -284,6 +284,8 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 
 `push_failed` và `skipped` không có thông báo, vì người dùng đã thấy push lỗi, còn đơn vị bị bỏ qua thì không có gì để báo.
 Không có `notify-send` (máy không có desktop) thì bỏ qua, kết quả vẫn ở log và ledger.
+Trình hiện thông báo báo có `body-markup` (hỏi qua `gdbus`) thì tên đơn vị được in đậm; chữ của judge và của repo luôn bị thoát `&`, `<`, `>` và bỏ ký tự điều khiển, nên không chèn được link hay ảnh.
+Không có `body-markup` thì gửi chữ thường, không thoát, để không hiện `&amp;`.
 Đơn vị bị `reverted` hay `superseded` khi sync chưa có thông báo; `status` vẫn hiện chúng.
 
 ### `evolo why [<commit>|#<pr>|<unit id>]`
@@ -387,7 +389,7 @@ packages/cli/                 # gói npm "evolo"
   src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, summary.json
   src/views.mjs               # [có] nội dung thông báo, status line, why; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line
-  fakes/                      # [có] gh, claude và notify-send giả cho test E2E (worker.test.mjs)
+  fakes/                      # [có] gh, claude, notify-send và gdbus giả cho test E2E (sandbox.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator
   claude/skills/evolo/SKILL.md  # [có] skill /evolo

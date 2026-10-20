@@ -17,7 +17,7 @@ Chỉ dùng cho bản thân, nên **không có chống gian lận, server hay le
 | `docs/architecture.md` | Thiết kế tổng thể: phạm vi, đơn vị chấm, level, achievement, analytics, review, dashboard, dữ liệu, lộ trình | Có cột trạng thái cho từng tính năng và giai đoạn |
 | `docs/auto-scoring.md` | Tự chấm sau push và PR merge: hook `pre-push`, hàng đợi, worker, sync PR qua `gh`, judge Claude, kết quả so sánh model | Đã xây, trừ phần hiển thị (mục 6) |
 | `docs/xp-evaluation.md` | Thiết kế gốc của rubric, judge, công thức XP | Có bảng phần nào đã xây, xây khác hoặc chưa làm |
-| `docs/review.md` | Review code cho từng push và PR: `evolo review`, cấu hình ngôn ngữ, lưu trữ, kết quả chạy thật | Đã xây (nhánh `feat/review`) |
+| `docs/review.md` | Review code cho từng push và PR: `evolo review`, cấu hình ngôn ngữ, lưu trữ, kết quả chạy thật | Đã xây (PR #6) |
 | `docs/superpowers/plans/2026-10-20-evolo-review.md` | Kế hoạch triển khai `evolo review` | Đã làm xong |
 | `docs/handoff.md` | File này | |
 
@@ -35,7 +35,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
 | XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
 | Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
-| Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | nhánh `feat/review` |
+| Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | #6 |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -72,7 +72,7 @@ Code trong `packages/cli/`:
 | `src/sandbox.mjs` | Sandbox E2E dùng chung (repo tạm, remote bare, `gh` và `claude` giả) |
 | `src/claude.mjs` | `evolo claude install` / `uninstall`: skill, hook `SessionStart`, status line trong `$CLAUDE_CONFIG_DIR/settings.json` |
 | `claude/skills/evolo/SKILL.md` | Skill `/evolo`: chỉ người dùng gọi được, chỉ chạy `evolo status`, `why`, `retry` |
-| `fakes/` | `gh`, `claude` và `notify-send` giả cho test E2E |
+| `fakes/` | `gh`, `claude`, `notify-send` và `gdbus` giả cho test E2E |
 | `src/units.mjs` | Biến dải push, commit đơn hoặc số PR thành unit `{kind, id, base, tip, excluded, selected?, pr?}`, và chọn commit được tính |
 | `src/github.mjs` | Mọi lời gọi `gh`: đọc PR, PR đã merge chứa một commit, chọn remote trỏ đúng repo GitHub |
 | `src/evaluate.mjs` | Pipeline cho một unit: facts → triage → worktree tạm tại `tip` → judge → validate → XP; thử lại tối đa 3 lần |
@@ -87,7 +87,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 101 test, đều pass (21 test E2E, khoảng 25 giây)
+cd packages/cli && npm test                      # 103 test, đều pass (22 test E2E, khoảng 25 giây)
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -170,6 +170,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 ### Hiển thị (2026-10-19, PR #5)
 
 - Worker gửi `notify-send` cho `scored` (kèm `level N!` khi lên level), `needs_review` và `failed`; máy không có `notify-send` thì bỏ qua.
+  Có `body-markup` thì in đậm tên đơn vị và thoát chữ của judge; không có thì gửi chữ thường (2026-10-20).
 - `evolo why [<commit>|#<pr>|<unit id>]` in từng điểm rubric kèm lý do và bằng chứng, cảnh báo của validator, commit bị bỏ, và dòng công thức `XP = base × value × size × repo × signals = raw -> XP`.
   Commit thuộc nhiều đơn vị thì chọn đơn vị đã tính nó; merge commit trỏ về PR của nó.
 - `evolo retry` xếp lại các đơn vị `failed` (cùng mã, nên kết quả mới thay bản ghi cũ) và cho job đang chờ chạy ngay; push đã bị force-push mất thì thành `push_failed` ngay.
@@ -203,7 +204,7 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
    Các repo cá nhân khác (friday, map-tour, Tunnel_Security) chưa được đăng ký.
 2. **Hiển thị:** xong, PR #5 đã merge (2026-10-20); `evolo claude install` đã chạy trên máy thật.
    Người dùng đã quyết định không làm `backfill` (2026-10-20); còn `preview`.
-3. **Review code:** `evolo review` xong trên nhánh `feat/review`, chờ mở PR và merge.
+3. **Review code:** `evolo review` xong, PR #6 đã merge (2026-10-20).
    Việc có thể làm tiếp: số dòng của vấn đề đôi khi vẫn là vị trí trong diff (validator đưa về mức file); judge chưa lần theo nơi gọi bằng `git grep` (`docs/review.md` mục 9).
 4. **Dashboard:** trang HTML tĩnh đọc ledger và `~/.evolo/reviews/` (`docs/architecture.md` mục 9); review là dữ liệu đầu tiên người dùng muốn xem trên đó.
 5. Sau đó: achievement, analytics, performance review (`evolo report`), rồi hiệu chỉnh bằng golden set (giai đoạn 3).

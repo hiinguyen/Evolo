@@ -3,7 +3,7 @@
 Tài liệu này mô tả lệnh `evolo review`: một judge riêng đọc lại một đơn vị đã chấm (một lần push hoặc một PR đã merge) và viết review code cho nó.
 Review được lưu lại để xem lại trong terminal, và sau này trên dashboard.
 
-Trạng thái (2026-10-20): đã xây trên nhánh `feat/review`, có test unit và E2E, đã chạy thật một lần (mục 9).
+Trạng thái (2026-10-20): đã xây (PR #6), có test unit và E2E, đã chạy thật một lần (mục 9).
 
 ## 1. Quyết định chính
 

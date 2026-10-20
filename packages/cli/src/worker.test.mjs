@@ -348,8 +348,10 @@ test("retrying a failed push that a force push removed ends it at once instead o
   assert.match(record.reason, new RegExp(`${short(gone)} is no longer on origin refs/heads/main`));
 });
 
-test("a notification shows the judge's text as plain text: no markup, no control characters", async () => {
+// A push whose judge summary carries markup and an escape sequence, scored with or without body markup on the desktop.
+async function notifiedWith(markup) {
   const box = makeSandbox();
+  box.setNotifyMarkup(markup);
   box.evolo("init", "--remote", "origin");
   box.setClaudeSummary('Added <a href="https://evil.example">a link</a> & <b>bold</b>\u001b[31m<img src="x">');
   const sha = box.commit("feat: start", { "app.js": lines(20, "app") });
@@ -357,8 +359,18 @@ test("a notification shows the judge's text as plain text: no markup, no control
   await box.settled(`push-root-${short(sha)}`);
   const [shown] = box.notifications();
   assert.match(shown.title, /^Evolo \+\d+ XP/);
+  return { body: shown.body, label: `proj push ..${short(sha)}` };
+}
+
+test("a desktop without body markup gets the judge's text as written, without control characters", async () => {
+  const { body, label } = await notifiedWith(false);
+  assert.equal(body, `${label}: feature\nAdded <a href="https://evil.example">a link</a> & <b>bold</b>[31m<img src="x">`);
+});
+
+test("a desktop with body markup gets Evolo's formatting, and the judge's markup as text", async () => {
+  const { body, label } = await notifiedWith(true);
   assert.equal(
-    shown.body,
-    'proj push ..' + short(sha) + ': feature\nAdded &lt;a href="https://evil.example"&gt;a link&lt;/a&gt; &amp; &lt;b&gt;bold&lt;/b&gt;[31m&lt;img src="x"&gt;',
+    body,
+    `<b>${label}</b>: feature\nAdded &lt;a href="https://evil.example"&gt;a link&lt;/a&gt; &amp; &lt;b&gt;bold&lt;/b&gt;[31m&lt;img src="x"&gt;`,
   );
 });
