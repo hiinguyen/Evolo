@@ -43,7 +43,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Tín hiệu XP | CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug`/`security` +10%; đọc khi chấm và ở mỗi lần sync tới khi chốt (CI xong hoặc sau 24 giờ), XP tính lại từ điểm đã lưu | #7 |
 | Chi phí | Trần theo ngày `budget.daily-usd` (mặc định $5), tính từ `costUsd` trong ledger và review; hết thì đơn vị cần judge chờ sang ngày sau, có một thông báo mỗi ngày; `status` in chi phí hôm nay | #7 |
 | CI và bảo vệ `main` | `.github/workflows/test.yml` chạy test trên Node 20, 22 và 24; ruleset `main` bắt buộc PR và ba check xanh, cấm force push và xoá | #8; ruleset tạo trên web |
-| Analytics | `evolo stats [week\|month\|quarter] [--previous]`: XP, cơ cấu, trung bình rubric, kỷ luật test, revert, repo, thư mục, nhịp làm việc theo kỳ lịch, so với kỳ trước, và streak ngày làm việc; bản ghi có `landedAt` (lúc push hoặc merge), `summary.json` tính XP theo ngày đó | nhánh `feat/stats`, chưa có PR |
+| Analytics | `evolo stats [week\|month\|quarter] [--previous]`: XP, cơ cấu, trung bình rubric, kỷ luật test, revert, repo, thư mục, nhịp làm việc theo kỳ lịch, so với kỳ trước, và streak ngày làm việc; bản ghi có `landedAt` (lúc push hoặc merge), `summary.json` tính XP theo ngày đó | #9 |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -222,7 +222,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Có CI thì PR của repo này nhận được tín hiệu "CI pass ngay" (+5%).
   Đổi tên job hoặc danh sách Node trong workflow thì phải sửa danh sách check của ruleset theo.
 
-### Analytics (2026-10-20, nhánh `feat/stats`)
+### Analytics (2026-10-20, PR #9)
 
 - Phần A trong bốn phần Game hoá; người dùng chọn thứ tự A analytics, B achievement, C dashboard, D performance review.
   Thiết kế: `docs/superpowers/specs/2026-10-20-evolo-stats-design.md`; người dùng đã chốt: có lệnh `evolo stats`, kỳ theo lịch, streak tính ngày làm việc, ngày của đơn vị là lúc tới nơi.
@@ -243,6 +243,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
 - Thông báo, `why`, `retry`, status line và tích hợp Claude Code (PR #5, merge 2026-10-20).
 - `evolo review` (PR #6), tín hiệu XP và trần chi phí theo ngày (PR #7, merge 2026-10-20), CI chạy test trên mỗi PR và ruleset bảo vệ `main` (PR #8, merge 2026-10-20).
+- `evolo stats`, `landedAt` và lộ trình Game hoá; `CLAUDE.md` với quy tắc cho agent (PR #9).
 
 ## 4. Việc tiếp theo
 
@@ -257,7 +258,7 @@ Theo `docs/auto-scoring.md` mục 10 và `docs/architecture.md` mục 11:
    Người dùng đã quyết định không làm `backfill` (2026-10-20); còn `preview`.
 3. **Review code:** `evolo review` xong, PR #6 đã merge (2026-10-20).
    Việc có thể làm tiếp: số dòng của vấn đề đôi khi vẫn là vị trí trong diff (validator đưa về mức file); judge chưa lần theo nơi gọi bằng `git grep` (`docs/review.md` mục 9).
-4. **Game hoá:** A analytics xong (`evolo stats`, nhánh `feat/stats`); tiếp theo B achievement (luật khai báo dựa trên `stats.mjs`, `achievements.json` chỉ để thông báo lần mở khoá đầu), rồi C dashboard (trang HTML tĩnh đọc ledger và `~/.evolo/reviews/`, review là dữ liệu đầu tiên người dùng muốn xem), rồi D performance review (`evolo report`).
+4. **Game hoá:** A analytics xong (`evolo stats`, PR #9); tiếp theo B achievement (luật khai báo dựa trên `stats.mjs`, `achievements.json` chỉ để thông báo lần mở khoá đầu), rồi C dashboard (trang HTML tĩnh đọc ledger và `~/.evolo/reviews/`, review là dữ liệu đầu tiên người dùng muốn xem), rồi D performance review (`evolo report`).
    Mỗi phần: brainstorm, spec trong `docs/superpowers/specs/`, plan, PR riêng.
 5. Sau đó: hiệu chỉnh bằng golden set (giai đoạn 3).
 
