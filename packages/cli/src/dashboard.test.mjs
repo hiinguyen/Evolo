@@ -3,13 +3,16 @@
 process.env.TZ = "Asia/Ho_Chi_Minh";
 
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, rmSync, statSync, writeFileSync, chmodSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { modelIn, sampleModel } from "../dashboard/fixtures.mjs";
+import { parseHash, renderRoute, renderShell } from "../dashboard/app.mjs";
 import { SECRET } from "./achievements/secret.mjs";
 import { day, unit as fixtureUnit } from "./achievements/fixtures.mjs";
-import { dashboardModel } from "./dashboard.mjs";
+import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, renderPage, writeDashboard } from "./dashboard.mjs";
 import { listAllRecords, summarize, writeRecords } from "./ledger.mjs";
 import { addJob, updateJob } from "./queue.mjs";
 import { writeReview } from "./review.mjs";
@@ -202,5 +205,99 @@ test("jobs parked on today's budget are counted apart from the waiting ones", ()
     assert.deepEqual(queue, { waiting: 2, parked: 1 });
     assert.equal(typeof budget.limit, "number");
     assert.equal(budget.spent, 0);
+  });
+});
+
+const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
+const MODEL_TAG = '<script type="application/json" id="model">';
+
+// The sample model with a summary that tries to close the data block, and one with `String.replace` patterns.
+function hostileModel() {
+  const model = sampleModel();
+  const [first, second, ...rest] = model.units;
+  return {
+    ...model,
+    units: [{ ...first, summary: "</script><script>alert(1)</script><!--" }, { ...second, summary: "keep $& and $' and $1 and $$" }, ...rest],
+  };
+}
+
+test("renderPage embeds the model once, and text in it cannot close the data block", () => {
+  const model = hostileModel();
+  const page = renderPage(model, DASHBOARD_DIR);
+  assert.equal(page.split(MODEL_TAG).length - 1, 1);
+  const from = page.indexOf(MODEL_TAG) + MODEL_TAG.length;
+  const block = page.slice(from, page.indexOf("</script>", from));
+  assert.ok(!block.includes("<"), "every < of the model is escaped");
+  // Read back, the model equals what JSON keeps of it: fields that are undefined are left out.
+  assert.deepEqual(modelIn(page), JSON.parse(JSON.stringify(model)));
+  assert.equal(modelIn(page).units[0].summary, "</script><script>alert(1)</script><!--");
+  assert.equal(modelIn(page).units[1].summary, "keep $& and $' and $1 and $$");
+});
+
+test("the page is a complete document that loads nothing from the network", () => {
+  const page = renderPage(sampleModel(), DASHBOARD_DIR);
+  assert.match(page, /^<!doctype html>\n<html lang="en">/);
+  assert.ok(page.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">`));
+  assert.ok(page.includes("<title>Evolo</title>"));
+  assert.ok(page.includes('<div id="app"></div>'));
+  assert.ok(page.includes("<noscript>"));
+  assert.ok(!page.includes("/*evolo:"), "every placeholder is filled");
+  assert.ok(page.includes(readFileSync(join(DASHBOARD_DIR, "style.css"), "utf8")));
+  assert.ok(page.includes(`<script type="module">${bundle(DASHBOARD_DIR)}</script>`));
+  assert.ok(!/\b(src|href)="(https?:)?\/\//.test(page), "no remote script, style or font");
+});
+
+test("bundle joins the drawing modules without import or export, and the result loads as one module", async () => {
+  const code = bundle(DASHBOARD_DIR);
+  assert.deepEqual(code.split("\n").filter((line) => /^\s*(import|export)\b/.test(line)), []);
+  // Text the HTML parser would end the script or the comment state on.
+  assert.ok(!code.includes("</script") && !code.includes("<!--"));
+  assert.deepEqual(MODULES.filter((name) => !existsSync(join(DASHBOARD_DIR, name))), []);
+  const dir = mkdtempSync(join(tmpdir(), "evolo-bundle-"));
+  try {
+    // Loading it catches a name declared by two modules, a syntax error, or a name a module forgot to import.
+    const path = join(dir, "bundle.mjs");
+    writeFileSync(path, `${code}\nexport { parseHash, renderRoute, renderShell };\n`);
+    const joined = await import(pathToFileURL(path).href);
+    const model = sampleModel();
+    for (const hash of ["#/", "#/nowhere"]) {
+      const route = joined.parseHash(hash);
+      assert.equal(joined.renderShell(model, route, joined.renderRoute(model, route)), renderShell(model, parseHash(hash), renderRoute(model, parseHash(hash))));
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("writeDashboard writes the page of the ledger to <home>/dashboard.html, readable only by the user", () => {
+  withHome((home) => {
+    seed(home, [unit({ id: "pr-3", kind: "pr", landed: day("2026-10-20"), xp: 90 })]);
+    const path = writeDashboard(home, NOW);
+    assert.equal(path, join(home, "dashboard.html"));
+    assert.equal(dashboardPath(home), path);
+    assert.equal(statSync(path).mode & 0o777, 0o600);
+    const model = modelIn(readFileSync(path, "utf8"));
+    assert.deepEqual(model, JSON.parse(JSON.stringify(dashboardModel(home, NOW))));
+    assert.deepEqual(model.units.map((entry) => entry.key), ["me/a/pr-3"]);
+  });
+});
+
+test("refreshDashboard rewrites only a page that exists, and logs instead of throwing", () => {
+  withHome((home) => {
+    seed(home, [unit({ id: "pr-3", kind: "pr", landed: day("2026-10-20") })]);
+    refreshDashboard(home, NOW);
+    assert.ok(!existsSync(dashboardPath(home)), "no page is made for a user who never asked for one");
+
+    writeDashboard(home, NOW);
+    seed(home, [unit({ id: "pr-4", kind: "pr", landed: day("2026-10-21") })]);
+    refreshDashboard(home, NOW);
+    assert.deepEqual(modelIn(readFileSync(dashboardPath(home), "utf8")).units.map((entry) => entry.id), ["pr-4", "pr-3"]);
+
+    const before = readFileSync(dashboardPath(home), "utf8");
+    mkdirSync(join(home, "ledger", "me", "a"), { recursive: true });
+    writeFileSync(join(home, "ledger", "me", "a", "pr-5.json"), "{ not json");
+    assert.doesNotThrow(() => refreshDashboard(home, NOW));
+    assert.equal(readFileSync(dashboardPath(home), "utf8"), before, "a page that cannot be made leaves the old one");
+    assert.match(readFileSync(join(home, "evolo.log"), "utf8"), /dashboard not updated: cannot read .*pr-5\.json/);
   });
 });

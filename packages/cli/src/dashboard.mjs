@@ -1,8 +1,11 @@
-// The model behind `evolo dashboard` (docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md section 4): one plain
-// object holding everything the page shows, built from the ledger, the reviews and the queue. The page is a function of
-// this object alone, so what is left out here can never reach the HTML.
+// `evolo dashboard` (docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md): the model, and the page made from it.
+// The model (section 4) is one plain object holding everything the page shows, built from the ledger, the reviews and
+// the queue. The page is a function of this object alone, so what is left out here can never reach the HTML.
 // Left out on purpose: PR and commit bodies, the judge's `notes`, `sessionID`, `deniedCommands` and `job` are long and
 // not shown; a locked secret achievement is only counted, so its name and condition are not in the page source either.
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { achievementsOf, unlockedIn } from "./achievements.mjs";
 import { dailyBudget } from "./budget.mjs";
 import { landedAt, listAllRecords, localDay, summarize } from "./ledger.mjs";
@@ -10,6 +13,7 @@ import { isParked, listJobs } from "./queue.mjs";
 import { listAllReviews } from "./review.mjs";
 import { CRITERIA, levelFor } from "./score.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "./stats.mjs";
+import { logLine, writeText } from "./store.mjs";
 import { recentXp, unitLabel } from "./views.mjs";
 
 const newestFirst = (time) => (a, b) => Date.parse(time(b)) - Date.parse(time(a));
@@ -123,4 +127,52 @@ export function dashboardModel(home, now = new Date()) {
     units: records.map(unitOf).sort(newestFirst((unit) => unit.landedAt)),
     reviews: listAllReviews(home).map(reviewOf).sort(newestFirst((review) => review.at)),
   };
+}
+
+// packages/cli/dashboard: the page's template, its style and the drawing modules, read each time a page is written.
+const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
+
+// The page is opened from file://, where Chrome refuses to load one module from another, so the drawing modules are
+// joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
+// import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
+const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
+export const MODULES = ["html.mjs", "overview.mjs", "app.mjs"];
+
+export function bundle(dir) {
+  return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
+}
+
+// The page for `model`: the template of `dir` with its style, the model and the script put in. Each is put in by a
+// function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The model
+// goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `<`, which JSON
+// reads back as `<`, so a `</script>` in a commit subject cannot end the data block.
+export function renderPage(model, dir) {
+  const template = readFileSync(join(dir, "index.html"), "utf8");
+  const style = readFileSync(join(dir, "style.css"), "utf8");
+  const data = JSON.stringify(model).replace(/</g, "\\u003c");
+  return template
+    .replace("/*evolo:style*/", () => style)
+    .replace("/*evolo:script*/", () => bundle(dir))
+    .replace("/*evolo:model*/", () => data);
+}
+
+export const dashboardPath = (home) => join(home, "dashboard.html");
+
+// Writes the page of the current ledger, and returns its path. It holds summaries, review text and file paths, so a
+// new page is readable by the user alone; one that exists keeps the permissions it has.
+export function writeDashboard(home, now = new Date()) {
+  const path = dashboardPath(home);
+  writeText(path, renderPage(dashboardModel(home, now), DASHBOARD_DIR), { mode: 0o600 });
+  return path;
+}
+
+// Writes the page again after the data changed, but only for a user who has opened it once: Evolo does not make a file
+// nobody asked for. Scoring and reviews never stop for the dashboard, so a failure is only logged.
+export function refreshDashboard(home, now = new Date()) {
+  if (!existsSync(dashboardPath(home))) return;
+  try {
+    writeDashboard(home, now);
+  } catch (error) {
+    logLine(home, `dashboard not updated: ${error.message}`);
+  }
 }

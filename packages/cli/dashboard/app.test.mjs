@@ -1,0 +1,67 @@
+// The router and the frame of the dashboard (docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md section 6).
+process.env.TZ = "Asia/Ho_Chi_Minh";
+
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { parseHash, renderRoute, renderShell } from "./app.mjs";
+import { sampleModel } from "./fixtures.mjs";
+import { renderOverview } from "./overview.mjs";
+
+const route = (screen, params = {}, query = {}) => ({ screen, params, query });
+
+test("parseHash reads every address of the spec", () => {
+  assert.deepEqual(parseHash(""), route("overview"));
+  assert.deepEqual(parseHash("#"), route("overview"));
+  assert.deepEqual(parseHash("#/"), route("overview"));
+  assert.deepEqual(parseHash("#/timeline"), route("timeline"));
+  assert.deepEqual(parseHash("#/unit/hiinguyen/evolo/pr-9"), route("unit", { key: "hiinguyen/evolo/pr-9", tab: "score" }));
+  for (const tab of ["score", "review", "files", "commits"]) {
+    assert.deepEqual(parseHash(`#/unit/me/a/push-65d6615-a2205df/${tab}`), route("unit", { key: "me/a/push-65d6615-a2205df", tab }));
+  }
+  assert.deepEqual(parseHash("#/analytics"), route("analytics", { kind: "week", which: "current" }));
+  for (const kind of ["week", "month", "quarter"]) {
+    for (const which of ["current", "previous"]) {
+      assert.deepEqual(parseHash(`#/analytics/${kind}/${which}`), route("analytics", { kind, which }));
+    }
+  }
+  assert.deepEqual(parseHash("#/achievements"), route("achievements"));
+  assert.deepEqual(parseHash("#/reviews"), route("reviews"));
+});
+
+test("parseHash decodes the query and each part of the path", () => {
+  assert.deepEqual(parseHash("#/timeline?repo=a%2Fb&type=feature"), route("timeline", {}, { repo: "a/b", type: "feature" }));
+  assert.deepEqual(parseHash("#/reviews?severity=high"), route("reviews", {}, { severity: "high" }));
+  assert.deepEqual(parseHash("#/unit/me/a%20b/pr-1/review"), route("unit", { key: "me/a b/pr-1", tab: "review" }));
+});
+
+test("parseHash sends an address it does not know to notFound", () => {
+  for (const hash of ["#/nowhere", "#main", "#/unit/me/a", "#/unit/me/a/pr-1/diff", "#/unit/me/a/pr-1/score/extra",
+    "#/analytics/year/current", "#/analytics/week/next", "#/timeline/extra", "#/unit/%E0%A4%A/a/pr-1"]) {
+    assert.equal(parseHash(hash).screen, "notFound", hash);
+  }
+  assert.deepEqual(parseHash("#/nowhere?x=1").query, { x: "1" });
+});
+
+test("renderShell lists the five screens and marks the open one", () => {
+  const model = sampleModel();
+  const current = (html) => [...html.matchAll(/<a href="([^"]*)" aria-current="page"/g)].map(([, href]) => href);
+  const shell = renderShell(model, route("overview"), "<p>content</p>");
+  for (const name of ["Overview", "Timeline", "Analytics", "Achievements", "Reviews"]) assert.match(shell, new RegExp(`<span>${name}</span>`));
+  assert.match(shell, /<a class="brand" href="#\/">/);
+  assert.deepEqual(current(shell), ["#/"]);
+  assert.ok(shell.includes("<p>content</p>"));
+  assert.deepEqual(current(renderShell(model, route("reviews"), "")), ["#/reviews"]);
+  assert.deepEqual(current(renderShell(model, route("analytics", { kind: "month", which: "previous" }), "")), ["#/analytics"]);
+  // A unit's details belong to the Timeline; an unknown address shows the Overview.
+  assert.deepEqual(current(renderShell(model, route("unit", { key: "me/a/pr-1", tab: "score" }), "")), ["#/timeline"]);
+  assert.deepEqual(current(renderShell(model, route("notFound"), "")), ["#/"]);
+  assert.match(shell, /Level 7 · 1,040 XP/);
+});
+
+test("renderRoute draws the overview, and the overview with a notice for an unknown address", () => {
+  const model = sampleModel();
+  assert.equal(renderRoute(model, parseHash("#/")), renderOverview(model));
+  const missing = renderRoute(model, parseHash("#/nowhere"));
+  assert.match(missing, /Nothing at this address/);
+  assert.ok(missing.endsWith(renderOverview(model)));
+});
