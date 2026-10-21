@@ -40,14 +40,16 @@ src/dashboard.mjs   dashboardModel(home, now)  ->  model JSON (mọi con số đ
         ▼
 dashboard/index.html   khung, CSP, chỗ nhúng CSS, JS và model
 dashboard/style.css    token màu cho sáng và tối
-dashboard/app.mjs      hàm vẽ thuần model -> HTML, điều hướng, tab, bộ lọc, biểu đồ SVG
+dashboard/*.mjs        hàm vẽ thuần model -> HTML theo màn hình, biểu đồ SVG; app.mjs: điều hướng, tab, bộ lọc
 ```
 
 - Nguyên tắc "AI chỉ đánh giá, code mới tính toán" mở rộng thêm một bước: **Node tính, trình duyệt chỉ vẽ**.
-  Mọi con số trên trang có trong model; `app.mjs` không cộng, không lọc theo kỳ, không xếp hạng gì ngoài bộ lọc người dùng bấm.
-- `app.mjs` là module ESM thuần: `node:test` import được các hàm vẽ của nó; nó chỉ tự khởi động khi có `document`.
-  Nó được nhúng vào trang bằng `<script type="module">`, nên không có bước build.
-- `index.html`, `style.css` và `app.mjs` nằm trong `packages/cli/dashboard/`, cạnh `judge/` và `claude/`; `writeDashboard` đọc chúng khi chạy.
+  Mọi con số trên trang có trong model; phần vẽ không cộng, không lọc theo kỳ, không xếp hạng gì ngoài bộ lọc người dùng bấm.
+- Phần vẽ là vài module ESM thuần, mỗi màn hình một file: `node:test` import được từng file; `app.mjs` chỉ tự khởi động khi có `document`.
+- Trang mở bằng `file://`, nơi Chrome chặn module import lẫn nhau, nên `writeDashboard` nối các module theo thứ tự cố định thành một `<script type="module">`: bỏ dòng `import` từ module anh em và từ khoá `export`.
+  Quy ước để việc nối này an toàn: module chỉ import từ module anh em, mỗi lệnh `import` một dòng, không trùng tên ở cấp cao nhất; test nạp bản đã nối như một module để bắt vi phạm.
+  Không có bước build và không có dependency.
+- `index.html`, `style.css` và các module nằm trong `packages/cli/dashboard/`, cạnh `judge/` và `claude/`; `writeDashboard` đọc chúng khi chạy.
 
 ## 4. Model
 
@@ -93,7 +95,7 @@ Achievement ẩn chưa mở chỉ có mặt dưới dạng con số `secretsHidd
 | Lúc | Điều kiện |
 |---|---|
 | `evolo dashboard` | Luôn sinh lại, rồi mở bằng `xdg-open`; `--no-open` chỉ in đường dẫn; không có `xdg-open` thì in đường dẫn |
-| Worker xong một job hoặc một lần sync làm đổi ledger | Chỉ khi `dashboard.html` đã tồn tại |
+| Worker xong một job hoặc một lần sync | Chỉ khi `dashboard.html` đã tồn tại; sinh lại cả khi sync không đổi gì, vì rẻ và làm mới ảnh chụp hàng đợi |
 | `evolo review` lưu một review | Chỉ khi `dashboard.html` đã tồn tại |
 
 - "Đã tồn tại" nghĩa là người dùng đã mở dashboard ít nhất một lần; Evolo không tự tạo một file vài MB mà người dùng chưa cần.
@@ -134,11 +136,11 @@ Giao diện:
 
 ## 7. Bảo mật
 
-- Trang chứa tóm tắt, lý do của judge, đường dẫn file và review code, nên file có quyền 0600 như các file khác trong `~/.evolo`.
+- Trang chứa tóm tắt, lý do của judge, đường dẫn file và review code, nên file mới được tạo với quyền 0600; file đã có giữ quyền của nó, như `writeJson`.
 - CSP trong `<meta>`: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:`.
   Không có `connect-src`, nên trang không gọi được mạng dù chữ nào lọt vào.
-- Mọi chữ đến từ dữ liệu đi qua một hàm `escape` duy nhất trong `app.mjs`; link chỉ nhận URL bắt đầu bằng `https://`.
-- Model được nhúng trong `<script type="application/json">` với mọi `<` thoát thành `<`, nên `</script>` trong commit hay PR không thoát ra khỏi khối dữ liệu.
+- Mọi chữ đến từ dữ liệu đi qua một hàm `escape` duy nhất trong `dashboard/html.mjs`; link chỉ nhận URL bắt đầu bằng `https://`.
+- Model được nhúng trong `<script type="application/json">` với mọi `<` thoát thành `\u003c`, nên `</script>` trong commit hay PR không thoát ra khỏi khối dữ liệu.
 
 ## 8. Module
 
@@ -147,9 +149,12 @@ Giao diện:
 | `src/dashboard.mjs` | `dashboardModel`, `writeDashboard` (đọc template, nhúng CSS, JS và model, ghi atomic 0600), `refreshDashboard` (chỉ ghi khi file đã có, nuốt lỗi vào log) |
 | `dashboard/index.html` | Khung trang, CSP, chỗ nhúng |
 | `dashboard/style.css` | Token màu, bố cục, huy hiệu |
-| `dashboard/app.mjs` | `escape`, hàm vẽ từng màn hình, router hash, biểu đồ SVG |
+| `dashboard/html.mjs` | `escape`, `safeUrl`, định dạng số và giờ dùng chung |
+| `dashboard/charts.mjs` | Biểu đồ SVG: cột theo ngày, thanh ngang, dải theo giờ và thứ |
+| `dashboard/overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs` | Mỗi file vẽ một màn hình từ model |
+| `dashboard/app.mjs` | Router hash, khung trang (thanh bên), bộ lọc, khởi động trong trình duyệt |
 | `bin/evolo.mjs` | Lệnh `dashboard [--no-open]`; `review` gọi `refreshDashboard` sau khi lưu |
-| `src/worker.mjs` | Gọi `refreshDashboard` sau mỗi job và mỗi lần sync có thay đổi |
+| `src/worker.mjs` | Gọi `refreshDashboard` sau mỗi job và mỗi lần sync |
 | `src/store.mjs` | Ghi file chữ atomic giữ quyền (dùng chung với `writeJson`) |
 
 Skill `/evolo` không đổi: nó chỉ chạy `status`, `why`, `retry`.
@@ -161,8 +166,9 @@ Skill `/evolo` không đổi: nó chỉ chạy `status`, `why`, `retry`.
   - trường bị bỏ không có trong model;
   - achievement ẩn chưa mở không có tên hay mô tả nào trong model;
   - bản ghi chưa chấm (`push_failed`, `failed`) và bản ghi cũ thiếu trường vẫn vào model;
-  - trang ghi ra có quyền 0600, `</script>` trong dữ liệu không phá khối JSON.
-- `dashboard/app.test.mjs`:
+  - trang ghi ra có quyền 0600, `</script>` trong dữ liệu không phá khối JSON;
+  - bản nối các module nạp được như một module (không trùng tên, không còn `import` hay `export`).
+- `dashboard/*.test.mjs` (một file test cho mỗi module):
   - mỗi màn hình vẽ đúng các con số của model;
   - chữ độc (`<img onerror>`, `javascript:` URL) bị escape hoặc bỏ;
   - trạng thái trống;
