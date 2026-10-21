@@ -2,7 +2,7 @@
 // Pure functions of ledger records and the summary, so every view is tested without a terminal or a desktop.
 import { tierName } from "./achievements.mjs";
 import { CRITERIA, levelFor } from "./score.mjs";
-import { localDay } from "./ledger.mjs";
+import { localDay, localTime } from "./ledger.mjs";
 import { escapeMarkup, richText, terminalSafe } from "./safe-text.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -115,7 +115,7 @@ export function explain(record, { reviewed = false } = {}) {
   const result = record.result;
   const worth = record.status === "scored" ? `${record.xp} XP` : record.status;
   const was = record.previousStatus ? ` (was ${record.previousStatus})` : "";
-  const lines = [`${record.repo} ${unitLabel(record.id)}  ${worth}${was}  ${record.at.slice(0, 16).replace("T", " ")}`];
+  const lines = [`${record.repo} ${unitLabel(record.id)}  ${worth}${was}  ${localTime(record.at)}`];
   if (!result) {
     // Ended before judging: a rejected push, a unit with nothing to score, or an error after every retry.
     lines.push(record.reason);

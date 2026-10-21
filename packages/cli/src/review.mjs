@@ -5,6 +5,7 @@ import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
 import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs";
 import { REVIEW_TASK } from "./judges/common.mjs";
+import { localTime } from "./ledger.mjs";
 import { evidencePath } from "./score.mjs";
 import { readJson, writeJson } from "./store.mjs";
 import { terminalSafe } from "./safe-text.mjs";
@@ -158,7 +159,7 @@ export function formatReview(stored) {
   const { review } = stored;
   const cost = stored.costUsd ? ` · $${stored.costUsd.toFixed(2)}` : "";
   const lines = [
-    `${stored.repo} ${unitLabel(stored.unitId)}  review in ${stored.language}  ${stored.at.slice(0, 16).replace("T", " ")}` +
+    `${stored.repo} ${unitLabel(stored.unitId)}  review in ${stored.language}  ${localTime(stored.at)}` +
       ` · ${stored.judge.model ?? stored.judge.backend}${cost}`,
   ];
   if (review.flags.includes("suspected_injection")) {

@@ -41,7 +41,7 @@ import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
 import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
-import { listAllRecords, listRecords, localDay, readSummary, writeSummary } from "../src/ledger.mjs";
+import { listAllRecords, listRecords, localDay, localTime, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "../src/stats.mjs";
@@ -251,7 +251,7 @@ function status() {
   console.log(records.length === 0 ? "no scores yet" : "latest:");
   for (const record of records) {
     const xp = record.status === "scored" ? `${record.xp} XP` : record.status;
-    console.log(terminalSafe(`  ${record.at.slice(0, 16).replace("T", " ")}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`));
+    console.log(terminalSafe(`  ${localTime(record.at)}  ${record.repo} ${record.id}  ${xp}  ${record.summary || record.reason || ""}`));
   }
 }
 
