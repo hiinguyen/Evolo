@@ -165,6 +165,17 @@ test("a locked secret achievement is only a count; an unlocked one is shown", ()
   });
 });
 
+test("a unit keeps in its result the XP it was scored at, which a revert takes off the unit itself", () => {
+  withHome((home) => {
+    const scored = unit({ id: "pr-5", kind: "pr", landed: day("2026-10-20"), xp: 45 });
+    seed(home, [{ ...scored, status: "reverted", previousStatus: "scored", xp: 0, result: { ...scored.result, xp: 45 } }]);
+    const [only] = dashboardModel(home, NOW).units;
+    assert.equal(only.xp, 0);
+    assert.equal(only.previousStatus, "scored");
+    assert.equal(only.result.xp, 45);
+  });
+});
+
 test("a unit that never reached judging is still listed", () => {
   withHome((home) => {
     const pushFailed = { id: "push-a-b", repo: "me/a", kind: "push", status: "push_failed", xp: 0, summary: "", reason: "rejected", at: day("2026-10-20"), landedAt: day("2026-10-20") };
@@ -260,7 +271,9 @@ test("bundle joins the drawing modules without import or export, and the result 
     writeFileSync(path, `${code}\nexport { parseHash, renderRoute, renderShell };\n`);
     const joined = await import(pathToFileURL(path).href);
     const model = sampleModel();
-    for (const hash of ["#/", "#/nowhere"]) {
+    for (const hash of ["#/", "#/nowhere", "#/timeline?repo=hiinguyen%2Fevolo&status=scored", "#/unit/hiinguyen/ai-orgs/pr-1/score",
+      "#/unit/hiinguyen/ai-orgs/pr-1/review", "#/unit/hiinguyen/evolo/pr-7/review", "#/unit/hiinguyen/evolo/pr-7/files", "#/unit/hiinguyen/evolo/pr-7/commits",
+      "#/unit/me/gone/pr-1"]) {
       const route = joined.parseHash(hash);
       assert.equal(joined.renderShell(model, route, joined.renderRoute(model, route)), renderShell(model, parseHash(hash), renderRoute(model, parseHash(hash))));
     }

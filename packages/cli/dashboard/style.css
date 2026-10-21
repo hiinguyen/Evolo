@@ -19,6 +19,8 @@
   --green: #1a7f37;
   --red: #cf222e;
   --red-soft: rgba(207, 34, 46, 0.08);
+  --amber: #9a6700;
+  --amber-soft: rgba(191, 135, 0, 0.12);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
   --radius: 10px;
   --radius-sm: 6px;
@@ -42,6 +44,8 @@
     --green: #3fb950;
     --red: #f85149;
     --red-soft: rgba(248, 81, 73, 0.14);
+    --amber: #d29922;
+    --amber-soft: rgba(210, 153, 34, 0.16);
     --shadow: none;
   }
 }
@@ -212,6 +216,15 @@ code {
 .list-panel { overflow: hidden; }
 
 .empty { padding: 32px 16px; color: var(--muted); text-align: center; }
+.empty p + p { margin-top: 8px; }
+
+/* Panel content: a column of blocks, a list without bullets, a list with them, and rows split by a line. */
+
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.plain-list { display: flex; flex-direction: column; gap: 4px; }
+.bullets { display: flex; flex-direction: column; gap: 8px; padding: 16px 16px 16px 36px; list-style: disc; }
+.rows > li + li { border-top: 1px solid var(--border); }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* Overview: level and stats. */
 
@@ -349,9 +362,18 @@ code {
 .unit-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .unit-label { flex: none; font-weight: 600; }
 
-.unit-summary, .unit-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.unit-meta { color: var(--muted); font-size: 12px; line-height: 16px; }
+.unit-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The meta line wraps rather than lose the day off its end on a phone; the day itself stays whole. */
+.unit-meta { min-width: 0; color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.unit-meta time { white-space: nowrap; }
 .unit-xp { font-weight: 600; white-space: nowrap; }
+
+/* A unit that lost its XP: the XP struck through beside the status. In a row the two stack, so the row keeps its height. */
+.unit-worth { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.unit-lost { color: var(--muted); font-weight: 500; }
+.unit-row .unit-worth { flex-direction: column; align-items: flex-end; gap: 0; }
+.unit-row .unit-lost { font-size: 12px; line-height: 16px; }
 
 .pill {
   display: inline-flex;
@@ -366,7 +388,153 @@ code {
   white-space: nowrap;
 }
 
-.pill-bad { border-color: transparent; background: var(--red-soft); color: var(--red); }
+.pill-bad, .sev-high { border-color: transparent; background: var(--red-soft); color: var(--red); }
+.sev-medium { border-color: transparent; background: var(--amber-soft); color: var(--amber); }
+
+/* Timeline: three filters over the list. The chevron is drawn in a grey that reads on both themes. */
+
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.filter { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.filter-label { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+
+.filter select {
+  width: 100%;
+  height: 36px;
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%238e8e93' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center / 16px 16px;
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+}
+
+.filter select:hover { border-color: var(--muted); }
+
+/* Unit details: the head, the tabs, and the panels of the open tab. */
+
+.unit-head { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.crumbs { display: flex; gap: 8px; min-width: 0; color: var(--muted); font-size: 13px; }
+.crumbs a { border-radius: 4px; color: var(--accent-text); font-weight: 500; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.unit-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.unit-heading h1 { min-width: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.unit-heading .unit-xp { color: var(--accent-text); font-size: 16px; line-height: 24px; }
+.unit-facts { color: var(--muted); }
+.unit-lede { max-width: 72ch; overflow-wrap: anywhere; }
+.ext-link { border-radius: 4px; color: var(--accent-text); font-weight: 500; white-space: nowrap; }
+.ext-link:hover { text-decoration: underline; }
+
+.tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+
+.tabs a {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin-bottom: -1px;
+  padding: 0 8px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tabs a:hover { color: var(--text); }
+.tabs a[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
+.tabs a:focus-visible { outline-offset: -2px; }
+
+/* The tabs sit closer to their panel than the screen's other blocks sit to each other. */
+.tabs + .tab-panel { margin-top: -8px; }
+.tab-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.tab-panel .notice { margin: 0; }
+.tab-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+
+/* Score: one row per criterion, its reason and evidence lined up under the bar. */
+
+.criteria > li { padding: 16px; }
+.criteria > li + li { border-top: 1px solid var(--border); }
+.criterion-head { display: grid; grid-template-columns: 112px minmax(0, 1fr) 40px; align-items: center; gap: 16px; }
+.criterion-name { font-weight: 600; }
+.score-bar { display: block; height: 8px; overflow: hidden; border-radius: 4px; background: var(--track); }
+.score-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.criterion-score { font-weight: 600; text-align: right; white-space: nowrap; }
+.criterion-reason, .evidence { padding-left: 128px; }
+.criterion-reason { margin-top: 8px; }
+.evidence { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.evidence code, .finding-meta code { min-width: 0; overflow-wrap: anywhere; }
+
+.formula { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.term {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  white-space: nowrap;
+}
+
+.term strong { font-weight: 600; }
+.term-xp { background: var(--accent-soft); color: var(--accent-text); }
+.op { color: var(--muted); }
+
+.fact-list { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.fact-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; }
+.fact-row dt { color: var(--muted); }
+.fact-row dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.rule-xp { color: var(--muted); }
+.rule-xp strong { color: var(--accent-text); font-size: 24px; line-height: 32px; font-weight: 600; }
+
+/* Review: the overview, strengths beside improvements, then the findings, the most severe first. */
+
+.review-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; gap: 16px; }
+.findings > li { padding: 16px; }
+.findings > li + li { border-top: 1px solid var(--border); }
+.finding-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.finding h3 { margin-top: 8px; font-size: 14px; line-height: 20px; font-weight: 600; }
+.finding p { margin-top: 4px; overflow-wrap: anywhere; }
+.finding .finding-fix { margin-top: 8px; }
+
+/* The command and its Copy button are one height, 36 px. */
+.command { display: flex; align-items: center; gap: 8px; }
+.command code { flex: 1; min-width: 0; padding: 8px 12px; line-height: 18px; overflow-wrap: anywhere; }
+
+.copy {
+  flex: none;
+  min-width: 80px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.copy:hover { background: var(--hover); }
+
+/* Files and commits: rows of a path or a commit, the lines on the right. */
+
+.file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 16px; padding: 10px 16px; }
+.file-path { font: 13px/20px var(--mono); overflow-wrap: anywhere; }
+.diff { font: 13px/20px var(--mono); white-space: nowrap; }
+.add { color: var(--green); }
+.del { color: var(--red); }
+
+.commit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 40px; padding: 10px 16px; }
+.commit-row .sha { flex: none; }
+.commit-subject { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.commit-row time { font-size: 12px; line-height: 16px; white-space: nowrap; }
 
 /* Narrower screens: five stats wrap, and under 720 px the sidebar becomes a bar across the top. */
 
@@ -404,6 +572,13 @@ code {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* The summary takes its own line rather than a few letters beside a long push label. */
   .unit-title { flex-direction: column; align-items: stretch; gap: 0; }
+  /* On its own line the summary gets two lines before it is cut. */
+  .unit-summary { display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .filter:first-child { grid-column: 1 / -1; }
+  .criterion-head { grid-template-columns: 96px minmax(0, 1fr) 32px; gap: 12px; }
+  .criterion-reason, .evidence { padding-left: 0; }
+  .fact-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .stat-value { font-size: 20px; line-height: 28px; }
   .badges { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 16px 8px; }
   .emblem { width: 48px; height: 48px; font-size: 16px; }

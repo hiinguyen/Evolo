@@ -6,6 +6,8 @@ import { test } from "node:test";
 import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderTimeline } from "./timeline.mjs";
+import { renderUnit } from "./unit.mjs";
 
 const route = (screen, params = {}, query = {}) => ({ screen, params, query });
 
@@ -64,6 +66,16 @@ test("renderRoute draws the overview, and the overview with a notice for an unkn
   const missing = renderRoute(model, parseHash("#/nowhere"));
   assert.match(missing, /Nothing at this address/);
   assert.ok(missing.endsWith(renderOverview(model)));
+});
+
+test("renderRoute draws the timeline with the filters of the address, and a unit's details on the tab it names", () => {
+  const model = sampleModel();
+  assert.equal(renderRoute(model, parseHash("#/timeline")), renderTimeline(model, {}));
+  assert.equal(renderRoute(model, parseHash("#/timeline?repo=hiinguyen%2Fevolo&type=feature")),
+    renderTimeline(model, { repo: "hiinguyen/evolo", type: "feature" }));
+  assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "score"));
+  assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1/commits")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "commits"));
+  assert.match(renderRoute(model, parseHash("#/unit/me/gone/pr-1")), /This unit is no longer in the ledger/);
 });
 
 test("drawScreen draws the frame and the screen into the root", () => {

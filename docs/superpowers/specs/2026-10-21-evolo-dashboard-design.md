@@ -82,7 +82,7 @@ dashboard/*.mjs        hàm vẽ thuần model -> HTML theo màn hình, biểu �
 Một đơn vị trong `units` giữ đúng những gì trang hiện:
 
 - `repo`, `id`, `kind`, `status`, `previousStatus`, `xp`, `summary`, `reason`, `at`, `landedAt`.
-- Từ `result`: `method`, `judge` (backend, model), `costUsd`, `failures`, `issues`, `evaluation` (loại, điểm rubric kèm `reason` và `evidence`, `flags`), `breakdown`.
+- Từ `result`: `method`, `xp` (XP lúc chấm; đơn vị bị revert hay superseded có `xp` về 0 nhưng `result.xp` giữ nguyên, để trang gạch ngang XP đã mất), `judge` (backend, model), `costUsd`, `failures`, `issues`, `evaluation` (loại, điểm rubric kèm `reason` và `evidence`, `flags`), `breakdown`.
 - Từ `facts`: `diffMode`, `totals`, `files` (`path`, `class`, `additions`, `deletions`), `commits` (`sha`, `subject`, `date`, `revertedBy`), `excluded` (`sha`, `subject`, `reason`), `pr` (`number`, `title`, `url`, `mergedAt`).
 - `signals`.
 

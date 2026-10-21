@@ -1,6 +1,7 @@
 // The Overview screen: level, recent XP, streak, the judge's spending, the queue, the achievements unlocked this week
 // and the latest units. `badge` and `unitRow` are shared: the Achievements screen draws its grid with `badge`, the
-// Timeline its list with `unitRow`. Every number is the model's; the only arithmetic is the width of the level bar.
+// Timeline its list with `unitRow`, and a unit's details its head with `unitWorth` and `unitType`. Every number is the
+// model's; the only arithmetic is the width of the level bar.
 import { escape, formatUsd, formatXp, hashOf, localDate, localTime, pageHead, plural } from "./html.mjs";
 
 const LATEST_UNITS = 5;
@@ -25,13 +26,18 @@ export function badge(achievement, tier) {
     + "</div>";
 }
 
-// The judge's contribution type, or for a unit never judged its kind (push or pr).
-const unitType = (unit) => unit.result?.evaluation?.contribution_type ?? unit.kind;
+export const statusText = (status) => STATUS_TEXT[status] ?? status;
 
-function unitWorth(unit) {
+// The judge's contribution type, or for a unit never judged its kind (push or pr).
+export const unitType = (unit) => unit.result?.evaluation?.contribution_type ?? unit.kind;
+
+// A unit's XP, or its status when it is not worth any. A revert or a force push takes the XP of a scored unit away; the
+// XP it was scored at stays in its result and is shown struck through, so the loss reads at a glance.
+export function unitWorth(unit) {
   if (unit.status === "scored") return `<span class="unit-xp">+${formatXp(unit.xp)} XP</span>`;
-  const text = STATUS_TEXT[unit.status] ?? unit.status;
-  return `<span class="pill${STATUS_BAD.has(unit.status) ? " pill-bad" : ""}">${escape(text)}</span>`;
+  const pill = `<span class="pill${STATUS_BAD.has(unit.status) ? " pill-bad" : ""}">${escape(statusText(unit.status))}</span>`;
+  if (unit.previousStatus !== "scored" || !(unit.result?.xp > 0)) return pill;
+  return `<span class="unit-worth"><s class="unit-lost" title="No longer counted">+${formatXp(unit.result.xp)} XP</s>${pill}</span>`;
 }
 
 // One unit as a link to its details: label and summary, then repo, type and the local day it landed; XP on the right.

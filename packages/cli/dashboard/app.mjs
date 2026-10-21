@@ -4,8 +4,9 @@
 // in Node (the tests) it only exports its functions.
 import { escape, formatXp } from "./html.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderTimeline, timelineHash } from "./timeline.mjs";
+import { renderUnit, UNIT_TABS } from "./unit.mjs";
 
-const UNIT_TABS = ["score", "review", "files", "commits"];
 const PERIOD_KINDS = ["week", "month", "quarter"];
 const PERIOD_WHICH = ["current", "previous"];
 
@@ -78,6 +79,8 @@ export function renderShell(model, route, content) {
 // The screens drawn so far; an address for one that is not here shows the Overview with a notice.
 const SCREENS = {
   overview: (model) => renderOverview(model),
+  timeline: (model, route) => renderTimeline(model, route.query),
+  unit: (model, route) => renderUnit(model, route.params.key, route.params.tab),
 };
 
 export function renderRoute(model, route) {
@@ -116,20 +119,62 @@ export function drawScreen(root, model, route) {
   }
 }
 
+const COPY_FEEDBACK_MS = 2000;
+// The pending reset of each Copy button, so a second click restarts the wait instead of being cut short by the first.
+const copyResets = new WeakMap();
+
+// Copies the command of a Copy button, and says on the button whether it worked.
+function copyCommand(button) {
+  const show = (text) => {
+    button.textContent = text;
+    clearTimeout(copyResets.get(button));
+    copyResets.set(button, setTimeout(() => { button.textContent = "Copy"; }, COPY_FEEDBACK_MS));
+  };
+  navigator.clipboard.writeText(button.dataset.copy).then(() => show("Copied"), () => show("Copy failed"));
+}
+
+// The values of the Timeline's selects, keyed by filter.
+const filterValues = (form) => Object.fromEntries([...form.querySelectorAll("select[data-filter]")].map((select) => [select.name, select.value]));
+
 function startDashboard() {
   const root = document.getElementById("app");
   const model = readModel(root, document.getElementById("model").textContent);
   if (model === null) return;
+  // A Copy button stays hidden where the page cannot write to the clipboard.
+  const canCopy = typeof navigator.clipboard?.writeText === "function";
+  // The select that changed the address, to give it focus back once the list is drawn again.
+  let changedFilter = null;
   const draw = () => {
     const route = parseHash(window.location.hash);
     drawScreen(root, model, route);
     document.title = `${TITLES[route.screen] ?? "Overview"} · Evolo`;
+    if (canCopy) for (const button of root.querySelectorAll("button[data-copy]")) button.hidden = false;
   };
   window.addEventListener("hashchange", () => {
     draw();
+    const select = changedFilter && root.querySelector(`select[name="${changedFilter}"]`);
+    changedFilter = null;
+    if (select) {
+      select.focus();
+      return;
+    }
     // A new screen starts at its top, and keyboard focus moves to it rather than staying on a link that is gone.
     window.scrollTo(0, 0);
     document.getElementById("main")?.focus({ preventScroll: true });
+  });
+  // A filter is part of the address: a change becomes a new hash, which draws the list and can be undone with Back.
+  root.addEventListener("change", (event) => {
+    const form = event.target.closest("form.filters");
+    if (!form) return;
+    const next = timelineHash(filterValues(form));
+    // An address that does not change fires no hashchange, and would leave `changedFilter` set for a later one.
+    if (next === window.location.hash) return;
+    changedFilter = event.target.name;
+    window.location.hash = next;
+  });
+  root.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-copy]");
+    if (button) copyCommand(button);
   });
   draw();
 }

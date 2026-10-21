@@ -53,9 +53,12 @@ const factsOf = (facts) => ({
   pr: facts.pr ? { number: facts.pr.number, title: facts.pr.title, url: facts.pr.url, mergedAt: facts.pr.mergedAt } : null,
 });
 
+// `xp` is what the judge's answer was worth when scored: the unit's own `xp` drops to 0 on a revert or a force push,
+// and the page still shows the XP it lost and the formula that gave it.
 const resultOf = (result) =>
   result && {
     method: result.method,
+    xp: result.xp,
     judge: result.judge,
     costUsd: result.costUsd,
     failures: result.failures,
@@ -136,7 +139,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "overview.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");

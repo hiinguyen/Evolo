@@ -31,7 +31,8 @@ const breakdown = (base, raw, value, mValue, mSize, mRepo, mSignals) =>
 
 const commit = (sha, subject, date, revertedBy = []) => ({ sha, subject, date, revertedBy });
 
-// One record as the worker writes it: an AI judgment unless `method` says rule, with the facts the page reads.
+// One record as the worker writes it: an AI judgment unless `method` says rule, with the facts the page reads. `xp` is
+// what the unit was scored at; a unit no longer scored is worth 0 and keeps that XP in its result, as refreshLedger does.
 function record({ repo, id, kind = "push", status = "scored", previousStatus, xp, landed, at = landed, summary, type = "feature",
   method = "ai", scores, costUsd = 0.1, files, commits, pr = null, failures = [], issues = [], flags = [], parts, signals }) {
   const additions = files.reduce((sum, file) => sum + file.additions, 0);
@@ -40,7 +41,7 @@ function record({ repo, id, kind = "push", status = "scored", previousStatus, xp
   const evaluation = status === "failed" ? undefined
     : { rubric_version: "1.0", contribution_type: type, scores, summary, flags, notes: "long notes the page never shows" };
   return {
-    id, repo, kind, status, ...(previousStatus ? { previousStatus } : {}), xp, summary, at, landedAt: landed,
+    id, repo, kind, status, ...(previousStatus ? { previousStatus } : {}), xp: status === "scored" ? xp : 0, summary, at, landedAt: landed,
     ...(signals ? { signals } : {}),
     result: {
       method, ...(method === "ai" ? { judge: JUDGE } : {}), costUsd, failures, issues, status: status === "failed" ? "failed" : "ok",
@@ -89,7 +90,7 @@ const RECORDS = [
     files: [file("src/worker.mjs", "source", 30, 12)], commits: [commit("7c1d2e9a", "refactor: split the worker loop", local("2026-10-19", "17:30"))],
   }),
   record({
-    repo: EVOLO, id: "push-c94e2f0-5e0b7a1", status: "reverted", previousStatus: "scored", xp: 0, landed: local("2026-10-16", "15:20"),
+    repo: EVOLO, id: "push-c94e2f0-5e0b7a1", status: "reverted", previousStatus: "scored", xp: 40, landed: local("2026-10-16", "15:20"),
     summary: "Cache the summary between commands.", scores: rubric(2, 2, 1, 2, 3, "src/ledger.mjs:101-111"),
     files: [file("src/ledger.mjs", "source", 24, 3)],
     commits: [commit("5e0b7a1c", "perf: cache the summary", local("2026-10-16", "15:12"), ["d00d1e5f"])],
