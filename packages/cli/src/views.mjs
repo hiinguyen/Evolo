@@ -152,9 +152,9 @@ export function findByRef(records, ref) {
   const prefix = ref.toLowerCase();
   const has = (commits) => commits?.some((commit) => commit.sha.startsWith(prefix));
   return (
-    records.find((record) => has(record.result?.facts.commits)) ??
-    records.find((record) => record.result?.facts.pr?.mergeCommit?.startsWith(prefix)) ??
-    records.find((record) => has(record.result?.facts.excluded)) ??
+    records.find((record) => has(record.result?.facts?.commits)) ??
+    records.find((record) => record.result?.facts?.pr?.mergeCommit?.startsWith(prefix)) ??
+    records.find((record) => has(record.result?.facts?.excluded)) ??
     null
   );
 }

@@ -44,9 +44,10 @@ function periodStats(records, xpByDay, kind, now, back) {
 const evaluationOf = (evaluation) =>
   evaluation && { contribution_type: evaluation.contribution_type, summary: evaluation.summary, scores: evaluation.scores, flags: evaluation.flags };
 
-const factsOf = (facts) => ({
+// A record from an older version, or one that ended early, may have no facts: it still goes into the model.
+const factsOf = (facts = {}) => ({
   diffMode: facts.diffMode,
-  totals: facts.totals,
+  totals: facts.totals ?? null,
   files: (facts.files ?? []).map(({ path, class: kind, additions, deletions }) => ({ path, class: kind, additions, deletions })),
   commits: (facts.commits ?? []).map(({ sha, subject, date, revertedBy }) => ({ sha, subject, date, revertedBy })),
   excluded: (facts.excluded ?? []).map(({ sha, subject, reason }) => ({ sha, subject, reason })),

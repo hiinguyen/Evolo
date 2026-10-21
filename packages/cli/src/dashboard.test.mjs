@@ -330,3 +330,14 @@ test("refreshDashboard rewrites only a page that exists, and logs instead of thr
     assert.match(readFileSync(join(home, "evolo.log"), "utf8"), /dashboard not updated: cannot read .*pr-5\.json/);
   });
 });
+
+test("a record whose result has no facts goes into the model with empty facts", () => {
+  withHome((home) => {
+    const odd = { ...unit({ id: "odd", landed: day("2026-10-21"), xp: 0 }), status: "failed" };
+    odd.result = { xp: 0 };
+    seed(home, [odd]);
+    const [entry] = dashboardModel(home, NOW).units;
+    assert.equal(entry.id, "odd");
+    assert.deepEqual(entry.result.facts, { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null });
+  });
+});

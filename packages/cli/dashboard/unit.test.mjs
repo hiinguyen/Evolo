@@ -250,3 +250,10 @@ test("a key that is not in the ledger says so, with a way back to the Timeline",
   assert.match(html, /<a [^>]*href="#\/timeline"[^>]*>/);
   assert.ok(!html.includes('role="tablist"'));
 });
+
+test("a unit whose result has no facts, breakdown or evaluation renders every tab", () => {
+  const bare = withUnit(sampleModel(), AI_PUSH, (unit) => ({ ...unit, result: { xp: 0, failures: [], issues: [], facts: { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null } } }));
+  for (const tab of ["score", "review", "files", "commits"]) {
+    assert.match(renderUnit(bare, AI_PUSH, tab), /unit-panel/, tab);
+  }
+});

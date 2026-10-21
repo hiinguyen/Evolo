@@ -1,12 +1,12 @@
 // End to end: `evolo dashboard` on a unit the real worker scored, in the sandbox of sandbox.mjs. The sandbox's
 // `xdg-open` is a fake (fakes/xdg-open.mjs), so no browser opens.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { modelIn } from "../dashboard/fixtures.mjs";
-import { writeRecord } from "./ledger.mjs";
+import { readRecord } from "./ledger.mjs";
 import { lines, makeSandbox, REPO, short } from "./sandbox.mjs";
 
 // How long a detached `xdg-open` (a Node script here) is given to log its call; it takes about a tenth of this.
@@ -98,15 +98,12 @@ test("a merged PR found by the sync appears in the page", async () => {
   assert.ok(pageModel(box).units.some((unit) => unit.key === `${REPO}/pr-7` && unit.status === "scored"));
 });
 
-test("a page that cannot be built is logged and does not stop the worker scoring", async () => {
+test("a page that cannot be written is logged and does not stop the worker scoring", async () => {
   const { box } = await scoredPush();
-  box.evolo("dashboard", "--no-open");
-  // A record that parses but has no `facts`: the ledger and the summary take it as it is, and only the page's model
-  // reads into `result.facts`, so it fails the page alone. (A review file that is not JSON would also fail the budget.)
-  const odd = { repo: REPO, id: "odd", kind: "push", status: "failed", xp: 0, at: new Date().toISOString(), result: { xp: 0 } };
-  writeRecord(box.home, REPO, odd);
+  // refreshDashboard only looks that the path exists, so a directory there makes the write fail and nothing else.
+  mkdirSync(join(box.home, "dashboard.html"));
   const base = box.git("rev-parse", "HEAD");
   const { id } = await pushMore(box, base, 40);
-  await box.waitFor(() => readFileSync(join(box.home, "evolo.log"), "utf8").includes("dashboard not updated"), () => "no log line");
-  assert.equal(pageModel(box).units.some((unit) => unit.id === id), false, "the old page stays");
+  assert.equal(readRecord(box.home, REPO, id).status, "scored");
+  assert.match(readFileSync(join(box.home, "evolo.log"), "utf8"), /dashboard not updated/);
 });
