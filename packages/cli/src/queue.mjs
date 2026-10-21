@@ -4,6 +4,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { closeSync, existsSync, openSync, readFileSync, statSync, utimesSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localDay } from "./ledger.mjs";
 import { jsonFiles, readJson, removeFile, writeJson } from "./store.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/evolo.mjs", import.meta.url));
@@ -55,6 +56,10 @@ export function takeSyncRequest(home) {
   removeFile(syncRequestPath(home));
   return true;
 }
+
+// A job waiting for the next local day because the day's judge budget is spent. It is not in flight, so it does not
+// hold the sync back, and no worker stays up for it: the first worker of the next day scores it.
+export const isParked = (job, now = new Date()) => job.budgetDay === localDay(now);
 
 export function removeJob(home, job) {
   removeFile(join(queueDir(home), `${job.id}.json`));

@@ -18,17 +18,22 @@ export function readJson(path, fallback) {
   }
 }
 
-// A file that already exists keeps its permissions: Claude Code's settings.json, for one, may hold tokens and be 0600.
-export function writeJson(path, value) {
+// Writes `text` to `path` atomically. A file that already exists keeps its permissions: Claude Code's settings.json, for
+// one, may hold tokens and be 0600. A new file gets `mode` when given, for text that should not be world-readable.
+export function writeText(path, text, { mode } = {}) {
   mkdirSync(dirname(path), { recursive: true });
   const temporary = join(dirname(path), `.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`);
-  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`);
+  writeFileSync(temporary, text, mode === undefined ? undefined : { mode });
   try {
     chmodSync(temporary, statSync(path).mode & 0o7777);
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
   renameSync(temporary, path);
+}
+
+export function writeJson(path, value) {
+  writeText(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
 export function removeFile(path) {
