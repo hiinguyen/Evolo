@@ -39,7 +39,7 @@ test("the achievements come in the catalog's order, then the secrets found, then
   const found = model.achievements.secretsFound.map((entry) => entry.name);
   assert.equal(found.length, 2);
   assert.deepEqual(names, [...model.achievements.visible.map((entry) => entry.name), ...found]);
-  assert.ok(html.lastIndexOf('<span class="badge-name">') < html.indexOf('class="secret-slot"'));
+  assert.ok(html.lastIndexOf('<span class="badge-name">') < html.indexOf('class="secret-slots"'));
 });
 
 test("an emblem shows the Roman numeral of the tier reached, a dash before the first, and a star for a secret", () => {
@@ -102,19 +102,34 @@ test("a secret found shows its description and the local day it was found, witho
   assert.ok(!tile.includes('role="progressbar"'));
 });
 
-test("every secret still hidden is one ? tile with no name, and none is drawn when there are none", () => {
+test("every secret still hidden is one small ? in a group read out as their number, with no name", () => {
   const model = sampleModel();
   const html = renderAchievements(model);
   assert.equal(count(html, 'class="secret-slot"'), model.achievements.secretsHidden);
-  assert.equal(count(html, 'class="secret-slot"'), 26);
-  const slot = html.slice(html.indexOf('<li class="secret-slot"'), html.indexOf("</li>", html.indexOf('<li class="secret-slot"')));
-  assert.ok(!slot.includes("badge-name"));
+  assert.equal(count(html, '<span class="secret-slot" aria-hidden="true">?</span>'), 26);
+  assert.match(html, /<div class="secret-slots" role="img" aria-label="26 hidden secrets">/);
+  const group = html.slice(html.indexOf('<div class="secret-slots"'), html.indexOf("</div>", html.indexOf('<div class="secret-slots"')));
+  assert.equal(group.replace(/<span class="secret-slot" aria-hidden="true">\?<\/span>/g, ""), '<div class="secret-slots" role="img" aria-label="26 hidden secrets">',
+    "nothing but the circles: no name, no description");
+  // The secrets found keep their full tiles, before the circles.
+  assert.ok(html.indexOf(model.achievements.secretsFound[1].name) < html.indexOf('class="secret-slots"'));
+  const one = renderAchievements({ ...model, achievements: { ...model.achievements, secretsFound: [], secretsHidden: 1 } });
+  assert.match(one, /aria-label="1 hidden secret"/);
+  assert.match(textOf(one), /Secrets 0 of 1 found /);
 
   const none = renderAchievements({ ...model, achievements: { ...model.achievements, secretsHidden: 0 } });
-  assert.equal(count(none, 'class="secret-slot"'), 0);
+  assert.equal(count(none, 'class="secret-slot'), 0);
   assert.match(textOf(none), /Secrets /);
   const nothing = renderAchievements({ ...model, achievements: { ...model.achievements, secretsFound: [], secretsHidden: 0 } });
   assert.ok(!textOf(nothing).includes("Secrets "), "no secrets section without secrets");
+});
+
+test("a comparison stays on one line with its number", () => {
+  const html = renderAchievements(sampleModel());
+  assert.ok(html.includes("refactors with centrality ≥\u00a03"));
+  const descriptions = [...html.matchAll(/<span class="badge-desc">([^<]*)<\/span>/g)].map(([, text]) => text);
+  assert.equal(descriptions.filter((text) => /[≥≤] \d/.test(text)).length, 0, "no plain space after ≥ before a number");
+  assert.ok(renderAchievements(withContributor({ description: "at most ≤ 10 <b>" })).includes("at most ≤\u00a010 &lt;b&gt;"));
 });
 
 test("names and descriptions are escaped", () => {

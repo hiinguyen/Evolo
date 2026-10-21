@@ -12,8 +12,9 @@
   box-shadow: var(--shadow);
 }
 
-.achievement .badge-name { font-size: 14px; line-height: 20px; }
-.badge-desc { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+/* Short centred lines wrap into even halves rather than leave one word alone under the rest. */
+.achievement .badge-name { font-size: 14px; line-height: 20px; text-wrap: balance; }
+.badge-desc { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; text-wrap: balance; }
 .badge-foot { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: auto; }
 
 /* The bar takes the room its count leaves; it is drawn in the badge's colours, thinner than the level meter. */
@@ -31,22 +32,21 @@
 .section-head h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
 .section-head .muted { font-size: 13px; }
 
-/* A secret not found yet: a dashed outline round a question mark, with nothing to name it. */
+/* The secrets still hidden: one small dashed circle each, in a row that wraps under the secrets found. */
+.secret-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.achievement-grid + .secret-slots { margin-top: 16px; }
+
 .secret-slot {
   display: grid;
   place-items: center;
-  height: 100%;
-  padding: 16px;
+  width: 32px;
+  height: 32px;
   border: 1px dashed var(--dash);
-  border-radius: var(--radius);
-}
-
-.secret-slot .emblem {
-  border: 1px dashed var(--dash);
-  background: none;
-  box-shadow: none;
+  border-radius: 50%;
   color: var(--muted);
-  text-shadow: none;
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
 }
 
 @media (max-width: 559px) {

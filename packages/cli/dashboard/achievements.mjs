@@ -1,9 +1,14 @@
 // The Achievements screen (docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md section 6): every achievement of
 // the catalog as a tile with its badge, description, progress and the day it was reached, in the catalog's order; then
-// the secrets found; then one "?" per secret still hidden. A secret not found yet is only a number in the model, so this
+// the secrets found; then one small "?" per secret still hidden. A secret not found yet is only a number in the model, so this
 // screen has nothing to name it with. Every number is the model's; the only arithmetic is the width of a progress bar.
 import { escape, formatXp, localDate, pageHead, plural } from "./html.mjs";
 import { badge } from "./overview.mjs";
+
+// A comparison and its number stay on one line: "impact ≥ 3" never ends a line on "≥". The space becomes a no-break
+// space before escaping, which leaves it as it is.
+const keepTogether = (text) => String(text ?? "").replace(/([≥≤]) (?=\d)/g, "$1\u00a0");
+const descriptionOf = (achievement) => `<span class="badge-desc">${escape(keepTogether(achievement.description))}</span>`;
 
 const dayOf = (iso) => `<time datetime="${escape(iso)}">${escape(localDate(iso))}</time>`;
 const reachedOn = (iso) => `<span class="badge-when">unlocked ${dayOf(iso)}</span>`;
@@ -31,26 +36,32 @@ function tierDay({ tier, unlocked }) {
 }
 
 function achievementTile(achievement) {
-  const details = `<span class="badge-desc">${escape(achievement.description)}</span>`
+  const details = descriptionOf(achievement)
     + `<span class="badge-foot">${tierProgress(achievement)}${tierDay(achievement)}</span>`;
   return `<li class="achievement">${badge(achievement, achievement.tier, details)}</li>`;
 }
 
 // A secret found has one tier and no progress, drawn as the Overview's strip draws it.
 function secretTile(secret) {
-  const details = `<span class="badge-desc">${escape(secret.description)}</span><span class="badge-foot">${reachedOn(secret.at)}</span>`;
+  const details = `${descriptionOf(secret)}<span class="badge-foot">${reachedOn(secret.at)}</span>`;
   return `<li class="achievement">${badge({ ...secret, hidden: true, tiers: [1] }, 1, details)}</li>`;
 }
 
-const hiddenTile = '<li class="secret-slot"><span class="emblem" aria-hidden="true">?</span><span class="sr-only">A secret not found yet</span></li>';
+// One small "?" per secret still hidden, read out once as their number: they have nothing to tell apart.
+function hiddenSecrets(count) {
+  if (count === 0) return "";
+  return `<div class="secret-slots" role="img" aria-label="${escape(plural(count, "hidden secret"))}">`
+    + '<span class="secret-slot" aria-hidden="true">?</span>'.repeat(count)
+    + "</div>";
+}
 
 function secretsSection({ secretsFound, secretsHidden }) {
   const total = secretsFound.length + secretsHidden;
   if (total === 0) return "";
-  const tiles = secretsFound.map(secretTile).join("") + hiddenTile.repeat(secretsHidden);
+  const found = secretsFound.length > 0 ? `<ul class="achievement-grid">${secretsFound.map(secretTile).join("")}</ul>` : "";
   return '<section class="achievement-section" aria-labelledby="secrets-head">'
     + `<div class="section-head"><h2 id="secrets-head">Secrets</h2><span class="muted">${formatXp(secretsFound.length)} of ${formatXp(total)} found</span></div>`
-    + `<ul class="achievement-grid">${tiles}</ul></section>`;
+    + `${found}${hiddenSecrets(secretsHidden)}</section>`;
 }
 
 export function renderAchievements(model) {
