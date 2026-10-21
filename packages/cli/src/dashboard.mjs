@@ -139,7 +139,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");

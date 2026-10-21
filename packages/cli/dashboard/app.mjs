@@ -2,6 +2,7 @@
 // address lives in the hash, so Back, Forward and a bookmark of one unit all work from a file:// page. In a browser
 // this module reads the model from the page, draws the screen the hash names, and draws again when the hash changes;
 // in Node (the tests) it only exports its functions.
+import { renderAnalytics } from "./analytics.mjs";
 import { escape, formatXp } from "./html.mjs";
 import { renderOverview } from "./overview.mjs";
 import { renderTimeline, timelineHash } from "./timeline.mjs";
@@ -81,6 +82,7 @@ const SCREENS = {
   overview: (model) => renderOverview(model),
   timeline: (model, route) => renderTimeline(model, route.query),
   unit: (model, route) => renderUnit(model, route.params.key, route.params.tab),
+  analytics: (model, route) => renderAnalytics(model, route.params.kind, route.params.which),
 };
 
 export function renderRoute(model, route) {

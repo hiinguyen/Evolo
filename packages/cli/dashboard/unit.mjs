@@ -7,13 +7,13 @@ import { unitType, unitWorth } from "./overview.mjs";
 
 export const UNIT_TABS = ["score", "review", "files", "commits"];
 
-const RUBRIC_MAX = 4;
+export const RUBRIC_MAX = 4;
 const FINDING_ORDER = ["high", "medium", "low"];
 // The classes of facts.mjs, the ones that count toward size first; a class this list does not know comes last.
 const FILE_CLASS_ORDER = ["source", "test", "fixture", "docs", "config", "lockfile", "generated"];
 
 // "scope_fit" -> "Scope fit".
-const sentenceCase = (text) => {
+export const sentenceCase = (text) => {
   const words = String(text).replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
@@ -21,9 +21,10 @@ const sentenceCase = (text) => {
 const shortSha = (sha) => String(sha).slice(0, 7);
 const rankIn = (order, value) => (order.includes(value) ? order.indexOf(value) : order.length);
 
-const panel = (title, aside, body) =>
+// A panel with a heading; `title` and `aside` are markup the caller built. Analytics draws its panels with these too.
+export const panel = (title, aside, body) =>
   `<section class="panel"><div class="panel-head"><h2>${title}</h2>${aside ? `<span class="muted">${aside}</span>` : ""}</div>${body}</section>`;
-const emptyPanel = (text) => `<section class="panel empty"><p>${text}</p></section>`;
+export const emptyPanel = (text) => `<section class="panel empty"><p>${text}</p></section>`;
 const diffOf = (additions, deletions) =>
   `<span class="diff"><span class="add">+${formatXp(additions)}</span> <span class="del">−${formatXp(deletions)}</span></span>`;
 

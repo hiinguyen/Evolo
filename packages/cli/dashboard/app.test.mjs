@@ -3,6 +3,7 @@ process.env.TZ = "Asia/Ho_Chi_Minh";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { renderAnalytics } from "./analytics.mjs";
 import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
@@ -76,6 +77,13 @@ test("renderRoute draws the timeline with the filters of the address, and a unit
   assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "score"));
   assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1/commits")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "commits"));
   assert.match(renderRoute(model, parseHash("#/unit/me/gone/pr-1")), /This unit is no longer in the ledger/);
+});
+
+test("renderRoute draws the analytics of the period the address names, this week by default", () => {
+  const model = sampleModel();
+  assert.equal(renderRoute(model, parseHash("#/analytics")), renderAnalytics(model, "week", "current"));
+  assert.equal(renderRoute(model, parseHash("#/analytics/month/previous")), renderAnalytics(model, "month", "previous"));
+  assert.ok(!renderRoute(model, parseHash("#/analytics/quarter/current")).includes("Nothing at this address"));
 });
 
 test("drawScreen draws the frame and the screen into the root", () => {
