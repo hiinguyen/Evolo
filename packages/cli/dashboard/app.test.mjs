@@ -3,7 +3,7 @@ process.env.TZ = "Asia/Ho_Chi_Minh";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseHash, renderRoute, renderShell } from "./app.mjs";
+import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
 
@@ -64,4 +64,30 @@ test("renderRoute draws the overview, and the overview with a notice for an unkn
   const missing = renderRoute(model, parseHash("#/nowhere"));
   assert.match(missing, /Nothing at this address/);
   assert.ok(missing.endsWith(renderOverview(model)));
+});
+
+test("drawScreen draws the frame and the screen into the root", () => {
+  const model = sampleModel();
+  const root = { innerHTML: "" };
+  drawScreen(root, model, parseHash("#/"));
+  assert.equal(root.innerHTML, renderShell(model, parseHash("#/"), renderOverview(model)));
+});
+
+test("a page that cannot be drawn shows an escaped message and a way back, never a blank page", (t) => {
+  const logged = t.mock.method(console, "error", () => {});
+  const root = { innerHTML: "" };
+  // A model without the fields the frame reads makes renderShell itself throw.
+  drawScreen(root, { units: [] }, parseHash("#/"));
+  assert.match(root.innerHTML, /^<div class="failure" role="alert"><p>The dashboard could not draw this page: /);
+  assert.match(root.innerHTML, /<a href="#\/">Back to the overview<\/a>/);
+  assert.ok(!root.innerHTML.includes('class="frame"'));
+
+  const unreadable = { innerHTML: "" };
+  assert.equal(readModel(unreadable, "<b>x</b>"), null);
+  // The parser quotes the bad text in its message; it arrives escaped.
+  const [, message] = /could not draw this page: (.*?)<\/p>/.exec(unreadable.innerHTML);
+  assert.match(message, /&lt;/);
+  assert.ok(!message.includes("<"));
+  assert.deepEqual(readModel({ innerHTML: "" }, '{"a":1}'), { a: 1 });
+  assert.equal(logged.mock.callCount(), 2);
 });

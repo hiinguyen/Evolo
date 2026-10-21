@@ -88,25 +88,48 @@ export function renderRoute(model, route) {
 
 const TITLES = { overview: "Overview", timeline: "Timeline", unit: "Unit", analytics: "Analytics", achievements: "Achievements", reviews: "Reviews" };
 
+// What `root` shows when the page cannot be drawn: a plain message built from nothing but the error, so it appears even
+// when the model is unreadable or the frame itself fails, with a way back to the overview.
+export function showFailure(root, error) {
+  const message = error instanceof Error ? error.message : String(error);
+  root.innerHTML = `<div class="failure" role="alert"><p>The dashboard could not draw this page: ${escape(message)}</p>`
+    + '<p><a href="#/">Back to the overview</a></p></div>';
+  console.error(error);
+}
+
+// The model the page carries in `#model`, or null after showing why it could not be read.
+export function readModel(root, text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    showFailure(root, error);
+    return null;
+  }
+}
+
+// Draws the screen of `route` into `root`; a screen or a frame that throws leaves the failure message, not a blank page.
+export function drawScreen(root, model, route) {
+  try {
+    root.innerHTML = renderShell(model, route, renderRoute(model, route));
+  } catch (error) {
+    showFailure(root, error);
+  }
+}
+
 function startDashboard() {
-  const model = JSON.parse(document.getElementById("model").textContent);
   const root = document.getElementById("app");
+  const model = readModel(root, document.getElementById("model").textContent);
+  if (model === null) return;
   const draw = () => {
     const route = parseHash(window.location.hash);
-    try {
-      root.innerHTML = renderShell(model, route, renderRoute(model, route));
-    } catch (error) {
-      // A screen that fails to draw must not leave a blank page: say so, and keep the sidebar to go elsewhere.
-      root.innerHTML = renderShell(model, route, `<p class="notice notice-bad" role="alert">This screen could not be drawn: ${escape(error.message)}</p>`);
-      console.error(error);
-    }
+    drawScreen(root, model, route);
     document.title = `${TITLES[route.screen] ?? "Overview"} · Evolo`;
   };
   window.addEventListener("hashchange", () => {
     draw();
     // A new screen starts at its top, and keyboard focus moves to it rather than staying on a link that is gone.
     window.scrollTo(0, 0);
-    document.getElementById("main").focus({ preventScroll: true });
+    document.getElementById("main")?.focus({ preventScroll: true });
   });
   draw();
 }

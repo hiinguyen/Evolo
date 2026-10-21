@@ -86,11 +86,37 @@ test("a key with characters of a URL is encoded in the link", () => {
 test("the achievements unlocked this week are a strip of badges, hidden when there are none", () => {
   const model = sampleModel();
   const html = renderOverview(model);
-  assert.match(textOf(html), /Unlocked this week/);
-  assert.equal(count(html, 'class="badge"'), model.achievements.recent.length);
+  assert.match(textOf(html), /Unlocked this week 4 achievements /);
+  assert.equal(count(html, 'class="badge"'), 4);
   const empty = renderOverview({ ...model, achievements: { ...model.achievements, recent: [] } });
   assert.ok(!empty.includes("Unlocked this week"));
   assert.ok(!empty.includes('class="badge'));
+});
+
+test("an achievement that rose two tiers this week is one badge at the higher tier, in the model's order", () => {
+  const model = sampleModel();
+  const entry = (id, name, tier) => ({ id, name, label: `${name} ${tier}`, description: "", hidden: false, tier, at: "2026-10-20T05:00:00.000Z" });
+  const recent = [entry("overdrive", "Overdrive", 1), entry("polyglot", "Polyglot", 1), entry("overdrive", "Overdrive", 2), entry("polyglot", "Polyglot", 2)];
+  const html = renderOverview({ ...model, achievements: { ...model.achievements, recent } });
+  const badges = [...html.matchAll(/aria-hidden="true">([^<]*)<\/span><span class="badge-name">([^<]*)</g)].map(([, mark, name]) => `${name} ${mark}`);
+  assert.deepEqual(badges, ["Overdrive II", "Polyglot II"]);
+  assert.match(textOf(html), /Unlocked this week 2 achievements /);
+  assert.equal(model.achievements.recent.length, 4, "the model passed in is not changed");
+});
+
+test("money takes thousands separators, and a long amount stays one value", () => {
+  const model = sampleModel();
+  const text = textOf(renderOverview({ ...model, budget: { spent: 1234.5, limit: 9999.99 } }));
+  assert.match(text, /Judge today \$1,234\.50 of \$9,999\.99 daily limit /);
+});
+
+test("a badge's numeral and tier label are escaped like any other text", () => {
+  // A tier that compares as 12 but prints as markup: the numeral falls back to the tier's text.
+  const tier = { valueOf: () => 12, toString: () => "<b>x</b>" };
+  const html = badge({ name: "Odd", description: "", tiers: [1, 2] }, tier);
+  assert.ok(!html.includes("<b>"));
+  assert.match(html, /aria-hidden="true">&lt;b&gt;x&lt;\/b&gt;</);
+  assert.match(html, /aria-label="Tier &lt;b&gt;x&lt;\/b&gt; of 2"/);
 });
 
 test("a badge has the tier's numeral, the name and one pip per tier", () => {

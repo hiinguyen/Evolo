@@ -19,9 +19,9 @@ export function badge(achievement, tier) {
   const pips = tiers.map((_, index) => `<i class="pip${index < tier ? " on" : ""}"></i>`).join("");
   const progress = achievement.hidden ? "Secret" : `Tier ${tier} of ${tiers.length}`;
   return `<div class="badge${tier > 0 ? "" : " locked"}" title="${escape(achievement.description)}">`
-    + `<span class="emblem" aria-hidden="true">${mark}</span>`
+    + `<span class="emblem" aria-hidden="true">${escape(mark)}</span>`
     + `<span class="badge-name">${escape(achievement.name)}</span>`
-    + (tiers.length > 0 ? `<span class="pips" role="img" aria-label="${progress}">${pips}</span>` : "")
+    + (tiers.length > 0 ? `<span class="pips" role="img" aria-label="${escape(progress)}">${pips}</span>` : "")
     + "</div>";
 }
 
@@ -78,13 +78,24 @@ function statGrid({ recent, streak, budget, queue }) {
     + "</div>";
 }
 
-// The tiers reached this week; a tier's pips come from its achievement in the catalog, a secret has one tier.
+// One entry per achievement, at the highest tier reached this week, where the achievement first comes in the model's
+// order: two tiers of one achievement in a week are one step forward, not two badges.
+function highestTiers(recent) {
+  const highest = new Map();
+  for (const entry of recent) {
+    if (entry.tier > (highest.get(entry.id)?.tier ?? 0)) highest.set(entry.id, entry);
+  }
+  return [...highest.values()];
+}
+
+// The achievements that moved this week; a badge's pips come from its achievement in the catalog, a secret has one tier.
 function unlockedStrip({ visible, recent }) {
-  if (recent.length === 0) return "";
+  const shown = highestTiers(recent);
+  if (shown.length === 0) return "";
   const tiersOf = (id) => visible.find((achievement) => achievement.id === id)?.tiers ?? [1];
-  const badges = recent.map((entry) => badge({ ...entry, tiers: tiersOf(entry.id) }, entry.tier)).join("");
+  const badges = shown.map((entry) => badge({ ...entry, tiers: tiersOf(entry.id) }, entry.tier)).join("");
   return '<section class="panel"><div class="panel-head"><h2>Unlocked this week</h2>'
-    + `<span class="muted">${plural(recent.length, "tier")}</span></div>`
+    + `<span class="muted">${plural(shown.length, "achievement")}</span></div>`
     + `<div class="panel-body badges">${badges}</div></section>`;
 }
 

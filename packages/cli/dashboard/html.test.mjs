@@ -30,6 +30,8 @@ test("numbers and money are formatted the way the CLI prints them", () => {
   assert.equal(formatXp(1234567), "1,234,567");
   assert.equal(formatUsd(0.32999999999999996), "$0.33");
   assert.equal(formatUsd(5), "$5.00");
+  assert.equal(formatUsd(9999.99), "$9,999.99");
+  assert.equal(formatUsd(1234.5), "$1,234.50");
   assert.equal(plural(1, "job"), "1 job");
   assert.equal(plural(2, "job"), "2 jobs");
   assert.equal(plural(0, "unit"), "0 units");

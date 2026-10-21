@@ -144,7 +144,7 @@ export function bundle(dir) {
 
 // The page for `model`: the template of `dir` with its style, the model and the script put in. Each is put in by a
 // function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The model
-// goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `<`, which JSON
+// goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `\u003c`, which JSON
 // reads back as `<`, so a `</script>` in a commit subject cannot end the data block.
 export function renderPage(model, dir) {
   const template = readFileSync(join(dir, "index.html"), "utf8");

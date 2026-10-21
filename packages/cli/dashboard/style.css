@@ -168,6 +168,21 @@ code {
 
 .noscript { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
 
+/* Shown in place of the whole frame when the page cannot be drawn, so it needs nothing but these lines. */
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+  margin: 64px auto;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.failure a { color: var(--accent-text); font-weight: 500; text-decoration: underline; }
+
 /* Panels. */
 
 .panel {
@@ -261,28 +276,30 @@ code {
 .stat { display: flex; flex-direction: column; min-width: 0; padding: 16px; }
 .stat-label { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; }
 
+/* A value as long as "+12,345 XP" or "$9,999.99" wraps before its unit, and breaks rather than leave its card. */
 .stat-value {
   margin-top: 8px;
   font-size: 24px;
   line-height: 32px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.stat-unit { margin-left: 4px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; }
+.stat-unit { margin-left: 4px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
 .stat-detail { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 16px; }
 
 /* Badges: a round emblem with the tier's numeral, the name, and one pip per tier. */
 
-.badges { display: flex; flex-wrap: wrap; gap: 16px; }
+/* Columns of equal width, as many as fit: the same grid holds 3 badges at 360 px and 10 on a wide screen. */
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px; }
 
 .badge {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  width: 96px;
+  min-width: 0;
   text-align: center;
 }
 
@@ -304,7 +321,7 @@ code {
   text-shadow: 0 1px 1px rgba(122, 40, 0, 0.5);
 }
 
-.badge-name { font-size: 12px; line-height: 16px; font-weight: 600; }
+.badge-name { max-width: 100%; font-size: 12px; line-height: 16px; font-weight: 600; overflow-wrap: anywhere; }
 .pips { display: flex; gap: 4px; }
 .pip { width: 10px; height: 4px; border-radius: 2px; background: var(--track); }
 .pip.on { background: var(--badge-to); }
@@ -360,6 +377,7 @@ code {
 @media (max-width: 719px) {
   .frame { grid-template-columns: minmax(0, 1fr); }
 
+  /* Scrolls sideways by touch or trackpad; a scrollbar track under a 48 px bar only looks broken. */
   .sidebar {
     z-index: 1;
     flex-direction: row;
@@ -370,7 +388,10 @@ code {
     overflow-x: auto;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+    scrollbar-width: none;
   }
+
+  .sidebar::-webkit-scrollbar { display: none; }
 
   .nav { flex-direction: row; }
   .sidebar-foot { display: none; }
@@ -383,4 +404,7 @@ code {
   .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* The summary takes its own line rather than a few letters beside a long push label. */
   .unit-title { flex-direction: column; align-items: stretch; gap: 0; }
+  .stat-value { font-size: 20px; line-height: 28px; }
+  .badges { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 16px 8px; }
+  .emblem { width: 48px; height: 48px; font-size: 16px; }
 }

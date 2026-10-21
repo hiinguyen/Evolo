@@ -15,7 +15,8 @@ export const safeUrl = (url) => (typeof url === "string" && url.startsWith("http
 // "1,040". Number() also turns anything that is not a number into "NaN" rather than into markup.
 export const formatXp = (xp) => Number(xp).toLocaleString("en-US");
 
-export const formatUsd = (usd) => `$${Number(usd).toFixed(2)}`;
+// "$9,999.99": cents always shown, thousands separated like XP.
+export const formatUsd = (usd) => `$${Number(usd).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export const plural = (count, word) => `${formatXp(count)} ${count === 1 ? word : `${word}s`}`;
 
