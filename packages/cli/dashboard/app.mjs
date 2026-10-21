@@ -2,9 +2,11 @@
 // address lives in the hash, so Back, Forward and a bookmark of one unit all work from a file:// page. In a browser
 // this module reads the model from the page, draws the screen the hash names, and draws again when the hash changes;
 // in Node (the tests) it only exports its functions.
+import { renderAchievements } from "./achievements.mjs";
 import { renderAnalytics } from "./analytics.mjs";
 import { escape, formatXp } from "./html.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderReviews } from "./reviews.mjs";
 import { renderTimeline, timelineHash } from "./timeline.mjs";
 import { renderUnit, UNIT_TABS } from "./unit.mjs";
 
@@ -77,12 +79,14 @@ export function renderShell(model, route, content) {
     + `</nav><main class="content" id="main" tabindex="-1">${content}</main></div>`;
 }
 
-// The screens drawn so far; an address for one that is not here shows the Overview with a notice.
+// Every screen; an address for one that is not here shows the Overview with a notice.
 const SCREENS = {
   overview: (model) => renderOverview(model),
   timeline: (model, route) => renderTimeline(model, route.query),
   unit: (model, route) => renderUnit(model, route.params.key, route.params.tab),
   analytics: (model, route) => renderAnalytics(model, route.params.kind, route.params.which),
+  achievements: (model) => renderAchievements(model),
+  reviews: (model, route) => renderReviews(model, route.query),
 };
 
 export function renderRoute(model, route) {

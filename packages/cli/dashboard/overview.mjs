@@ -1,5 +1,5 @@
 // The Overview screen: level, recent XP, streak, the judge's spending, the queue, the achievements unlocked this week
-// and the latest units. `badge` and `unitRow` are shared: the Achievements screen draws its grid with `badge`, the
+// and the latest units. `badge` and `unitRow` are shared: the Achievements screen draws its tiles with `badge`, the
 // Timeline its list with `unitRow`, and a unit's details its head with `unitWorth` and `unitType`. Every number is the
 // model's; the only arithmetic is the width of the level bar.
 import { escape, formatUsd, formatXp, hashOf, localDate, localTime, pageHead, plural } from "./html.mjs";
@@ -13,8 +13,9 @@ const STATUS_TEXT = { failed: "failed", push_failed: "push failed", reverted: "r
 const STATUS_BAD = new Set(["failed", "push_failed"]);
 
 // An achievement's emblem: the numeral of `tier` (a star for a secret, a dash before the first tier), its name and one
-// pip per tier, lit up to `tier`. `achievement` needs { name, description, tiers, hidden }.
-export function badge(achievement, tier) {
+// pip per tier, lit up to `tier`. `achievement` needs { name, description, tiers, hidden }. `details` is markup the
+// caller built, put under the pips: the Achievements screen adds the description, the progress and the day.
+export function badge(achievement, tier, details = "") {
   const tiers = achievement.tiers ?? [];
   const mark = achievement.hidden ? "★" : tier > 0 ? numeral(tier) : "–";
   const pips = tiers.map((_, index) => `<i class="pip${index < tier ? " on" : ""}"></i>`).join("");
@@ -23,6 +24,7 @@ export function badge(achievement, tier) {
     + `<span class="emblem" aria-hidden="true">${escape(mark)}</span>`
     + `<span class="badge-name">${escape(achievement.name)}</span>`
     + (tiers.length > 0 ? `<span class="pips" role="img" aria-label="${escape(progress)}">${pips}</span>` : "")
+    + details
     + "</div>";
 }
 

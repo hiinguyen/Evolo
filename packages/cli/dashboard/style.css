@@ -18,6 +18,8 @@
   --raised: #ffffff;
   --badge-from: #ffb020;
   --badge-to: #ff6a3d;
+  /* The dashed outline of a secret not found yet. */
+  --dash: #c7c7cc;
   --green: #1a7f37;
   --red: #cf222e;
   --red-soft: rgba(207, 34, 46, 0.08);
@@ -44,6 +46,7 @@
     --hover: #242428;
     --track: #2c2c31;
     --raised: #3a3a40;
+    --dash: #4a4a52;
     --green: #3fb950;
     --red: #f85149;
     --red-soft: rgba(248, 81, 73, 0.14);
@@ -79,6 +82,19 @@ code {
 
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .muted { color: var(--muted); }
+
+/* Text for a screen reader only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* Frame: sidebar and content. */
 

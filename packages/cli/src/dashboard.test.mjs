@@ -289,7 +289,7 @@ test("bundle joins the drawing modules without import or export, and the result 
     const model = sampleModel();
     for (const hash of ["#/", "#/nowhere", "#/timeline?repo=hiinguyen%2Fevolo&status=scored", "#/unit/hiinguyen/ai-orgs/pr-1/score",
       "#/unit/hiinguyen/ai-orgs/pr-1/review", "#/unit/hiinguyen/evolo/pr-7/review", "#/unit/hiinguyen/evolo/pr-7/files", "#/unit/hiinguyen/evolo/pr-7/commits",
-      "#/unit/me/gone/pr-1"]) {
+      "#/unit/me/gone/pr-1", "#/achievements", "#/reviews", "#/reviews?severity=medium"]) {
       const route = joined.parseHash(hash);
       assert.equal(joined.renderShell(model, route, joined.renderRoute(model, route)), renderShell(model, parseHash(hash), renderRoute(model, parseHash(hash))));
     }

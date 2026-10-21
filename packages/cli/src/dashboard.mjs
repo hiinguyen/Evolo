@@ -139,7 +139,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
@@ -147,7 +147,7 @@ export function bundle(dir) {
 
 // The stylesheets, joined into the page's one <style> in this order: the tokens, the frame and the shared components
 // first, then each screen's own rules, so a screen's rule wins over a shared one it narrows.
-export const STYLES = ["style.css", "overview.css", "timeline.css", "unit.css", "analytics.css"];
+export const STYLES = ["style.css", "overview.css", "timeline.css", "unit.css", "analytics.css", "achievements.css", "reviews.css"];
 
 export function styles(dir) {
   return STYLES.map((name) => readFileSync(join(dir, name), "utf8")).join("\n");

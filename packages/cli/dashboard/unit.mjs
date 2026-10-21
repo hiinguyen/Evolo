@@ -8,7 +8,9 @@ import { unitType, unitWorth } from "./overview.mjs";
 export const UNIT_TABS = ["score", "review", "files", "commits"];
 
 export const RUBRIC_MAX = 4;
-const FINDING_ORDER = ["high", "medium", "low"];
+export const FINDING_ORDER = ["high", "medium", "low"];
+// A finding's severity as the page shows it: one the page does not know is styled and counted as low.
+export const severityOf = (finding) => (FINDING_ORDER.includes(finding.severity) ? finding.severity : "low");
 // The classes of facts.mjs, the ones that count toward size first; a class this list does not know comes last.
 const FILE_CLASS_ORDER = ["source", "test", "fixture", "docs", "config", "lockfile", "generated"];
 
@@ -145,9 +147,8 @@ const bulletPanel = (title, items) =>
   (items?.length > 0 ? panel(title, "", `<ul class="bullets">${items.map((item) => `<li>${escape(item)}</li>`).join("")}</ul>`) : "");
 
 function findingItem(finding) {
-  const severity = FINDING_ORDER.includes(finding.severity) ? finding.severity : "low";
   return '<li class="finding"><div class="finding-meta">'
-    + `<span class="pill sev-${severity}">${escape(finding.severity)}</span>`
+    + `<span class="pill sev-${severityOf(finding)}">${escape(finding.severity)}</span>`
     + `<span class="muted">${escape(finding.category)}</span><code>${escape(finding.location)}</code></div>`
     + `<h3>${escape(finding.title)}</h3><p>${escape(finding.detail)}</p>`
     + (finding.suggestion ? `<p class="finding-fix"><span class="muted">Suggestion</span> ${escape(finding.suggestion)}</p>` : "")

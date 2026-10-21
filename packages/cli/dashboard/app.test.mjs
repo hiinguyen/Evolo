@@ -3,10 +3,12 @@ process.env.TZ = "Asia/Ho_Chi_Minh";
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { renderAchievements } from "./achievements.mjs";
 import { renderAnalytics } from "./analytics.mjs";
 import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderReviews } from "./reviews.mjs";
 import { renderTimeline } from "./timeline.mjs";
 import { renderUnit } from "./unit.mjs";
 
@@ -84,6 +86,14 @@ test("renderRoute draws the analytics of the period the address names, this week
   assert.equal(renderRoute(model, parseHash("#/analytics")), renderAnalytics(model, "week", "current"));
   assert.equal(renderRoute(model, parseHash("#/analytics/month/previous")), renderAnalytics(model, "month", "previous"));
   assert.ok(!renderRoute(model, parseHash("#/analytics/quarter/current")).includes("Nothing at this address"));
+});
+
+test("renderRoute draws the achievements, and the reviews with the severity of the address", () => {
+  const model = sampleModel();
+  assert.equal(renderRoute(model, parseHash("#/achievements")), renderAchievements(model));
+  assert.equal(renderRoute(model, parseHash("#/reviews")), renderReviews(model, {}));
+  assert.equal(renderRoute(model, parseHash("#/reviews?severity=high")), renderReviews(model, { severity: "high" }));
+  assert.ok(!renderRoute(model, parseHash("#/reviews?severity=low")).includes("Nothing at this address"));
 });
 
 test("drawScreen draws the frame and the screen into the root", () => {
