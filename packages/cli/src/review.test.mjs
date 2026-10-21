@@ -1,3 +1,6 @@
+// A fixed zone without daylight saving, so the printed review time (local, UTC+7) does not depend on the machine.
+process.env.TZ = "Asia/Ho_Chi_Minh";
+
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -115,7 +118,7 @@ const stored = (review, overrides = {}) => ({
 test("a printed review lists the most severe findings first, with where and how to fix them", () => {
   const review = answer({ findings: [finding({ severity: "low", title: "Name" }), finding({ severity: "high", title: "Leak" })] });
   const text = formatReview(stored(review));
-  assert.match(text, /^me\/proj PR #5 {2}review in vi {2}2026-10-20 08:00 · claude-sonnet-5-5 · \$0\.12/);
+  assert.match(text, /^me\/proj PR #5 {2}review in vi {2}2026-10-20 15:00 · claude-sonnet-5-5 · \$0\.12/);
   assert.ok(text.indexOf("[high]") < text.indexOf("[low]"), text);
   assert.match(text, /\[high\] bug {2}src\/app\.js:10-12 {2}Leak\n {6}The result is used without a check\.\n {6}fix: Check it first\./);
   assert.match(text, /strengths:\n {2}- Clear tests\./);

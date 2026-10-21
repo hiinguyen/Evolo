@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { readRecord, writeRecord } from "./ledger.mjs";
 import { lines, makeSandbox, REPO, short } from "./sandbox.mjs";
 
 const reviewFile = (box, id) => join(box.home, "reviews", ...REPO.split("/"), `${id}.json`);
@@ -39,6 +40,26 @@ test("a review is written in the configured language, saved, shown again without
   box.evolo("review", id, "--again");
   assert.equal(box.judgeCalls(), calls + 1);
   assert.match(box.evolo("why", id), new RegExp(`review: saved, see \`evolo review ${id}\``));
+});
+
+test("status, why and review show times in the local time zone, not UTC", async () => {
+  // Late evening in UTC is already the next morning at UTC+7, so a UTC time shows the wrong day and hour.
+  const zone = process.env.TZ;
+  process.env.TZ = "Asia/Ho_Chi_Minh";
+  try {
+    const { box, id } = await scoredPush();
+    writeRecord(box.home, REPO, { ...readRecord(box.home, REPO, id), at: "2026-10-20T23:33:51.623Z" });
+    box.evolo("review", id);
+    const stored = JSON.parse(readFileSync(reviewFile(box, id), "utf8"));
+    writeFileSync(reviewFile(box, id), JSON.stringify({ ...stored, at: "2026-10-20T23:40:00.000Z" }));
+
+    assert.match(box.evolo("status"), new RegExp(`^ {2}2026-10-21 06:33 {2}${REPO} ${id} `, "m"));
+    assert.match(box.evolo("why", id), /^me\/proj push \S+ {2}\d+ XP {2}2026-10-21 06:33$/m);
+    assert.match(box.evolo("review", id), /review in en {2}2026-10-21 06:40/);
+  } finally {
+    if (zone === undefined) delete process.env.TZ;
+    else process.env.TZ = zone;
+  }
 });
 
 test("a finding at a path that does not exist is dropped and reported", async () => {

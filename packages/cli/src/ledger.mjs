@@ -74,10 +74,17 @@ export function listAllRecords(home) {
   return ledgerKeys(home).flatMap((key) => listRecords(home, key));
 }
 
+const pad = (value) => String(value).padStart(2, "0");
+
 // "YYYY-MM-DD" of `date` in the local time zone, which is what "today" means to the user.
 export function localDay(date) {
-  const pad = (value) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// "YYYY-MM-DD HH:MM" of the ISO time `iso` in the local time zone, for showing a stored time to the user.
+export function localTime(iso) {
+  const date = new Date(iso);
+  return `${localDay(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 // When the unit was pushed or merged, which is the day the work counts on. A unit can be scored much later: a PR merged
