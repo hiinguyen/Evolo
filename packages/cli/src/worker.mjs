@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { achievementsOf, notifyUnlocks } from "./achievements.mjs";
 import { BudgetExceededError, assertWithinBudget, isWithinBudget, nextLocalDay } from "./budget.mjs";
+import { refreshDashboard } from "./dashboard.mjs";
 import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
@@ -308,9 +309,11 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
       const inFlight = jobs.some((job) => job.attempts === 0 && !isParked(job));
       if (ready) {
         await processJob(home, ready, judge);
+        refreshDashboard(home);
         worked = true;
       } else if (worked && !inFlight) {
         syncAll(home).forEach((note) => logLine(home, note));
+        refreshDashboard(home);
         worked = false;
       } else if (jobs.every((job) => isParked(job))) {
         break;

@@ -42,7 +42,7 @@ import { levelFor } from "../src/score.mjs";
 import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
-import { writeDashboard } from "../src/dashboard.mjs";
+import { refreshDashboard, writeDashboard } from "../src/dashboard.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
 import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
 import { listAllRecords, listRecords, localDay, localTime, readSummary, writeSummary } from "../src/ledger.mjs";
@@ -382,6 +382,7 @@ async function review(argv) {
     costUsd: result.costUsd, durationMs: result.durationMs, review: result.review, issues: result.issues,
   };
   writeReview(home, stored);
+  refreshDashboard(home);
   logLine(home, `reviewed ${record.repo} ${record.id}: ${result.review.findings.length} finding(s)`);
   console.log(formatReview(stored));
 }
