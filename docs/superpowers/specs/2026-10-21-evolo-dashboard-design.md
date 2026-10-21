@@ -39,7 +39,8 @@ src/dashboard.mjs   dashboardModel(home, now)  ->  model JSON (mọi con số đ
         │
         ▼
 dashboard/index.html   khung, CSP, chỗ nhúng CSS, JS và model
-dashboard/style.css    token màu cho sáng và tối
+dashboard/style.css    token màu cho sáng và tối, khung trang, thành phần dùng chung
+dashboard/<màn>.css    quy tắc riêng của từng màn hình
 dashboard/*.mjs        hàm vẽ thuần model -> HTML theo màn hình, biểu đồ SVG; app.mjs: điều hướng, tab, bộ lọc
 ```
 
@@ -49,7 +50,8 @@ dashboard/*.mjs        hàm vẽ thuần model -> HTML theo màn hình, biểu �
 - Trang mở bằng `file://`, nơi Chrome chặn module import lẫn nhau, nên `writeDashboard` nối các module theo thứ tự cố định thành một `<script type="module">`: bỏ dòng `import` từ module anh em và từ khoá `export`.
   Quy ước để việc nối này an toàn: module chỉ import từ module anh em, mỗi lệnh `import` một dòng, không trùng tên ở cấp cao nhất; test nạp bản đã nối như một module để bắt vi phạm.
   Không có bước build và không có dependency.
-- `index.html`, `style.css` và các module nằm trong `packages/cli/dashboard/`, cạnh `judge/` và `claude/`; `writeDashboard` đọc chúng khi chạy.
+- `index.html`, các file CSS và các module nằm trong `packages/cli/dashboard/`, cạnh `judge/` và `claude/`; `writeDashboard` đọc chúng khi chạy.
+  CSS cũng được nối theo thứ tự cố định (`STYLES`) thành một thẻ `<style>`: `style.css` trước, rồi file của từng màn hình, để quy tắc riêng của màn hình thắng quy tắc dùng chung nó thu hẹp.
 
 ## 4. Model
 
@@ -148,7 +150,8 @@ Giao diện:
 |---|---|
 | `src/dashboard.mjs` | `dashboardModel`, `writeDashboard` (đọc template, nhúng CSS, JS và model, ghi atomic 0600), `refreshDashboard` (chỉ ghi khi file đã có, nuốt lỗi vào log) |
 | `dashboard/index.html` | Khung trang, CSP, chỗ nhúng |
-| `dashboard/style.css` | Token màu, bố cục, huy hiệu |
+| `dashboard/style.css` | Token màu, khung trang, thành phần dùng chung (panel, hàng, pill, nút, segmented control, huy hiệu) |
+| `dashboard/overview.css`, `timeline.css`, `unit.css`, `analytics.css`, `achievements.css`, `reviews.css` | Quy tắc riêng của từng màn hình |
 | `dashboard/html.mjs` | `escape`, `safeUrl`, định dạng số và giờ dùng chung |
 | `dashboard/charts.mjs` | Biểu đồ SVG: cột theo ngày, thanh ngang, dải theo giờ và thứ |
 | `dashboard/overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs` | Mỗi file vẽ một màn hình từ model |

@@ -1,0 +1,59 @@
+/* Overview: the level card. The stats under it are shared with Analytics and live in style.css. */
+
+.overview-top { display: flex; flex-direction: column; gap: 16px; }
+
+.level-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+  padding: 16px;
+}
+
+.level-number {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.level-number .caption {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.level-number strong { font-size: 28px; line-height: 32px; font-weight: 700; }
+
+.level-progress { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+
+.level-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+
+.level-total { color: var(--muted); }
+.level-total strong { color: var(--text); font-size: 20px; line-height: 28px; font-weight: 600; }
+
+.level-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@media (max-width: 719px) {
+  .level-card { gap: 16px; }
+  .level-number { width: 64px; height: 64px; }
+}

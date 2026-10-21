@@ -145,13 +145,21 @@ export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
 }
 
-// The page for `model`: the template of `dir` with its style, the model and the script put in. Each is put in by a
+// The stylesheets, joined into the page's one <style> in this order: the tokens, the frame and the shared components
+// first, then each screen's own rules, so a screen's rule wins over a shared one it narrows.
+export const STYLES = ["style.css", "overview.css", "timeline.css", "unit.css", "analytics.css"];
+
+export function styles(dir) {
+  return STYLES.map((name) => readFileSync(join(dir, name), "utf8")).join("\n");
+}
+
+// The page for `model`: the template of `dir` with its styles, the model and the script put in. Each is put in by a
 // function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The model
 // goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `\u003c`, which JSON
 // reads back as `<`, so a `</script>` in a commit subject cannot end the data block.
 export function renderPage(model, dir) {
   const template = readFileSync(join(dir, "index.html"), "utf8");
-  const style = readFileSync(join(dir, "style.css"), "utf8");
+  const style = styles(dir);
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
   return template
     .replace("/*evolo:style*/", () => style)

@@ -1,0 +1,81 @@
+/* Analytics: the period switcher, the figures, the charts, and when the commits were made. */
+
+.period-switch { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: -8px; }
+
+.analytics-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.delta { font-weight: 600; }
+.delta-up { color: var(--green); }
+.delta-down { color: var(--red); }
+
+.analytics-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.analytics-pair > .panel { min-width: 0; }
+
+/* Columns by day: the scale on the left, its labels centred on the top line and on the base; the first and last day
+   under the ends. The SVG keeps its shape as it scales, so the lines are borders and a line that does not scale. */
+.chart { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; }
+
+.chart-scale, .chart-ends { color: var(--muted); font-size: 11px; line-height: 16px; white-space: nowrap; }
+.chart-scale { display: flex; flex-direction: column; align-items: flex-end; justify-content: space-between; }
+.chart-scale span:first-child { margin-top: -8px; }
+.chart-scale span:last-child { margin-bottom: -8px; }
+.chart-ends { display: flex; grid-column: 2; justify-content: space-between; gap: 16px; }
+
+.chart-plot {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: hidden;
+  border-top: 1px solid var(--track);
+  border-bottom: 1px solid var(--border);
+}
+
+.chart-grid { stroke: var(--track); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.bar { fill: var(--accent); }
+.column-hit { fill: transparent; }
+.column:hover .column-hit { fill: var(--hover); }
+.column:hover .bar { fill: var(--accent-text); }
+
+/* Horizontal bars: the label and its note on one line, the bar under them. */
+.hbars { display: flex; flex-direction: column; gap: 16px; }
+.hbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 4px 16px; }
+.hbar-label { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-note { color: var(--muted); font-size: 13px; white-space: nowrap; }
+.hbar-track { grid-column: 1 / -1; height: 8px; overflow: hidden; border-radius: 4px; background: var(--track); }
+.hbar-track > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+
+/* Rubric averages: the bar takes the room the numbers leave. */
+.averages { width: 100%; border-collapse: collapse; }
+.averages th, .averages td { height: 40px; padding: 0 12px 0 0; font-weight: 400; text-align: left; }
+.averages tr > :first-child { padding-left: 16px; }
+.averages tr > :last-child { padding-right: 16px; }
+.averages thead th { height: 32px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 500; }
+.averages tbody tr + tr > * { border-top: 1px solid var(--border); }
+.averages tbody th { font-weight: 600; white-space: nowrap; }
+.averages .num { width: 1%; text-align: right; white-space: nowrap; }
+.averages .average { font-weight: 600; }
+.average-bar .score-bar { min-width: 32px; }
+
+/* Commits by hour and by weekday: the two blocks share the width by their number of cells, so every cell is one size. */
+.rhythm { display: grid; grid-template-columns: minmax(0, 24fr) minmax(0, 7fr); gap: 32px; }
+.rhythm-block h3 { margin-bottom: 8px; color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+.strip-cells, .strip-labels { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 4px; }
+.cell { height: 32px; border-radius: 4px; background: var(--accent); }
+.cell.level-0 { background: var(--track); }
+.cell.level-1 { opacity: 0.3; }
+.cell.level-2 { opacity: 0.5; }
+.cell.level-3 { opacity: 0.75; }
+.strip-labels { margin-top: 8px; color: var(--muted); font-size: 11px; line-height: 16px; }
+.strip-labels span { white-space: nowrap; }
+.strip-dense .strip-labels span:not(:nth-child(6n + 1)) { visibility: hidden; }
+
+@media (max-width: 719px) {
+  .analytics-pair, .rhythm { grid-template-columns: minmax(0, 1fr); }
+  .rhythm { gap: 24px; }
+}
+
+@media (max-width: 559px) {
+  .strip-cells, .strip-labels { gap: 2px; }
+  .cell { height: 24px; }
+  /* The figures take two columns like the other stats; this file comes after style.css, so it says so again. */
+  .analytics-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

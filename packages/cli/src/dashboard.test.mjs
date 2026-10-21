@@ -12,7 +12,7 @@ import { modelIn, sampleModel } from "../dashboard/fixtures.mjs";
 import { parseHash, renderRoute, renderShell } from "../dashboard/app.mjs";
 import { SECRET } from "./achievements/secret.mjs";
 import { day, unit as fixtureUnit } from "./achievements/fixtures.mjs";
-import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, renderPage, writeDashboard } from "./dashboard.mjs";
+import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, renderPage, STYLES, styles, writeDashboard } from "./dashboard.mjs";
 import { listAllRecords, summarize, writeRecords } from "./ledger.mjs";
 import { addJob, updateJob } from "./queue.mjs";
 import { writeReview } from "./review.mjs";
@@ -253,9 +253,25 @@ test("the page is a complete document that loads nothing from the network", () =
   assert.ok(page.includes('<div id="app"></div>'));
   assert.ok(page.includes("<noscript>"));
   assert.ok(!page.includes("/*evolo:"), "every placeholder is filled");
-  assert.ok(page.includes(readFileSync(join(DASHBOARD_DIR, "style.css"), "utf8")));
+  assert.ok(page.includes(`<style>${styles(DASHBOARD_DIR)}</style>`));
   assert.ok(page.includes(`<script type="module">${bundle(DASHBOARD_DIR)}</script>`));
   assert.ok(!/\b(src|href)="(https?:)?\/\//.test(page), "no remote script, style or font");
+});
+
+test("the stylesheets all exist, the shared one comes first, and none loads anything", () => {
+  assert.deepEqual(STYLES.filter((name) => !existsSync(join(DASHBOARD_DIR, name))), []);
+  assert.equal(STYLES[0], "style.css", "a screen's rules come after the shared rules they narrow");
+  assert.equal(new Set(STYLES).size, STYLES.length);
+  for (const name of STYLES) {
+    const css = readFileSync(join(DASHBOARD_DIR, name), "utf8");
+    assert.ok(!/@import/i.test(css), `${name} imports nothing`);
+    // Every url() is a data: URL, the one kind the page's policy (img-src data:) lets in.
+    for (const [, target] of css.matchAll(/url\(\s*["']?([^"')\s]*)/gi)) assert.match(target, /^data:/, `${name} loads ${target}`);
+  }
+  const joined = styles(DASHBOARD_DIR);
+  assert.ok(STYLES.every((name) => joined.includes(readFileSync(join(DASHBOARD_DIR, name), "utf8"))));
+  assert.ok(joined.indexOf(":root {") < joined.indexOf(".level-card {"), "the tokens come first");
+  assert.ok(!joined.includes("</style"), "no stylesheet can end the style element");
 });
 
 test("bundle joins the drawing modules without import or export, and the result loads as one module", async () => {
