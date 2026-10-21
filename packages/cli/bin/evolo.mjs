@@ -9,7 +9,8 @@
 //                                         --background leaves all of it to a detached worker and prints nothing
 //   evolo status                          level, XP, the queue and the latest scores
 //   evolo stats [week|month|quarter] [--previous]   analytics of this calendar period (or the previous one) against
-//                                         the one before it, and the streak of workdays
+//                                         the one before it, the streak of workdays and the achievements unlocked
+//   evolo achievements                    every achievement's tier and progress, and the secrets found
 //   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
 //   evolo review [<commit>|#<pr>|<unit id>] [--repo <clone>] [--again] [--judge claude|opencode] [--model M]
 //       a code review of a unit by a separate judge, saved under <home>/reviews; the saved one unless --again
@@ -31,6 +32,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { achievementsOf, unlockedIn } from "../src/achievements.mjs";
 import { dailyBudget } from "../src/budget.mjs";
 import { evaluateUnit, scoreValues } from "../src/evaluate.mjs";
 import { levelFor } from "../src/score.mjs";
@@ -47,14 +49,14 @@ import { formatReview, readReview, reviewUnit, writeReview } from "../src/review
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
 import { terminalSafe } from "../src/safe-text.mjs";
-import { explain, findByRef, formatStats, recentXp, statusLine, unitLabel } from "../src/views.mjs";
+import { explain, findByRef, formatAchievements, formatStats, recentXp, statusLine, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|stats|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|stats|achievements|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
-  evolo stats [week|month|quarter] [--previous]
+  evolo stats [week|month|quarter] [--previous] | evolo achievements
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
   evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]
   evolo claude install|uninstall
@@ -262,7 +264,13 @@ function stats(argv) {
   const back = values.previous ? 1 : 0;
   const current = computeStats(records, periodOf(kind, now, back));
   const previous = computeStats(records, periodOf(kind, now, back + 1));
-  console.log(formatStats(current, previous, streakOf(records, now)).join("\n"));
+  const unlocks = unlockedIn(achievementsOf(records), current.period);
+  console.log(formatStats(current, previous, streakOf(records, now), unlocks).join("\n"));
+}
+
+function achievements(argv) {
+  if (argv.length > 0) usageError("expected: evolo achievements");
+  console.log(formatAchievements(achievementsOf(listAllRecords(evoloHome()))).join("\n"));
 }
 
 // The record of the unit `ref` names, searched in the registered clone `repoDir` when it is one, else in every
@@ -409,7 +417,7 @@ function config(argv) {
   }
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, why, review, retry, statusline, claude, config, evaluate };
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, achievements, why, review, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();

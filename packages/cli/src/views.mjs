@@ -1,5 +1,6 @@
 // What Evolo shows the user: desktop notifications, the status line and `evolo why` (docs/auto-scoring.md section 6).
 // Pure functions of ledger records and the summary, so every view is tested without a terminal or a desktop.
+import { tierName } from "./achievements.mjs";
 import { CRITERIA, levelFor } from "./score.mjs";
 import { localDay } from "./ledger.mjs";
 import { escapeMarkup, richText, terminalSafe } from "./safe-text.mjs";
@@ -182,10 +183,12 @@ function sparkline(counts) {
 
 // `evolo stats`: the lines for stats.mjs's computeStats of a period, against the previous period when it has data,
 // and the streak. Repository names and paths come from the ledger, so the lines are printed without control characters.
-export function formatStats(current, previous, streak) {
+// `unlocks` are the achievement tiers reached in the period (achievements.mjs's unlockedIn).
+export function formatStats(current, previous, streak, unlocks = []) {
   const header = [
     previous ? `${current.period.label}  (vs ${previous.period.label})` : current.period.label,
     `streak ${plural(streak.current, "workday")} (longest ${streak.longest})`,
+    ...(unlocks.length > 0 ? [row("unlocked", unlocks.map(({ label }) => label).join(" · "))] : []),
   ];
   if (current.units === 0) return [...header, "no contributions"].map(terminalSafe);
   const before = previous?.units > 0 ? previous : null;
@@ -206,7 +209,7 @@ export function formatStats(current, previous, streak) {
     `${formatXp(current.xp)} XP${before ? change(current.xp, before.xp) : ""}  ` +
       `${plural(current.units, "unit")}${before ? change(current.units, before.units) : ""}  ` +
       `level ${current.level}  judge $${current.costUsd.toFixed(2)}`,
-    header[1],
+    ...header.slice(1),
     row("types", current.types.map(({ type, units, xp }) => `${type} ${units} (${formatXp(xp)} XP)`).join(" · ")),
     row("rubric", rubricText),
     row("tests", testsText),
@@ -216,4 +219,39 @@ export function formatStats(current, previous, streak) {
     row("hours", `${sparkline(current.hours)}  (0-23)`),
     row("weekdays", WEEKDAYS.map((day, index) => `${day} ${current.weekdays[index]}`).join("  ")),
   ].map(terminalSafe);
+}
+
+// Width of the progress column of `evolo achievements`: "123/500" or "60 (max)".
+const PROGRESS_WIDTH = 9;
+
+// `evolo achievements`: the visible achievements (achievements.mjs's achievementsOf) in catalog order with their tier
+// and progress, then the secrets found; a secret still locked shows nothing but that it exists.
+export function formatAchievements(achievements) {
+  const visible = achievements.filter((achievement) => !achievement.hidden);
+  const secrets = achievements.filter((achievement) => achievement.hidden);
+  const found = secrets.filter((achievement) => achievement.tier > 0);
+  const width = Math.max(...[...visible, ...found].map((achievement) => achievement.name.length));
+  const line = (name, tier, progress, description) => `${name.padEnd(width)}  ${tier.padEnd(4)} ${progress.padEnd(PROGRESS_WIDTH)} ${description}`;
+  const progress = ({ tier, tiers, value }) => (tier === tiers.length ? `${value} (max)` : `${value}/${tiers[tier]}`);
+  const hidden = secrets.length - found.length;
+  return [
+    `${visible.filter((achievement) => achievement.tier > 0).length} of ${visible.length} unlocked · ` +
+      `${plural(found.length, "secret")} found, ${hidden} still hidden`,
+    ...visible.map((achievement) => line(achievement.name, achievement.tier > 0 ? tierName(achievement.tier) : "-", progress(achievement), achievement.description)),
+    ...found.map((achievement) => line(achievement.name, "★", "", achievement.description)),
+    ...(hidden > 0 ? [`??? × ${hidden}`] : []),
+  ].map(terminalSafe);
+}
+
+// The desktop notification for achievement tiers just reached (achievements.mjs's notifyUnlocks), as { title, body },
+// or null when there are none. The text is Evolo's own, escaped all the same.
+export function achievementNotification(unlocks, { markup = false } = {}) {
+  if (unlocks.length === 0) return null;
+  const text = (value) => (markup ? escapeMarkup(terminalSafe(value)) : terminalSafe(value));
+  if (unlocks.length === 1) return { title: `achievement unlocked: ${unlocks[0].label}`, body: text(unlocks[0].description) };
+  const label = (value) => (markup ? `<b>${text(value)}</b>` : text(value));
+  return {
+    title: `${unlocks.length} achievements unlocked`,
+    body: unlocks.map((unlock) => `${label(unlock.label)}: ${text(unlock.description)}`).join("\n"),
+  };
 }

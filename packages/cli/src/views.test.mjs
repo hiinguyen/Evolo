@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { terminalSafe } from "./safe-text.mjs";
-import { explain, findByRef, formatStats, notification, recentXp, statusLine, unitLabel } from "./views.mjs";
+import {
+  achievementNotification, explain, findByRef, formatAchievements, formatStats, notification, recentXp, statusLine, unitLabel,
+} from "./views.mjs";
 
 const NOW = new Date(2026, 9, 19, 15, 0);
 
@@ -153,4 +155,52 @@ test("stats print repository names and paths without control characters", () => 
   const printed = formatStats(stats, null, { current: 0, longest: 0 }).join("\n");
   assert.equal(printed, terminalSafe(printed));
   assert.match(printed, /me\/\[2Japp/);
+});
+
+test("stats list the achievement tiers unlocked in the period, and no row when there are none", () => {
+  const unlocks = [{ label: "Streak I" }, { label: "Bug Hunter II" }];
+  const lines = formatStats(periodStats("2026-10"), null, { current: 5, longest: 5 }, unlocks);
+  assert.equal(lines[3], "unlocked  Streak I · Bug Hunter II");
+  assert.ok(!formatStats(periodStats("2026-10"), null, { current: 5, longest: 5 }).some((line) => line.startsWith("unlocked")));
+  const empty = periodStats("2026-09", { units: 0, xp: 0, rubric: { n: 0, averages: {} }, tests: { touched: 0, eligible: 0 } });
+  assert.deepEqual(formatStats(empty, null, { current: 0, longest: 0 }, [{ label: "Odd One" }]), [
+    "2026-09", "streak 0 workdays (longest 0)", "unlocked  Odd One", "no contributions",
+  ]);
+});
+
+const achievement = (id, name, tiers, value, extra = {}) => ({
+  id, name, description: `${name.toLowerCase()} things`, hidden: false, tiers, value,
+  tier: tiers.filter((threshold) => value >= threshold).length, unlocked: [], ...extra,
+});
+
+test("achievements show each tier, the progress to the next and the secrets found, never the ones still hidden", () => {
+  const lines = formatAchievements([
+    achievement("contributor", "Contributor", [1, 10, 50], 12),
+    achievement("bug-hunter", "Bug Hunter", [3, 10, 30], 1),
+    achievement("polyglot", "Polyglot", [2, 3, 5], 6),
+    achievement("found", "Found It", [1], 1, { hidden: true }),
+    achievement("locked-one", "Do Not Print", [1], 0, { hidden: true }),
+    achievement("locked-two", "Nor This", [1], 0, { hidden: true }),
+  ]);
+  assert.deepEqual(lines, [
+    "2 of 3 unlocked · 1 secret found, 2 still hidden",
+    "Contributor  II   12/50     contributor things",
+    "Bug Hunter   -    1/3       bug hunter things",
+    "Polyglot     III  6 (max)   polyglot things",
+    "Found It     ★              found it things",
+    "??? × 2",
+  ]);
+  assert.ok(!lines.join("\n").includes("Do Not Print"));
+});
+
+test("an unlock is announced alone or with the others found at the same time, escaped for markup", () => {
+  assert.equal(achievementNotification([]), null);
+  assert.deepEqual(achievementNotification([{ label: "Bug Hunter II", description: "bugfixes with impact ≥ 3" }]), {
+    title: "achievement unlocked: Bug Hunter II", body: "bugfixes with impact ≥ 3",
+  });
+  const many = [{ label: "Contributor I", description: "scored units" }, { label: "R&D", description: "a <b> tag" }];
+  assert.deepEqual(achievementNotification(many), { title: "2 achievements unlocked", body: "Contributor I: scored units\nR&D: a <b> tag" });
+  assert.deepEqual(achievementNotification(many, { markup: true }), {
+    title: "2 achievements unlocked", body: "<b>Contributor I</b>: scored units\n<b>R&amp;D</b>: a &lt;b&gt; tag",
+  });
 });

@@ -297,6 +297,14 @@ Nhật ký chi tiết của hook và worker nằm ở `~/.evolo/evolo.log`.
 
 `evolo stats [week|month|quarter] [--previous]` in analytics của một kỳ theo lịch, so với kỳ trước: XP, cơ cấu loại việc, trung bình rubric, kỷ luật test, revert, repo, thư mục, nhịp làm việc, và streak ngày làm việc.
 Định nghĩa từng chỉ số: `docs/superpowers/specs/2026-10-20-evolo-stats-design.md`.
+Kỳ có achievement mở thì thêm dòng `unlocked` liệt kê các bậc đó.
+
+### `evolo achievements`
+
+`evolo achievements` in mọi achievement theo thứ tự danh sách: bậc đã đạt (số La Mã, `-` khi chưa đạt), tiến độ tới bậc kế (`12/50`, hoặc `5 (max)` ở bậc cuối) và mô tả.
+Sau đó là các achievement ẩn đã mở, rồi số achievement ẩn còn khoá (`??? × 9`); achievement ẩn còn khoá không lộ tên hay điều kiện.
+Achievement tính lại từ ledger mỗi lần, nên mất khi đơn vị giữ nó bị revert hay bị force-push thay thế.
+Luật và ngưỡng của achievement hiện: `docs/superpowers/specs/2026-10-20-evolo-achievements-design.md`.
 
 ### Thông báo desktop
 
@@ -307,6 +315,7 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 | `scored` | `Evolo +160 XP`, thêm `· level 3!` khi lên level | `lightrag PR #5: feature` và lời tóm tắt của judge |
 | `needs_review` | `Evolo Needs review` | Đơn vị, và gợi ý `evolo why <id>` |
 | `failed` | `Evolo Scoring failed` | Lý do, và gợi ý `evolo retry` |
+| Mở achievement | `Evolo achievement unlocked: Bug Hunter II`, hoặc `Evolo 3 achievements unlocked` | Mô tả, hoặc mỗi bậc một dòng; gửi sau thông báo XP |
 | Hết ngân sách ngày | `Evolo Daily budget spent` | Số tiền đã tiêu, và gợi ý `evolo config set budget.daily-usd <USD>`; mỗi ngày một lần |
 
 `push_failed` và `skipped` không có thông báo, vì người dùng đã thấy push lỗi, còn đơn vị bị bỏ qua thì không có gì để báo.
@@ -315,6 +324,8 @@ Trình hiện thông báo báo có `body-markup` (hỏi qua `gdbus`) thì tên �
 Không có `body-markup` thì bỏ các thẻ đó, link thành `chữ (địa chỉ)`.
 SwayNotificationCenter 0.12.6 render `<b>`, `<i>`, `<u>` nhưng hiện thẻ `<a>` nguyên văn (2026-10-20).
 Đơn vị bị `reverted` hay `superseded` khi sync chưa có thông báo; `status` vẫn hiện chúng.
+Achievement chỉ được kiểm tra sau một bản ghi `scored`; `~/.evolo/achievements.json` nhớ các bậc đã báo để không báo lại bậc mất rồi mở lại.
+Lần chấm đầu tiên sau khi cập nhật báo gộp mọi bậc ledger đã đạt.
 
 ### `evolo why [<commit>|#<pr>|<unit id>]`
 
@@ -435,7 +446,9 @@ packages/cli/                 # gói npm "evolo"
   src/config.mjs              # [có] ~/.evolo/config.json: review.language, budget.daily-usd
   src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, landedAt, summary.json
   src/stats.mjs               # [có] analytics theo kỳ và streak, cho evolo stats
-  src/views.mjs               # [có] nội dung thông báo, status line, why, stats; tìm đơn vị theo commit, PR hoặc mã
+  src/achievements.mjs        # [có] bậc, tiến độ và ngày mở của achievement; achievements.json nhớ bậc đã báo
+  src/achievements/           # [có] catalog.mjs (achievement hiện), secret.mjs (achievement ẩn), fixtures.mjs (bản ghi giả cho test)
+  src/views.mjs               # [có] nội dung thông báo, status line, why, stats, achievements; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line
   fakes/                      # [có] gh, claude, notify-send và gdbus giả cho test E2E (sandbox.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
