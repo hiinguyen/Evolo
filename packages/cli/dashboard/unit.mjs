@@ -129,10 +129,13 @@ function notScoredPanel(unit) {
   return panel(unit.result ? "Scoring failed" : "Never judged", "", `<div class="panel-body stack">${why}${retry}</div>`);
 }
 
+// The XP the rule gave; once the unit no longer counts (a revert, a force push) it is struck through, as in the head.
 function rulePanel(unit) {
   const xp = unit.result.xp ?? unit.xp;
+  const worth = `<strong>+${formatXp(xp)}</strong> XP`;
+  const shown = unit.status === "scored" ? worth : `<s class="unit-lost" title="No longer counted">${worth}</s> <span class="muted">No longer counted</span>`;
   return panel("Triaged by rule", "", '<div class="panel-body stack">'
-    + `<p class="rule-xp"><strong>+${formatXp(xp)}</strong> XP</p>`
+    + `<p class="rule-xp">${shown}</p>`
     + '<p class="muted">Small documentation edits and lockfile or generated-file updates get fixed scores, without the judge.</p>'
     + "</div>");
 }

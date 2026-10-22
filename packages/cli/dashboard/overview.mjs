@@ -5,6 +5,8 @@
 import { escape, formatUsd, formatXp, hashOf, localDate, localTime, pageHead, plural } from "./html.mjs";
 
 const LATEST_UNITS = 5;
+// The strip of this week's achievements stops here; the Achievements screen has the rest.
+const STRIP_BADGES = 10;
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const numeral = (tier) => ROMAN[tier - 1] ?? String(tier);
 
@@ -101,10 +103,11 @@ function unlockedStrip({ visible, recent }) {
   const shown = highestTiers(recent);
   if (shown.length === 0) return "";
   const tiersOf = (id) => visible.find((achievement) => achievement.id === id)?.tiers ?? [1];
-  const badges = shown.map((entry) => badge({ ...entry, tiers: tiersOf(entry.id) }, entry.tier)).join("");
+  const badges = shown.slice(0, STRIP_BADGES).map((entry) => badge({ ...entry, tiers: tiersOf(entry.id) }, entry.tier)).join("");
+  const more = shown.length > STRIP_BADGES ? `<a class="badges-more" href="#/achievements">+${formatXp(shown.length - STRIP_BADGES)} more</a>` : "";
   return '<section class="panel"><div class="panel-head"><h2>Unlocked this week</h2>'
     + `<span class="muted">${plural(shown.length, "achievement")}</span></div>`
-    + `<div class="panel-body badges">${badges}</div></section>`;
+    + `<div class="panel-body badges">${badges}</div>${more}</section>`;
 }
 
 function latestUnits(units) {

@@ -124,6 +124,15 @@ test("a unit triaged by rule shows the rule and its XP, without rubric bars", ()
   assert.ok(!html.includes("score-bar"));
 });
 
+test("a rule-triaged unit that was reverted strikes its XP through in the rule panel too", () => {
+  const model = withUnit(sampleModel(), RULE, (unit) => ({ ...unit, status: "reverted", previousStatus: "scored", xp: 0 }));
+  const html = renderUnit(model, RULE, "score");
+  assert.match(html, /<p class="rule-xp"><s class="unit-lost"[^>]*><strong>\+10<\/strong> XP<\/s>/);
+  assert.match(textOf(html), /No longer counted/);
+  const live = renderUnit(sampleModel(), RULE, "score");
+  assert.ok(!live.includes('<s class="unit-lost"'));
+});
+
 test("a unit that failed or never reached judging shows why, not a rubric", () => {
   const failed = renderUnit(sampleModel(), FAILED, "score");
   assert.match(textOf(failed), /attempt 1: the judge did not answer in time/);

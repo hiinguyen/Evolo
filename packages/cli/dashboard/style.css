@@ -219,6 +219,17 @@ code {
 .panel-link { border-radius: 4px; color: var(--accent-text); font-size: 13px; font-weight: 500; }
 .panel-link:hover { text-decoration: underline; }
 
+/* The end of a capped strip of badges: a link to the screen that has them all. */
+.badges-more {
+  display: inline-block;
+  margin: 0 16px 16px;
+  border-radius: 4px;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.badges-more:hover { text-decoration: underline; }
+
 .list-panel { overflow: hidden; }
 
 .empty { padding: 32px 16px; color: var(--muted); text-align: center; }
@@ -392,10 +403,16 @@ code {
 
 @media (max-width: 1079px) {
   .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* The Overview's five cards are three over two, each row filling the width; the six figures of Analytics keep 3 + 3. */
+  .overview-top .stat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .overview-top .stat-grid > .stat { grid-column: span 2; }
+  .overview-top .stat-grid > .stat:nth-child(n + 4) { grid-column: span 3; }
 }
 
 @media (max-width: 719px) {
-  .frame { grid-template-columns: minmax(0, 1fr); }
+  /* The bar keeps its own height on a short page: two auto rows would share the leftover height of the frame. */
+  .frame { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
 
   /* Scrolls sideways by touch or trackpad; a scrollbar track under a 48 px bar only looks broken. */
   .sidebar {
@@ -419,7 +436,8 @@ code {
 }
 
 @media (max-width: 559px) {
-  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stat-grid, .overview-top .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-top .stat-grid > .stat, .overview-top .stat-grid > .stat:nth-child(n + 4) { grid-column: auto; }
   /* The summary takes its own line rather than a few letters beside a long push label. */
   .unit-title { flex-direction: column; align-items: stretch; gap: 0; }
   /* On its own line the summary gets two lines before it is cut. */

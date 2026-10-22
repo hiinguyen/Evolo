@@ -335,9 +335,14 @@ test("a record whose result has no facts goes into the model with empty facts", 
   withHome((home) => {
     const odd = { ...unit({ id: "odd", landed: day("2026-10-21"), xp: 0 }), status: "failed" };
     odd.result = { xp: 0 };
-    seed(home, [odd]);
-    const [entry] = dashboardModel(home, NOW).units;
+    const nulled = { ...unit({ id: "nulled", landed: day("2026-10-21"), xp: 0 }), status: "failed" };
+    nulled.result = { xp: 0, facts: null };
+    seed(home, [odd, nulled]);
+    const units = dashboardModel(home, NOW).units;
+    const entry = units.find((candidate) => candidate.id === "odd");
     assert.equal(entry.id, "odd");
     assert.deepEqual(entry.result.facts, { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null });
+    const found = units.find((candidate) => candidate.id === "nulled");
+    assert.deepEqual(found.result.facts, { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null });
   });
 });

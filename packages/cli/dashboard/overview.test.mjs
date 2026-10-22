@@ -145,3 +145,16 @@ test("an empty ledger shows how to get the first score", () => {
   assert.ok(!html.includes("unit-row"));
   assert.ok(!html.includes("Level 7"));
 });
+
+test("the strip shows at most 10 badges in the model's order and ends with a link to the rest", () => {
+  const model = sampleModel();
+  const names = Array.from({ length: 12 }, (_, index) => `Badge${String(index + 1).padStart(2, "0")}`);
+  const recent = names.map((name, index) => ({ id: `id${index}`, name, label: `${name} 1`, description: "", hidden: false, tier: 1, at: "2026-10-20T05:00:00.000Z" }));
+  const html = renderOverview({ ...model, achievements: { ...model.achievements, recent } });
+  assert.equal(count(html, 'class="badge"'), 10);
+  assert.match(textOf(html), /Unlocked this week 12 achievements /);
+  assert.ok(html.includes("Badge10") && !html.includes("Badge11"));
+  assert.match(html, /<a class="badges-more" href="#\/achievements">\+2 more<\/a>/);
+  const exact = renderOverview({ ...model, achievements: { ...model.achievements, recent: recent.slice(0, 10) } });
+  assert.ok(!exact.includes("badges-more"));
+});

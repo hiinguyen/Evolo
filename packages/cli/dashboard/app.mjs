@@ -142,6 +142,18 @@ function copyCommand(button) {
 // The values of the Timeline's selects, keyed by filter.
 const filterValues = (form) => Object.fromEntries([...form.querySelectorAll("select[data-filter]")].map((select) => [select.name, select.value]));
 
+// On a narrow screen the nav scrolls sideways and may hide the open screen's link; scrolling the nav itself, not the
+// page, brings it into view.
+function showActiveNav(root) {
+  const bar = root.querySelector(".sidebar");
+  const current = bar?.querySelector('a[aria-current="page"]');
+  if (!bar || !current || bar.scrollWidth <= bar.clientWidth) return;
+  const barBox = bar.getBoundingClientRect();
+  const box = current.getBoundingClientRect();
+  if (box.left < barBox.left) bar.scrollLeft += box.left - barBox.left;
+  else if (box.right > barBox.right) bar.scrollLeft += box.right - barBox.right;
+}
+
 function startDashboard() {
   const root = document.getElementById("app");
   const model = readModel(root, document.getElementById("model").textContent);
@@ -154,6 +166,7 @@ function startDashboard() {
     const route = parseHash(window.location.hash);
     drawScreen(root, model, route);
     document.title = `${TITLES[route.screen] ?? "Overview"} · Evolo`;
+    showActiveNav(root);
     if (canCopy) for (const button of root.querySelectorAll("button[data-copy]")) button.hidden = false;
   };
   window.addEventListener("hashchange", () => {

@@ -72,6 +72,8 @@
 .fact-row dt { color: var(--muted); }
 .fact-row dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .rule-xp { color: var(--muted); }
+.rule-xp s { text-decoration-thickness: 1px; }
+.rule-xp s strong { color: var(--muted); }
 .rule-xp strong { color: var(--accent-text); font-size: 24px; line-height: 32px; font-weight: 600; }
 
 /* Review: the overview, strengths beside improvements, then the findings, the most severe first. */

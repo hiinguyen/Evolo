@@ -45,14 +45,17 @@ const evaluationOf = (evaluation) =>
   evaluation && { contribution_type: evaluation.contribution_type, summary: evaluation.summary, scores: evaluation.scores, flags: evaluation.flags };
 
 // A record from an older version, or one that ended early, may have no facts: it still goes into the model.
-const factsOf = (facts = {}) => ({
-  diffMode: facts.diffMode,
-  totals: facts.totals ?? null,
-  files: (facts.files ?? []).map(({ path, class: kind, additions, deletions }) => ({ path, class: kind, additions, deletions })),
-  commits: (facts.commits ?? []).map(({ sha, subject, date, revertedBy }) => ({ sha, subject, date, revertedBy })),
-  excluded: (facts.excluded ?? []).map(({ sha, subject, reason }) => ({ sha, subject, reason })),
-  pr: facts.pr ? { number: facts.pr.number, title: facts.pr.title, url: facts.pr.url, mergedAt: facts.pr.mergedAt } : null,
-});
+const factsOf = (given) => {
+  const facts = given ?? {};
+  return {
+    diffMode: facts.diffMode,
+    totals: facts.totals ?? null,
+    files: (facts.files ?? []).map(({ path, class: kind, additions, deletions }) => ({ path, class: kind, additions, deletions })),
+    commits: (facts.commits ?? []).map(({ sha, subject, date, revertedBy }) => ({ sha, subject, date, revertedBy })),
+    excluded: (facts.excluded ?? []).map(({ sha, subject, reason }) => ({ sha, subject, reason })),
+    pr: facts.pr ? { number: facts.pr.number, title: facts.pr.title, url: facts.pr.url, mergedAt: facts.pr.mergedAt } : null,
+  };
+};
 
 // `xp` is what the judge's answer was worth when scored: the unit's own `xp` drops to 0 on a revert or a force push,
 // and the page still shows the XP it lost and the formula that gave it.
