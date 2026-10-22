@@ -398,8 +398,9 @@ Trần theo ngày:
 
 - `evolo config set budget.daily-usd 2.50` đổi trần; nhận số dương, tối đa hai chữ số thập phân.
   Giá trị sửa tay sai trong `config.json` thì dùng mặc định và ghi vào `evolo.log`, không làm hỏng đơn vị nào.
-- Số đã tiêu là tổng `costUsd` của các bản ghi ledger (kể cả `failed`) và các review đã lưu có thời điểm trong ngày theo múi giờ máy, nên không có bộ đếm riêng phải giữ cho khớp.
-  `evolo review` và `evolo evaluate` không bị chặn, vì người dùng tự gọi, nhưng chi phí của `review` được tính vào ngày.
+- Số đã tiêu là tổng `costUsd` của các bản ghi ledger (kể cả `failed`), các review và các performance review (`evolo report`) đã lưu có thời điểm trong ngày theo múi giờ máy, nên không có bộ đếm riêng phải giữ cho khớp.
+  `evolo review`, `evolo report` và `evolo evaluate` không bị chặn, vì người dùng tự gọi, nhưng chi phí của `review` và `report` được tính vào ngày.
+  Bản viết lại bằng `--again` thay bản cũ, nên chi phí của bản cũ không còn được đếm; lần `review` hay `report` thất bại thì không lưu gì, nên chi phí của nó cũng không được đếm.
 - Trần được kiểm tra trước khi gọi judge cho một đơn vị, không kiểm tra giữa chừng: đơn vị bắt đầu dưới trần thì chạy hết, nên một ngày có thể vượt trần tối đa một đơn vị (mỗi lần thử dừng ở $1, tối đa 3 lần thử).
 - Đơn vị bị chặn thì ở lại hàng đợi với `budgetDay` là hôm nay và `notBefore` là nửa đêm; nó không chặn sync, và worker thoát thay vì thức chờ đến sáng.
   Worker đầu tiên của ngày hôm sau (push mới, hoặc hook `SessionStart`) chấm nó; không có gì tự khởi động worker lúc nửa đêm.

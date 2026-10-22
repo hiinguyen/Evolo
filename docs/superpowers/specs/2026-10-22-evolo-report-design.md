@@ -131,6 +131,7 @@ report       đầu ra đã kiểm tra
 
 - Số liệu được lưu cùng lời văn chứ không tính lại khi in, để con số luôn khớp với điều AI đã đọc.
 - `budget.mjs` cộng `costUsd` của report vào chi phí theo ngày (`spentOn`), như review code; report không bị trần chặn, vì người dùng tự gọi nó.
+  Bản viết lại bằng `--again` thay bản cũ cả chi phí, như `evolo review --again`, nên chi phí của bản cũ không còn được đếm.
 
 ## 7. Bản đã lưu bị cũ
 
@@ -169,12 +170,13 @@ validator:
 
 ## 9. Dashboard
 
-- Model thêm `reports`: mỗi bản lưu với `id` (`week/2026-10-19`), `stale` (mục 7), các trường của mục 6 trừ `notes`; khối `numbers` chỉ giữ `xp`, `units`, `level`, `types`, `rubric` của hai kỳ.
-- Màn mới Reports (`#/reports`): lưới thẻ, mới nhất trước theo ngày bắt đầu kỳ; mỗi thẻ có nhãn kỳ, ngày viết, ngôn ngữ, hai dòng đầu của overview, và nhãn "stale" hoặc "in progress" khi đúng.
+- Model thêm `reports`: mỗi bản lưu với `id` (`week/2026-10-19`), `stale` (mục 7), `again` (lệnh viết lại, null với kỳ mà `evolo report` không còn với tới, tức trước kỳ trước), và các trường của mục 6 trừ `basis`; khối `numbers` chỉ giữ `label`, `xp`, `units`, `level` của hai kỳ.
+- Màn mới Reports (`#/reports`): lưới thẻ, mới nhất trước theo ngày bắt đầu kỳ; mỗi thẻ có nhãn kỳ, loại kỳ, ngôn ngữ, ngày viết, ba dòng đầu của overview, và nhãn "Stale" hoặc "In progress" khi đúng.
 - Chi tiết (`#/reports/<kind>/<ngày>`): các ô XP, đơn vị, level (kèm thay đổi so với kỳ trước), overview, việc nổi bật (mỗi mục link tới đơn vị), điểm mạnh và điều cần cải thiện với trích dẫn là link tới tab Score của đơn vị; đơn vị không còn trong model thì trích dẫn là chữ thường.
 - Mục "Reports" mới trong thanh bên, sau "Reviews"; không có bản nào thì màn trống chỉ cách viết (`evolo report`).
 - `evolo report` gọi `refreshDashboard` sau khi lưu, như `evolo review`.
-- Mọi chữ qua `escape`, mọi link dựng bằng `hashOf`, như các màn khác; module `dashboard/reports.mjs` và `dashboard/reports.css` vào `MODULES` và `STYLES`.
+- Mọi chữ qua `escape`, mọi link dựng bằng `hashOf`, như các màn khác; đoạn trong backtick của lời văn được vẽ thành `<code>` sau khi đã escape.
+- Module `dashboard/reports.mjs` và `dashboard/reports.css` vào `MODULES` và `STYLES`.
 
 ## 10. Thay đổi ở lớp judge
 
