@@ -25,7 +25,8 @@ test("today, the last 7 days, the streak, the judge's spending and the queue are
   assert.match(text, /Today \+70 XP /);
   assert.match(text, /Last 7 days \+195 XP /);
   assert.match(text, /Streak 2 workdays longest 3 /);
-  assert.match(text, /Judge today \$0\.33 of \$5\.00 daily limit /);
+  // The day's scorings and review, and the sample's weekly report written that morning ($0.04).
+  assert.match(text, /Judge today \$0\.37 of \$5\.00 daily limit /);
   assert.match(text, /Queue 1 waiting 1 job waiting for tomorrow's budget /);
 });
 

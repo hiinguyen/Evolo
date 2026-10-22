@@ -1,6 +1,6 @@
 // End to end: `evolo report` on units the real worker scored, in the sandbox of sandbox.mjs with the fake judge.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { localDay } from "./ledger.mjs";
@@ -82,4 +82,15 @@ test("a point citing a unit outside the period is dropped and shown, and a repor
   assert.match(failed.stderr, /^ {2}attempt 3: /m);
   assert.equal(box.judgeCalls(), calls + 3);
   assert.equal(readFileSync(reportFile(box), "utf8"), before, "the saved report is kept");
+});
+
+test("the dashboard shows a report once it is written, and is written again with it", async () => {
+  const { box } = await scoredPush();
+  const page = box.evolo("dashboard", "--no-open").trim();
+  assert.doesNotMatch(readFileSync(page, "utf8"), /A fake look back/);
+  box.evolo("report");
+  const html = readFileSync(page, "utf8");
+  assert.match(html, /"reports":\[\{"id":"week\/\d{4}-\d\d-\d\d"/);
+  assert.match(html, /A fake look back at the period\./);
+  assert.equal(readdirSync(join(box.home, "reports", "week")).length, 1);
 });

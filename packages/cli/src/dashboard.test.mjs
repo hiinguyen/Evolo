@@ -16,6 +16,7 @@ import { day, unit as fixtureUnit } from "./achievements/fixtures.mjs";
 import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, renderPage, STYLES, styles, writeDashboard } from "./dashboard.mjs";
 import { listAllRecords, summarize, writeRecords } from "./ledger.mjs";
 import { addJob, updateJob } from "./queue.mjs";
+import { reportData, saveReport, storedReport } from "./report.mjs";
 import { writeReview } from "./review.mjs";
 import { runWorker } from "./worker.mjs";
 import { levelFor } from "./score.mjs";
@@ -233,6 +234,37 @@ test("a stored review is listed with its label, newest first", () => {
     assert.deepEqual(reviews.map((entry) => [entry.key, entry.label]), [["me/a/pr-8", "PR #8"], ["me/a/pr-7", "PR #7"]]);
     assert.equal(reviews[1].language, "en");
     assert.deepEqual(reviews[1].review, base.review);
+  });
+});
+
+// Saves the report of `period` as `evolo report` would, from the ledger of `home` as it is now.
+function saveReportOf(home, period, at) {
+  const data = reportData(listAllRecords(home), [], period, NOW);
+  const report = { overview: "Fine.", highlights: [], strengths: [], improvements: [], flags: [], notes: "" };
+  saveReport(home, storedReport({ data, written: { report, issues: [], judge: { backend: "claude", model: "m" }, costUsd: 0.04, durationMs: 1 }, language: "en", at }));
+}
+
+test("saved reports are listed latest period first, with whether the ledger changed since and how to write them again", () => {
+  withHome((home) => {
+    const records = [unit({ id: "pr-1", kind: "pr", landed: day("2026-10-20") }), unit({ id: "pr-2", kind: "pr", landed: day("2026-10-13") })];
+    seed(home, records);
+    saveReportOf(home, periodOf("week", NOW, 2), "2026-10-12T02:00:00.000Z");
+    saveReportOf(home, periodOf("week", NOW, 0), "2026-10-21T02:00:00.000Z");
+    saveReportOf(home, periodOf("week", NOW, 1), "2026-10-19T02:00:00.000Z");
+    saveReportOf(home, periodOf("month", NOW, 0), "2026-10-21T03:00:00.000Z");
+    let { reports } = dashboardModel(home, NOW);
+    assert.deepEqual(reports.map((report) => report.id), ["week/2026-10-19", "week/2026-10-12", "week/2026-10-05", "month/2026-10-01"]);
+    assert.deepEqual(reports.map((report) => report.again), [
+      "evolo report week --again", "evolo report week --previous --again", null, "evolo report month --again",
+    ]);
+    assert.ok(reports.every((report) => !report.stale));
+    assert.deepEqual(reports[0].numbers.current, { label: "week 2026-10-19..2026-10-25", xp: 50, units: 1, level: levelFor(100).level });
+    assert.equal(reports[0].report.notes, "");
+    assert.equal(reports[0].basis, undefined, "the basis is compared in Node, not shipped to the page");
+
+    writeRecords(home, "me/a", [{ ...records[0], status: "reverted", xp: 0 }, records[1]]);
+    ({ reports } = dashboardModel(home, NOW));
+    assert.deepEqual(reports.map((report) => report.stale), [true, false, false, true]);
   });
 });
 

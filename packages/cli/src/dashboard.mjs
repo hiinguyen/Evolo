@@ -1,6 +1,6 @@
 // `evolo dashboard` (docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md): the model, and the page made from it.
-// The model (section 4) is one plain object holding everything the page shows, built from the ledger, the reviews and
-// the queue. The page is a function of this object alone, so what is left out here can never reach the HTML.
+// The model (section 4) is one plain object holding everything the page shows, built from the ledger, the reviews, the
+// reports and the queue. The page is a function of this object alone, so what is left out here can never reach the HTML.
 // Left out on purpose: PR and commit bodies, the judge's `notes`, `sessionID`, `deniedCommands` and `job` are long and
 // not shown; a locked secret achievement is only counted, so its name and condition are not in the page source either.
 import { createHash } from "node:crypto";
@@ -11,6 +11,7 @@ import { achievementsOf, unlockedIn } from "./achievements.mjs";
 import { dailyBudget } from "./budget.mjs";
 import { landedAt, listAllRecords, localDay, summarize } from "./ledger.mjs";
 import { isParked, listJobs } from "./queue.mjs";
+import { basisOf, listAllReports } from "./report.mjs";
 import { listAllReviews } from "./review.mjs";
 import { CRITERIA, levelFor } from "./score.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "./stats.mjs";
@@ -103,6 +104,38 @@ const reviewOf = (stored) => ({
   issues: stored.issues,
 });
 
+// Only what the Reports screen shows of a period's numbers; the rest stays in the saved report.
+const reportNumbers = ({ period, xp, units, level }) => ({ label: period.label, xp, units, level });
+
+// The command that writes the report of the period starting at `start` again, or null for a period `evolo report` no
+// longer reaches: it writes only this period and the one before it.
+function againCommand(kind, start, now) {
+  const back = [0, 1].find((step) => periodOf(kind, now, step).start.getTime() === Date.parse(start));
+  if (back === undefined) return null;
+  return `evolo report ${kind}${back === 1 ? " --previous" : ""} --again`;
+}
+
+// A saved report as the page shows it, with whether the ledger changed since it was written. The full statistics stay
+// in the file: the Analytics screen has them for the current and the previous periods.
+function reportOf(stored, records, reviews, now) {
+  const period = { start: new Date(stored.start), end: new Date(stored.end) };
+  const { overview, highlights, strengths, improvements, flags, notes } = stored.report;
+  return {
+    id: stored.id, kind: stored.kind, label: stored.label, start: stored.start, end: stored.end, inProgress: stored.inProgress,
+    at: stored.at, language: stored.language, judge: stored.judge, costUsd: stored.costUsd,
+    failed: stored.failed, omitted: stored.omitted, unlocked: stored.unlocked,
+    numbers: { current: reportNumbers(stored.numbers.current), previous: reportNumbers(stored.numbers.previous) },
+    units: stored.units,
+    report: { overview, highlights, strengths, improvements, flags, notes },
+    issues: stored.issues,
+    stale: stored.basis !== basisOf(records, reviews, period),
+    again: againCommand(stored.kind, stored.start, now),
+  };
+}
+
+// The latest period first; of two starting on one day, the report written last.
+const byPeriod = (a, b) => Date.parse(b.start) - Date.parse(a.start) || Date.parse(b.at) - Date.parse(a.at);
+
 function achievementsModel(records, now) {
   const all = achievementsOf(records);
   const secrets = all.filter((achievement) => achievement.hidden);
@@ -118,6 +151,7 @@ export function dashboardModel(home, now = new Date()) {
   const records = listAllRecords(home);
   const summary = summarize(home);
   const jobs = listJobs(home);
+  const reviews = listAllReviews(home);
   return {
     version: 1,
     generatedAt: now.toISOString(),
@@ -133,7 +167,8 @@ export function dashboardModel(home, now = new Date()) {
     }])),
     achievements: achievementsModel(records, now),
     units: records.map(unitOf).sort(newestFirst((unit) => unit.landedAt)),
-    reviews: listAllReviews(home).map(reviewOf).sort(newestFirst((review) => review.at)),
+    reviews: reviews.map(reviewOf).sort(newestFirst((review) => review.at)),
+    reports: listAllReports(home).map((stored) => reportOf(stored, records, reviews, now)).sort(byPeriod),
   };
 }
 
@@ -144,7 +179,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "reports.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
@@ -152,7 +187,7 @@ export function bundle(dir) {
 
 // The stylesheets, joined into the page's one <style> in this order: the tokens, the frame and the shared components
 // first, then each screen's own rules, so a screen's rule wins over a shared one it narrows.
-export const STYLES = ["style.css", "overview.css", "timeline.css", "unit.css", "analytics.css", "achievements.css", "reviews.css"];
+export const STYLES = ["style.css", "overview.css", "timeline.css", "unit.css", "analytics.css", "achievements.css", "reviews.css", "reports.css"];
 
 export function styles(dir) {
   return STYLES.map((name) => readFileSync(join(dir, name), "utf8")).join("\n");

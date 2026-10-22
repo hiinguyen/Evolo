@@ -6,6 +6,7 @@ import { renderAchievements } from "./achievements.mjs";
 import { renderAnalytics } from "./analytics.mjs";
 import { escape, formatXp } from "./html.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderReport, renderReports } from "./reports.mjs";
 import { renderReviews } from "./reviews.mjs";
 import { renderTimeline, timelineHash } from "./timeline.mjs";
 import { renderUnit, UNIT_TABS } from "./unit.mjs";
@@ -19,6 +20,10 @@ const ROUTES = {
   timeline: (rest) => (rest.length === 0 ? {} : null),
   achievements: (rest) => (rest.length === 0 ? {} : null),
   reviews: (rest) => (rest.length === 0 ? {} : null),
+  reports: ([kind, day, ...extra]) => {
+    if (kind === undefined) return {};
+    return PERIOD_KINDS.includes(kind) && /^\d{4}-\d{2}-\d{2}$/.test(day ?? "") && extra.length === 0 ? { id: `${kind}/${day}` } : null;
+  },
   unit: ([owner, name, id, tab = "score", ...extra]) =>
     (id && extra.length === 0 && UNIT_TABS.includes(tab) ? { key: `${owner}/${name}/${id}`, tab } : null),
   analytics: ([kind = "week", which = "current", ...extra]) =>
@@ -60,6 +65,8 @@ const NAV = [
   { screen: "achievements", href: "#/achievements", label: "Achievements",
     icon: icon('<circle cx="8" cy="6" r="3.75"/><path d="M5.75 9 5 14l3-1.5 3 1.5-.75-5"/>') },
   { screen: "reviews", href: "#/reviews", label: "Reviews", icon: icon('<path d="M2.5 3.5h11v7.5H8l-3 2.5V11H2.5z"/>') },
+  { screen: "reports", href: "#/reports", label: "Reports",
+    icon: icon('<path d="M4 1.75h5.5L12.5 4.75v9.5H4z"/><path d="M9.5 1.75v3h3M6.25 8h4M6.25 10.75h4"/>') },
 ];
 
 // The screen whose entry in the sidebar is lit: a unit's details belong to the Timeline, an unknown address shows the
@@ -87,6 +94,7 @@ const SCREENS = {
   analytics: (model, route) => renderAnalytics(model, route.params.kind, route.params.which),
   achievements: (model) => renderAchievements(model),
   reviews: (model, route) => renderReviews(model, route.query),
+  reports: (model, route) => (route.params.id ? renderReport(model, route.params.id) : renderReports(model)),
 };
 
 export function renderRoute(model, route) {
@@ -95,7 +103,7 @@ export function renderRoute(model, route) {
   return `<p class="notice" role="status">Nothing at this address. Here is the overview.</p>${renderOverview(model)}`;
 }
 
-const TITLES = { overview: "Overview", timeline: "Timeline", unit: "Unit", analytics: "Analytics", achievements: "Achievements", reviews: "Reviews" };
+const TITLES = { overview: "Overview", timeline: "Timeline", unit: "Unit", analytics: "Analytics", achievements: "Achievements", reviews: "Reviews", reports: "Reports" };
 
 // What `root` shows when the page cannot be drawn: a plain message built from nothing but the error, so it appears even
 // when the model is unreadable or the frame itself fails, with a way back to the overview.

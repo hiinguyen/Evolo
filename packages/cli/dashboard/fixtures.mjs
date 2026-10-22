@@ -8,7 +8,9 @@ import { join } from "node:path";
 import { dashboardModel } from "../src/dashboard.mjs";
 import { writeRecords } from "../src/ledger.mjs";
 import { addJob, updateJob } from "../src/queue.mjs";
+import { reportData, saveReport, storedReport } from "../src/report.mjs";
 import { writeReview } from "../src/review.mjs";
+import { periodOf } from "../src/stats.mjs";
 
 // A Wednesday; its week started on Monday 2026-10-19.
 export const SAMPLE_NOW = new Date("2026-10-21T13:00:00+07:00");
@@ -141,6 +143,7 @@ function build() {
   try {
     for (const repo of [EVOLO, ORGS]) writeRecords(home, repo, RECORDS.filter((entry) => entry.repo === repo));
     writeReview(home, REVIEW);
+    saveReport(home, sampleReport());
     addJob(home, { type: "push", repo: EVOLO, from: "b31f0c4", to: "c7d8e9f" });
     const parked = addJob(home, { type: "pr", repo: ORGS, number: 2 });
     updateJob(home, { ...parked, budgetDay: "2026-10-21" });
@@ -148,6 +151,25 @@ function build() {
   } finally {
     rmSync(home, { recursive: true, force: true });
   }
+}
+
+// The report of the sample's week as `evolo report` saves it, written in the morning of SAMPLE_NOW from the same data,
+// so it is not stale: the agent world's PR and Evolo's time fix are its highlights.
+const HIGHLIGHT_TEXTS = ["It laid the agent world's foundation, with a deterministic engine.", "It fixed the times every view shows."];
+
+function sampleReport() {
+  const data = reportData(RECORDS, [REVIEW], periodOf("week", SAMPLE_NOW), SAMPLE_NOW);
+  const [first, second] = data.input.highlights;
+  const report = {
+    overview: "A week split between Evolo's views and the agent world's first phase, with tests beside most of the code.",
+    highlights: data.input.highlights.map((unit, index) => ({ unit, text: HIGHLIGHT_TEXTS[index] })),
+    strengths: [{ text: "Kept each change small and tested.", units: [first, second] }],
+    improvements: [{ text: "The tick loop mixes scheduling with state updates: split them before the next phase.", units: [first] }],
+    flags: [],
+    notes: "",
+  };
+  const written = { report, issues: [], judge: JUDGE, costUsd: 0.04, durationMs: 9000 };
+  return storedReport({ data, written, language: "en", at: local("2026-10-21", "08:00") });
 }
 
 let built = null;
