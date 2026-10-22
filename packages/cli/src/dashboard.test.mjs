@@ -268,6 +268,19 @@ test("saved reports are listed latest period first, with whether the ledger chan
   });
 });
 
+test("a saved report in a shape the page cannot read is left out and logged, and the rest of the page is drawn", () => {
+  withHome((home) => {
+    seed(home, [unit({ id: "pr-1", kind: "pr", landed: day("2026-10-20") })]);
+    saveReportOf(home, periodOf("week", NOW, 0), "2026-10-21T02:00:00.000Z");
+    mkdirSync(join(home, "reports", "month"), { recursive: true });
+    writeFileSync(join(home, "reports", "month", "2026-10-01.json"), JSON.stringify({ id: "month/2026-10-01", report: null }));
+    const { reports, units } = dashboardModel(home, NOW);
+    assert.deepEqual(reports.map((report) => report.id), ["week/2026-10-19"]);
+    assert.equal(units.length, 1);
+    assert.match(readFileSync(join(home, "evolo.log"), "utf8"), /dashboard: left out the report month\/2026-10-01: /);
+  });
+});
+
 test("jobs parked on today's budget are counted apart from the waiting ones", () => {
   withHome((home) => {
     const parked = addJob(home, { type: "pr", repo: "me/a" });

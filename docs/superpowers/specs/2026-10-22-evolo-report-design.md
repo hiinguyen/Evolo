@@ -40,8 +40,9 @@ evolo report [week|month|quarter] [--previous] [--again] [--judge claude|opencod
 - Kỳ giống `evolo stats`: kỳ lịch theo giờ địa phương, tuần từ thứ Hai, mặc định `week`, `--previous` là kỳ ngay trước.
 - Có bản đã lưu cho kỳ đó và không có `--again`: in bản đã lưu, không gọi judge.
 - Không có bản lưu, hoặc có `--again`: dựng đầu vào, gọi judge, kiểm tra, lưu, ghi lại dashboard nếu file dashboard đã có, rồi in.
-- Kỳ không có đơn vị `scored` nào: in "no scored contributions in <kỳ>: nothing to review", không gọi judge, không lưu.
-- Judge thất bại: in lý do từng lần thử ra stderr, thoát mã 1, không lưu gì; bản cũ (nếu có) được giữ.
+- Kỳ không có đơn vị `scored` nào: in "no scored contributions in <kỳ>: nothing to review" (kèm gợi ý `evolo retry` khi kỳ có đơn vị `failed`), không gọi judge, không lưu.
+- Judge thất bại: in lý do từng lần thử ra stderr, ghi chi phí của các lần thử vào `evolo.log`, thoát mã 1, không lưu gì; bản cũ (nếu có) được giữ.
+- Dashboard bỏ qua (và ghi log) một file report không đọc được, để nó không làm hỏng cả trang.
 - Tiến trình in ra stderr như `evolo review` (`writing the report of week 2026-10-19..2026-10-25 in vi with claude-sonnet-5-5...`).
 
 ## 4. Đầu vào của AI (code tính)
@@ -101,7 +102,7 @@ Schema `judge/report.schema.json`:
 - Mỗi điểm mạnh và điều cần cải thiện phải trích ít nhất một đơn vị; mỗi trích dẫn phải là `key` trong `units` hoặc `reverted` của đầu vào.
   Mục trích tới đơn vị không có trong đầu vào, hoặc không trích gì, bị bỏ và ghi vào `issues`, giống cách `evolo review` bỏ vấn đề ở đường dẫn không có thật.
   Trích dẫn lặp trong một mục được gộp.
-- Không có con số: `overview` và mọi `text` không được chứa chữ số (`\p{Nd}`) ngoài đoạn code trong dấu backtick.
+- Không có con số: `overview` và mọi `text` không được chứa chữ số (`\p{Nd}`) ngoài đoạn code trong dấu backtick, và đoạn code có chữ số phải là một cái tên: bắt đầu bằng chữ cái, và số đứng riêng chỉ được là từ cuối (`Node 20`, `SHA-256` được; `100 XP`, `about 40 lines` không).
   Vi phạm thì không hợp lệ và thử lại; prompt dặn viết tên kỹ thuật có số (`SHA-256`, `Node 20`) trong backtick, và gọi đơn vị bằng lời, không bằng số PR.
   Luật này thô nhưng tất định, và chặn đúng thứ cần chặn: AI tự nêu XP, phần trăm hay số dòng.
 - `flags` chỉ giữ `suspected_injection`; có cờ đó thì bản in có dòng cảnh báo, như `evolo review`.
@@ -135,7 +136,7 @@ report       đầu ra đã kiểm tra
 
 ## 7. Bản đã lưu bị cũ
 
-- `basis` là SHA-256 của các dòng `key status xp` của mọi bản ghi có `landedAt` trong kỳ (mọi trạng thái), cộng `key at` của review code của các đơn vị đó, đã xếp thứ tự.
+- `basis` là SHA-256 của các dòng `key status xp` của mọi bản ghi có `landedAt` trong kỳ và trong kỳ trước (mọi trạng thái, vì bản in so với kỳ trước), `key at` của review code của các đơn vị trong kỳ, và nhãn các bậc achievement mở trong kỳ, đã xếp thứ tự.
 - Khi in bản đã lưu, `evolo report` tính lại `basis`; khác thì in thêm "the ledger changed since this report was written: `evolo report <kind>[ --previous] --again` writes it again".
 - Dashboard cũng tính lại và hiện cùng thông báo.
 - Không tự viết lại: viết lại tốn tiền, nên người dùng quyết định.

@@ -431,7 +431,9 @@ async function report(argv) {
   }
   const data = reportData(records, reviews, period, now);
   if (data.input.units.length === 0) {
-    console.log(`no scored contributions in ${period.label}: nothing to review`);
+    const failed = data.failed === 0 ? ""
+      : `; ${data.failed} unit${data.failed === 1 ? "" : "s"} failed to score: \`evolo retry\` scores ${data.failed === 1 ? "it" : "them"} again`;
+    console.log(`no scored contributions in ${period.label}: nothing to review${failed}`);
     return;
   }
   const language = reportLanguage(home);
@@ -442,6 +444,8 @@ async function report(argv) {
     onProgress: (tool, detail) => console.error(terminalSafe(`  ${tool} ${String(detail).slice(0, 100)}`)),
   });
   if (!written.ok) {
+    // Nothing is saved, so the log is the only record of what the attempts cost.
+    logLine(home, `report of ${period.label} failed after $${(written.costUsd ?? 0).toFixed(2)}: ${written.failures.at(-1) ?? ""}`);
     fail(`report failed${written.unavailable ? " (the judge could not be reached)" : ""}:\n${written.failures.map((failure) => `  ${failure}`).join("\n")}`);
   }
   const stored = storedReport({ data, written, language, at: new Date().toISOString() });

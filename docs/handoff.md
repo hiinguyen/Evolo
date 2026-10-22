@@ -109,7 +109,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 338 test, đều pass (40 test E2E, khoảng 45 giây); CI chạy cùng lệnh
+cd packages/cli && npm test                      # 341 test, đều pass (41 test E2E, khoảng 45 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -290,8 +290,10 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Chạy thật (2026-10-22) với `claude` thật trên bản sao `~/.evolo`: tuần 2026-10-19..25, 8 đơn vị, $0.07, một lần thử, mọi trích dẫn hợp lệ, không có chữ số; lời nhận xét cụ thể (PR quá lớn và gộp việc không liên quan, AI-orgs thiếu test runner chuẩn); in lại mất 0,09 giây, không gọi judge; không còn thư mục tạm.
 - Xem màn Reports trong Chrome trên bản sao đó: sáng và tối, 360 px và 900 px, console sạch, không có request mạng.
   Từ đó sửa: nhãn kỳ bị ngắt giữa ngày trên thẻ (ngày viết chuyển xuống dòng meta), và backtick trong lời văn giờ được vẽ thành code.
-- Test: `src/report.test.mjs` (15), `src/report.e2e.test.mjs` (5), `dashboard/reports.test.mjs` (9), thêm test ở judges, config, budget, views, dashboard và router; đã kiểm tra test bắt được lỗi khi gỡ kiểm trích dẫn, luật chữ số (cả chữ số không phải ASCII và miễn trừ backtick), `basis`, kiểm việc nổi bật và lọc đơn vị triage bằng luật.
-- Giới hạn đã biết: `--again` thay bản cũ cả chi phí, và lần viết thất bại không lưu gì, nên chi phí của chúng không vào trần ngày (giống `evolo review`); `evolo report` chỉ viết được kỳ này và kỳ trước, nên bản cũ hơn bị cũ thì dashboard không đưa lệnh viết lại.
+- Test: `src/report.test.mjs` (16), `src/report.e2e.test.mjs` (6), `dashboard/reports.test.mjs` (9), thêm test ở judges, config, budget, views, dashboard và router; đã kiểm tra test bắt được lỗi khi gỡ kiểm trích dẫn, luật chữ số (cả chữ số không phải ASCII và miễn trừ backtick), `basis`, kiểm việc nổi bật và lọc đơn vị triage bằng luật.
+- Agent review cả nhánh: không có CRITICAL hay HIGH; đã sửa 2 MEDIUM (`basis` bỏ sót kỳ trước và achievement mà bản in có hiện; số đếm bọc trong backtick lọt qua luật chữ số) và 3 LOW (chi phí lần viết thất bại giờ vào `evolo.log`; kỳ chỉ có đơn vị `failed` gợi ý `evolo retry`; một file report hỏng không còn làm hỏng cả dashboard), mỗi điểm có test.
+  Agent không chạy được claude thật với `--tools Read`; lần chạy thật ở trên đã xác nhận structured output vẫn chạy với tổ hợp đó.
+- Giới hạn đã biết: `--again` thay bản cũ cả chi phí, và lần viết thất bại không lưu gì, nên chi phí của chúng không vào trần ngày (giống `evolo review`), chỉ có trong log; `evolo report` chỉ viết được kỳ này và kỳ trước, nên bản cũ hơn bị cũ thì dashboard không đưa lệnh viết lại.
 
 ### Git
 

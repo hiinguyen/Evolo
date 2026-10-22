@@ -117,8 +117,8 @@ function againCommand(kind, start, now) {
 
 // A saved report as the page shows it, with whether the ledger changed since it was written. The full statistics stay
 // in the file: the Analytics screen has them for the current and the previous periods.
-function reportOf(stored, records, reviews, now) {
-  const period = { start: new Date(stored.start), end: new Date(stored.end) };
+function reportOf(stored, { records, reviews, achievements, now }) {
+  const period = { kind: stored.kind, start: new Date(stored.start), end: new Date(stored.end) };
   const { overview, highlights, strengths, improvements, flags, notes } = stored.report;
   return {
     id: stored.id, kind: stored.kind, label: stored.label, start: stored.start, end: stored.end, inProgress: stored.inProgress,
@@ -128,9 +128,22 @@ function reportOf(stored, records, reviews, now) {
     units: stored.units,
     report: { overview, highlights, strengths, improvements, flags, notes },
     issues: stored.issues,
-    stale: stored.basis !== basisOf(records, reviews, period),
+    stale: stored.basis !== basisOf(records, reviews, period, achievements),
     again: againCommand(stored.kind, stored.start, now),
   };
+}
+
+// Every saved report the page can show. A file in another shape (edited by hand, or from another version) is left out
+// and logged, so it cannot keep the rest of the page from being written.
+function reportsModel(home, context) {
+  return listAllReports(home).flatMap((stored) => {
+    try {
+      return [reportOf(stored, context)];
+    } catch (error) {
+      logLine(home, `dashboard: left out the report ${stored.id ?? "without an id"}: ${error.message}`);
+      return [];
+    }
+  });
 }
 
 // The latest period first; of two starting on one day, the report written last.
@@ -168,7 +181,7 @@ export function dashboardModel(home, now = new Date()) {
     achievements: achievementsModel(records, now),
     units: records.map(unitOf).sort(newestFirst((unit) => unit.landedAt)),
     reviews: reviews.map(reviewOf).sort(newestFirst((review) => review.at)),
-    reports: listAllReports(home).map((stored) => reportOf(stored, records, reviews, now)).sort(byPeriod),
+    reports: reportsModel(home, { records, reviews, achievements: achievementsOf(records), now }).sort(byPeriod),
   };
 }
 

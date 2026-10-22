@@ -106,6 +106,15 @@ test("a period with many units keeps the most impactful sixty, and says how many
   assert.equal(input.highlights.length, 5);
 });
 
+test("the basis changes with the previous period's units and the achievements unlocked, which the report also shows", () => {
+  const records = [unit({ id: "pr-1" })];
+  const basis = basisOf(records, [], WEEK);
+  const lastWeek = unit({ id: "pr-0", landed: day("2026-10-14") });
+  assert.notEqual(basisOf([...records, lastWeek], [], WEEK), basis, "the comparison with the week before changes");
+  assert.notEqual(basisOf([...records, lastWeek], [], WEEK), basisOf([...records, { ...lastWeek, xp: 75 }], [], WEEK));
+  assert.equal(basisOf([...records, unit({ id: "pr-next", landed: day("2026-10-27") })], [], WEEK), basis, "a later unit unlocks nothing in it");
+});
+
 test("the basis changes with the status, XP or review of a unit of the period, and with nothing else", () => {
   const records = [unit({ id: "pr-1" }), unit({ id: "pr-2" }), unit({ id: "pr-old", landed: day("2026-10-10") })];
   const reviews = [review("pr-1")];
@@ -118,7 +127,8 @@ test("the basis changes with the status, XP or review of a unit of the period, a
   assert.notEqual(basisOf([...records, unit({ id: "pr-3" })], reviews, WEEK), basis);
   assert.notEqual(basisOf(records, [review("pr-1", "me/app", day("2026-10-22"))], WEEK), basis);
   assert.notEqual(basisOf(records, [], WEEK), basis);
-  assert.equal(basisOf([first, second, { ...old, xp: 999 }], reviews, WEEK), basis, "a unit of another period");
+  assert.equal(basisOf([first, second, { ...old, summary: "Edited." }], reviews, WEEK), basis, "a unit long before the period");
+  assert.notEqual(basisOf([first, second, { ...old, xp: 999 }], reviews, WEEK), basis, "it moves the XP tiers unlocked this week");
   assert.equal(basisOf(records, [...reviews, review("pr-old")], WEEK), basis, "a review of another period's unit");
 });
 
@@ -206,7 +216,11 @@ test("a digit anywhere in the prose outside inline code rejects the report", () 
     assert.equal(checked.ok, false, JSON.stringify(overrides));
     assert.match(checked.problems.join(), /digit/);
   }
-  assert.equal(validateReport(answer({ overview: "Moved to `Node 20` and `SHA-256`." }), INPUT).ok, true);
+  assert.equal(validateReport(answer({ overview: "Moved to `Node 20` and `SHA-256`, with `i18n` and `utf-8`." }), INPUT).ok, true);
+  // Inline code names a thing; a count in it is still a number the writer made up.
+  for (const overview of ["You earned `100 XP`.", "It touched `12 files`.", "About `3` reverts.", "Only `about 40 lines`."]) {
+    assert.equal(validateReport(answer({ overview }), INPUT).ok, false, overview);
+  }
 });
 
 test("only known flags are kept, and missing notes become empty", () => {

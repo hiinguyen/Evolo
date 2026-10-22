@@ -75,15 +75,19 @@ const numbersInput = ({ period, xp, units, level, types, rubric, tests, reverts,
 // computeStats with its period's dates as ISO text, as the saved report and the dashboard hold it.
 const serializable = (stats) => ({ ...stats, period: { ...stats.period, start: stats.period.start.toISOString(), end: stats.period.end.toISOString() } });
 
-// A fingerprint of everything a report of `period` is written from: each unit that landed in it (any status) with its
-// status and XP, and when each of their code reviews was written. A saved report whose basis no longer matches was
-// written from other data, and says so.
-export function basisOf(records, reviews, period) {
+// A fingerprint of everything a report of `period` (stats.mjs's periodOf) is written from and shows: each unit that
+// landed in it or in the period before (any status) with its status and XP, when each code review of the period's units
+// was written, and the achievement tiers unlocked in it. A saved report whose basis no longer matches was written from
+// other data, and says so. `achievements` is achievementsOf(records), passed in by a caller that already has it.
+export function basisOf(records, reviews, period, achievements = achievementsOf(records)) {
   const inPeriod = records.filter(isWithin(period));
+  const before = records.filter(isWithin(periodOf(period.kind, period.start, 1)));
   const keys = new Set(inPeriod.map(keyOf));
   const lines = [
     ...inPeriod.map((record) => `${keyOf(record)} ${record.status} ${record.xp}`),
+    ...before.map((record) => `before ${keyOf(record)} ${record.status} ${record.xp}`),
     ...reviews.filter((stored) => keys.has(`${stored.repo}/${stored.unitId}`)).map((stored) => `${stored.repo}/${stored.unitId} review ${stored.at}`),
+    ...unlockedIn(achievements, period).map(({ label }) => `unlocked ${label}`),
   ].sort();
   return createHash("sha256").update(lines.join("\n")).digest("hex");
 }
@@ -140,8 +144,19 @@ function checkShape(raw) {
   ];
 }
 
-// A digit outside `inline code`: the writer may name `Node 20`, but every number the report shows comes from code.
-const hasDigit = (text) => /\p{Nd}/u.test(text.replace(/`[^`]*`/g, ""));
+// Inline code may name a thing with a digit in it (`Node 20`, `SHA-256`, `i18n`): it starts with a letter, and a bare
+// number can only be its last word. `100 XP` or `about 40 lines` in backticks is still a count the writer made up.
+const isName = (code) => {
+  const words = code.trim().split(/\s+/);
+  return /^\p{L}/u.test(code.trim()) && words.slice(0, -1).every((word) => !/^\p{Nd}+$/u.test(word));
+};
+
+// A digit outside inline code, or inline code with a digit that does not name a thing: every number the report shows
+// comes from code.
+const hasDigit = (text) => {
+  const spans = [...text.matchAll(/`([^`]*)`/g)].map(([, code]) => code);
+  return /\p{Nd}/u.test(text.replace(/`[^`]*`/g, "")) || spans.some((code) => /\p{Nd}/u.test(code) && !isName(code));
+};
 
 function digitProblems(raw) {
   const prose = [
@@ -150,7 +165,7 @@ function digitProblems(raw) {
     ...raw.strengths.map((point, index) => [`strengths[${index}]`, point.text]),
     ...raw.improvements.map((point, index) => [`improvements[${index}]`, point.text]),
   ];
-  return prose.filter(([, text]) => hasDigit(text)).map(([field, text]) => `${field} has a digit outside inline code: "${text}"`);
+  return prose.filter(([, text]) => hasDigit(text)).map(([field, text]) => `${field} has a digit outside inline code or a number in it: "${text}"`);
 }
 
 // The points of one list whose citations are all units of the period, each citation once; the rest are recorded.

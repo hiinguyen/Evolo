@@ -52,6 +52,19 @@ test("a period without scored units has nothing to review and costs nothing", as
   assert.equal(box.evoloRun("report", "year").status, 2);
 });
 
+test("a period whose only units failed to score says how to score them, and costs nothing", async () => {
+  const box = makeSandbox();
+  box.evolo("init", "--remote", "origin");
+  box.setClaudeInvalid(true);
+  const sha = box.commit("feat: start", { "app.js": lines(30, "app") });
+  box.push(["origin", "main"]);
+  await box.settled(`push-root-${short(sha)}`, ["failed"]);
+  const calls = box.judgeCalls();
+  assert.equal(box.evolo("report"),
+    `no scored contributions in ${periodOf("week").label}: nothing to review; 1 unit failed to score: \`evolo retry\` scores it again\n`);
+  assert.equal(box.judgeCalls(), calls);
+});
+
 test("a saved report says when the ledger changed since, until it is written again", async () => {
   const { box } = await scoredPush();
   box.evolo("report");
@@ -82,6 +95,7 @@ test("a point citing a unit outside the period is dropped and shown, and a repor
   assert.match(failed.stderr, /^ {2}attempt 3: /m);
   assert.equal(box.judgeCalls(), calls + 3);
   assert.equal(readFileSync(reportFile(box), "utf8"), before, "the saved report is kept");
+  assert.match(readFileSync(join(box.home, "evolo.log"), "utf8"), /report of week \S+ failed after \$0\.03: /, "what it cost is on record");
 });
 
 test("the dashboard shows a report once it is written, and is written again with it", async () => {
