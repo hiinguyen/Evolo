@@ -76,7 +76,7 @@ export function createClaudeJudge({ model = DEFAULT_CLAUDE_MODEL, budgetUsd = DE
     model,
     async judge({ workDir, inputs, task, spec = SCORE_TASK, onProgress }) {
       const inputList = Object.values(inputs).map((path) => `- ${path}`).join("\n");
-      const args = claudeArgs({ model, budgetUsd, inputsDir: dirname(inputs.facts), task: `${task}\n\nInput files:\n${inputList}`, spec });
+      const args = claudeArgs({ model, budgetUsd, inputsDir: dirname(Object.values(inputs)[0]), task: `${task}\n\nInput files:\n${inputList}`, spec });
       // EVOLO_JUDGE marks every process below this one, so Evolo's git hooks ignore anything a judge might trigger.
       const env = { ...process.env, EVOLO_JUDGE: "1" };
       const onEvent = (event) => toolUses(event).forEach((block) => onProgress?.(...describeTool(block)));

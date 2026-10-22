@@ -16,6 +16,12 @@ export const CONFIG_KEYS = {
     check: (value) => value.length <= LANGUAGE_MAX_LENGTH && LANGUAGE_PATTERN.test(value),
     rule: `a language name or code: letters, spaces and "-", at most ${LANGUAGE_MAX_LENGTH} characters`,
   },
+  "report.language": {
+    default: "en",
+    describe: "the language performance reviews (evolo report) are written in, as a name or code (vi, Vietnamese, pt-BR)",
+    check: (value) => value.length <= LANGUAGE_MAX_LENGTH && LANGUAGE_PATTERN.test(value),
+    rule: `a language name or code: letters, spaces and "-", at most ${LANGUAGE_MAX_LENGTH} characters`,
+  },
   "budget.daily-usd": {
     default: "5",
     describe: "the most the background worker spends on the judge per local day, in USD; the rest waits for the next day",

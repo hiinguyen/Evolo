@@ -138,6 +138,13 @@ test("stats show a period against the previous one, with changes only where the 
   ]);
 });
 
+test("stats without a streak leave its line out", () => {
+  const lines = formatStats(periodStats("2026-10"), null, null);
+  assert.equal(lines[1], "300 XP  3 units  level 5  judge $0.42");
+  assert.match(lines[2], /^types {5}/);
+  assert.ok(lines.every((line) => !line.startsWith("streak")));
+});
+
 test("stats without a previous period, or for an empty one, show no changes", () => {
   const empty = periodStats("2026-09", { units: 0, xp: 0, rubric: { n: 0, averages: {} }, tests: { touched: 0, eligible: 0 } });
   const lines = formatStats(periodStats("2026-10"), empty, { current: 1, longest: 1 });
