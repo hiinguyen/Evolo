@@ -97,7 +97,7 @@ Achievement ẩn chưa mở chỉ có mặt dưới dạng con số `secretsHidd
 | Lúc | Điều kiện |
 |---|---|
 | `evolo dashboard` | Luôn sinh lại và luôn in đường dẫn; trừ khi có `--no-open`, còn chạy `xdg-open` tách rời (lệnh trả về ngay, không có `xdg-open` cũng không báo lỗi) |
-| Worker xong một job hoặc một lần sync | Chỉ khi `dashboard.html` đã tồn tại; sinh lại cả khi sync không đổi gì, vì rẻ và làm mới ảnh chụp hàng đợi |
+| Worker xong job cuối của một loạt job, hoặc một lần sync | Chỉ khi `dashboard.html` đã tồn tại; sinh lại cả khi sync không đổi gì, để làm mới ảnh chụp hàng đợi; không sinh lại giữa hai job liền nhau vì 5.000 bản ghi mất hơn 1 giây |
 | `evolo review` lưu một review | Chỉ khi `dashboard.html` đã tồn tại |
 
 - "Đã tồn tại" nghĩa là người dùng đã mở dashboard ít nhất một lần; Evolo không tự tạo một file vài MB mà người dùng chưa cần.
