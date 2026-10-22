@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { BASE_XP, CRITERIA } from "../score.mjs";
 import { claudeArgs, readClaudeRun } from "./claude.mjs";
-import { FatalJudgeError, JudgeUnavailableError, REVIEW_TASK, SCORE_TASK, taskPrompt } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, REPORT_TASK, REVIEW_TASK, SCORE_TASK, taskPrompt } from "./common.mjs";
+import { agentFrontmatter } from "./opencode.mjs";
 
 const answer = { contribution_type: "bugfix" };
 const run = (events, overrides = {}) => ({ events, timedOut: false, code: 0, stderr: "", ...overrides });
@@ -80,4 +81,28 @@ test("every task prompt carries the shared input and trust rules", () => {
     assert.match(prompt, /# Inputs/);
     assert.doesNotMatch(prompt, /\{\{shared\}\}/);
   }
+});
+
+test("a task without commands runs with the file-reading tool alone, and may run no command", () => {
+  const args = claudeArgs({ model: "m", budgetUsd: 1, inputsDir: "/in", task: "t", spec: REPORT_TASK });
+  assert.equal(args[args.indexOf("--tools") + 1], "Read");
+  assert.deepEqual(JSON.parse(args[args.indexOf("--settings") + 1]).permissions.allow, []);
+  assert.equal(args[args.indexOf("--append-system-prompt") + 1], taskPrompt(REPORT_TASK));
+  assert.equal(args[args.indexOf("--json-schema") + 1], readFileSync(REPORT_TASK.schemaPath, "utf8"));
+});
+
+test("the opencode agent of a task may run exactly the task's commands", () => {
+  const bashRules = (spec) => agentFrontmatter(spec).split("  bash:\n")[1].split("\n---")[0].split("\n");
+  assert.deepEqual(bashRules(REPORT_TASK), ['    "*": deny']);
+  assert.ok(bashRules(SCORE_TASK).includes('    "git log*": allow'));
+  assert.equal(bashRules(SCORE_TASK)[0], '    "*": deny');
+});
+
+test("the report prompt has its own inputs and trust rules, and forbids numbers", () => {
+  const prompt = taskPrompt(REPORT_TASK);
+  assert.match(prompt, /# Inputs/);
+  assert.match(prompt, /# Trust rules/);
+  assert.match(prompt, /period\.json/);
+  assert.match(prompt, /digit/);
+  assert.doesNotMatch(prompt, /change\.diff/);
 });

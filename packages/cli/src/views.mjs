@@ -183,11 +183,12 @@ function sparkline(counts) {
 
 // `evolo stats`: the lines for stats.mjs's computeStats of a period, against the previous period when it has data,
 // and the streak. Repository names and paths come from the ledger, so the lines are printed without control characters.
-// `unlocks` are the achievement tiers reached in the period (achievements.mjs's unlockedIn).
+// `unlocks` are the achievement tiers reached in the period (achievements.mjs's unlockedIn). A null `streak` leaves its
+// line out: a performance review shows a period as it was, and the streak is as of today.
 export function formatStats(current, previous, streak, unlocks = []) {
   const header = [
     previous ? `${current.period.label}  (vs ${previous.period.label})` : current.period.label,
-    `streak ${plural(streak.current, "workday")} (longest ${streak.longest})`,
+    ...(streak ? [`streak ${plural(streak.current, "workday")} (longest ${streak.longest})`] : []),
     ...(unlocks.length > 0 ? [row("unlocked", unlocks.map(({ label }) => label).join(" · "))] : []),
   ];
   if (current.units === 0) return [...header, "no contributions"].map(terminalSafe);

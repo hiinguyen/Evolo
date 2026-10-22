@@ -1,15 +1,14 @@
-// Judge backend that runs a task (scoring or review) as an opencode agent.
+// Judge backend that runs a task (scoring, review or report) as an opencode agent.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JudgeUnavailableError, READ_ONLY_COMMANDS, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
+import { JudgeUnavailableError, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
 
-// Deny everything (including MCP tools from the user's global config), then allow read-only inspection.
-function agentFrontmatter(spec) {
-  const bashRules = READ_ONLY_COMMANDS.map((command) => `    "${command}*": allow`).join("\n");
+// Deny everything (including MCP tools from the user's global config), then allow reading and the task's commands.
+export function agentFrontmatter(spec) {
   return [
     "---",
-    `description: Evolo ${spec.name}: evaluates one git contribution and returns JSON. Read-only.`,
+    `description: Evolo ${spec.name}: reads its inputs and returns JSON. Read-only.`,
     "mode: primary",
     "temperature: 0.1",
     "steps: 30",
@@ -21,7 +20,7 @@ function agentFrontmatter(spec) {
     "  list: allow",
     "  bash:",
     '    "*": deny',
-    bashRules,
+    ...spec.commands.map((command) => `    "${command}*": allow`),
     "---",
     "",
   ].join("\n");
@@ -65,7 +64,7 @@ export function createOpencodeJudge({ model } = {}) {
   return {
     backend: "opencode",
     model: model ?? "opencode default",
-    async judge({ checkoutDir, inputs, task, spec = SCORE_TASK, onProgress }) {
+    async judge({ workDir, inputs, task, spec = SCORE_TASK, onProgress }) {
       const configDir = writeAgentConfig(spec);
       try {
         const args = [
@@ -75,11 +74,11 @@ export function createOpencodeJudge({ model } = {}) {
           "--", task,
         ];
         // Ignore any .opencode config inside the evaluated repo so it cannot swap the agent or its permissions.
-        // opencode resolves the project from PWD, so it must point at the checkout, not at our own cwd.
-        const env = { ...process.env, PWD: checkoutDir, OPENCODE_CONFIG_DIR: configDir, OPENCODE_DISABLE_PROJECT_CONFIG: "1" };
+        // opencode resolves the project from PWD, so it must point at the work dir, not at our own cwd.
+        const env = { ...process.env, PWD: workDir, OPENCODE_CONFIG_DIR: configDir, OPENCODE_DISABLE_PROJECT_CONFIG: "1" };
         const onEvent = (event) => event.type === "tool_use" && onProgress?.(...describeTool(event));
         // `opencode run` does not exit after an error event, so it is stopped as soon as one arrives.
-        const run = await runJsonl("opencode", args, { cwd: checkoutDir, env, onEvent, isFatal: (event) => event.type === "error" });
+        const run = await runJsonl("opencode", args, { cwd: workDir, env, onEvent, isFatal: (event) => event.type === "error" });
         return readOpencodeRun(run);
       } finally {
         rmSync(configDir, { recursive: true, force: true });

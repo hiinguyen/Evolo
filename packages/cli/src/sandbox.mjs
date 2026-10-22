@@ -75,6 +75,9 @@ export function makeSandbox() {
   const setNotifyMarkup = (markup) => (markup ? writeFileSync(`${notifyLog}.markup`, "") : rmSync(`${notifyLog}.markup`, { force: true }));
   const setClaudeSummary = (summary) => writeFileSync(`${claudeLog}.summary`, summary);
   const setClaudeBadPath = (bad) => (bad ? writeFileSync(`${claudeLog}.badpath`, "") : rmSync(`${claudeLog}.badpath`, { force: true }));
+  // Whether the fake report writer cites a unit that does not exist, or states a number (fakes/claude.mjs).
+  const setClaudeBadCite = (bad) => (bad ? writeFileSync(`${claudeLog}.badcite`, "") : rmSync(`${claudeLog}.badcite`, { force: true }));
+  const setClaudeDigits = (bad) => (bad ? writeFileSync(`${claudeLog}.digits`, "") : rmSync(`${claudeLog}.digits`, { force: true }));
   // The first line of every task the fake judge was given, in order.
   const judgeTasks = () => (existsSync(claudeLog) ? readFileSync(claudeLog, "utf8").split("\n").filter(Boolean) : []);
   const notifications = () => (existsSync(notifyLog) ? readFileSync(notifyLog, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
@@ -122,7 +125,7 @@ export function makeSandbox() {
     spawn(process.execPath, [BIN, "worker"], { cwd: work, env, stdio: "ignore", detached: true }).unref();
   };
   return {
-    home, remote, work, git, commit, push, evolo, evoloRun, setGithub, setClaudeDown, setClaudeInvalid, setClaudeBadPath, setClaudeSummary, setNotifyMarkup, judgeCalls, judgeTasks,
+    home, remote, work, git, commit, push, evolo, evoloRun, setGithub, setClaudeDown, setClaudeInvalid, setClaudeBadPath, setClaudeBadCite, setClaudeDigits, setClaudeSummary, setNotifyMarkup, judgeCalls, judgeTasks,
     notifications, opened,
     settled, retrying, crashWorker, retryNow, lockPath, waitFor,
   };

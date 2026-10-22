@@ -1,0 +1,51 @@
+/* Reports: a grid of cards, each a link to one report; one report in full, with its citations as small links. */
+
+.report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+
+.report-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.report-card:hover { background: var(--hover); }
+
+/* The period's label has the card's whole width, so a week's two dates stay on one line; when it was written is meta. */
+.report-head { display: flex; flex-direction: column; min-width: 0; }
+.report-label { font-weight: 600; overflow-wrap: break-word; }
+.report-meta { color: var(--muted); font-size: 12px; line-height: 16px; }
+
+/* The whole overview is in the page; the card shows its first three lines. */
+.report-overview {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.report-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+
+/* The notices sit together, closer than the screen's sections. */
+.report-notices { display: flex; flex-direction: column; gap: 8px; }
+.report-notices .notice { margin: 0; }
+
+/* Three figures stay in one row at any width: three short numbers fit, and 2 + 1 would leave a hole. */
+.stat-grid.report-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.highlight, .report-points > li { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; }
+.highlight-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.highlight-head .cite { font-weight: 600; }
+.highlight-worth { color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.highlight p, .report-points p { overflow-wrap: anywhere; }
+
+.cites { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.cite { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+a.cite { border-radius: 4px; color: var(--accent-text); font-weight: 500; }
+a.cite:hover { text-decoration: underline; }

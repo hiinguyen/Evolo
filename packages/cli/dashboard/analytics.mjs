@@ -13,7 +13,7 @@ const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOUR_NAMES = Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, "0")}:00`);
 
 // "+550", "-0.4": `now` against `before` with `digits` decimals, signed as formatStats signs it.
-function delta(now, before, digits = 0) {
+export function delta(now, before, digits = 0) {
   const size = Number(Math.abs(now - before).toFixed(digits));
   const sign = now < before && size !== 0 ? "-" : "+";
   const tone = size === 0 ? "flat" : sign === "-" ? "down" : "up";
@@ -32,7 +32,7 @@ function periodSwitch(kind, which) {
 }
 
 // One figure; `value`, `unit` and `detail` are markup the caller built from formatted numbers.
-const figure = (label, value, unit = "", detail = "") =>
+export const figure = (label, value, unit = "", detail = "") =>
   `<div class="panel stat"><span class="stat-label">${label}</span>`
   + `<span class="stat-value">${value}${unit ? `<span class="stat-unit">${unit}</span>` : ""}</span>`
   + (detail ? `<span class="stat-detail">${detail}</span>` : "")

@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 import { BudgetExceededError, assertWithinBudget, dailyBudget, nextLocalDay, spentOn } from "./budget.mjs";
 import { setConfig } from "./config.mjs";
 import { writeRecord } from "./ledger.mjs";
+import { saveReport } from "./report.mjs";
 import { writeReview } from "./review.mjs";
 
 const homes = [];
@@ -20,7 +21,7 @@ const noon = new Date(2026, 9, 20, 12, 0);
 const at = (hours, day = 20) => new Date(2026, 9, day, hours, 0).toISOString();
 const record = (id, when, costUsd) => ({ id, kind: "push", status: "scored", xp: 10, at: when, ...(costUsd !== undefined && { result: { costUsd } }) });
 
-test("the day's spending adds every scoring and every review of that local day", () => {
+test("the day's spending adds every scoring, every review and every report of that local day", () => {
   const home = makeHome();
   writeRecord(home, "me/a", record("push-1", at(9), 0.5));
   writeRecord(home, "me/a", { ...record("push-2", at(10), 0.25), status: "failed" });
@@ -29,8 +30,10 @@ test("the day's spending adds every scoring and every review of that local day",
   writeRecord(home, "me/b", record("push-5", at(23, 19), 4));
   writeReview(home, { unitId: "pr-3", repo: "me/b", at: at(11), costUsd: 0.25 });
   writeReview(home, { unitId: "push-5", repo: "me/b", at: at(8, 21), costUsd: 3 });
-  assert.equal(spentOn(home, "2026-10-20"), 2);
-  assert.equal(spentOn(home, "2026-10-19"), 4);
+  saveReport(home, { id: "week/2026-10-19", at: at(12), costUsd: 0.5 });
+  saveReport(home, { id: "month/2026-09-01", at: at(9, 19), costUsd: 0.75 });
+  assert.equal(spentOn(home, "2026-10-20"), 2.5);
+  assert.equal(spentOn(home, "2026-10-19"), 4.75);
   assert.equal(spentOn(home, "2026-10-22"), 0);
 });
 

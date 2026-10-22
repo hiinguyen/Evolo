@@ -8,6 +8,7 @@ import { renderAnalytics } from "./analytics.mjs";
 import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
+import { renderReport, renderReports } from "./reports.mjs";
 import { renderReviews } from "./reviews.mjs";
 import { renderTimeline } from "./timeline.mjs";
 import { renderUnit } from "./unit.mjs";
@@ -31,6 +32,10 @@ test("parseHash reads every address of the spec", () => {
   }
   assert.deepEqual(parseHash("#/achievements"), route("achievements"));
   assert.deepEqual(parseHash("#/reviews"), route("reviews"));
+  assert.deepEqual(parseHash("#/reports"), route("reports"));
+  for (const kind of ["week", "month", "quarter"]) {
+    assert.deepEqual(parseHash(`#/reports/${kind}/2026-10-01`), route("reports", { id: `${kind}/2026-10-01` }));
+  }
 });
 
 test("parseHash decodes the query and each part of the path", () => {
@@ -41,21 +46,23 @@ test("parseHash decodes the query and each part of the path", () => {
 
 test("parseHash sends an address it does not know to notFound", () => {
   for (const hash of ["#/nowhere", "#main", "#/unit/me/a", "#/unit/me/a/pr-1/diff", "#/unit/me/a/pr-1/score/extra",
-    "#/analytics/year/current", "#/analytics/week/next", "#/timeline/extra", "#/unit/%E0%A4%A/a/pr-1"]) {
+    "#/analytics/year/current", "#/analytics/week/next", "#/timeline/extra", "#/unit/%E0%A4%A/a/pr-1",
+    "#/reports/week", "#/reports/year/2026-10-01", "#/reports/week/latest", "#/reports/week/2026-10-19/extra"]) {
     assert.equal(parseHash(hash).screen, "notFound", hash);
   }
   assert.deepEqual(parseHash("#/nowhere?x=1").query, { x: "1" });
 });
 
-test("renderShell lists the five screens and marks the open one", () => {
+test("renderShell lists the six screens and marks the open one", () => {
   const model = sampleModel();
   const current = (html) => [...html.matchAll(/<a href="([^"]*)" aria-current="page"/g)].map(([, href]) => href);
   const shell = renderShell(model, route("overview"), "<p>content</p>");
-  for (const name of ["Overview", "Timeline", "Analytics", "Achievements", "Reviews"]) assert.match(shell, new RegExp(`<span>${name}</span>`));
+  for (const name of ["Overview", "Timeline", "Analytics", "Achievements", "Reviews", "Reports"]) assert.match(shell, new RegExp(`<span>${name}</span>`));
   assert.match(shell, /<a class="brand" href="#\/">/);
   assert.deepEqual(current(shell), ["#/"]);
   assert.ok(shell.includes("<p>content</p>"));
   assert.deepEqual(current(renderShell(model, route("reviews"), "")), ["#/reviews"]);
+  assert.deepEqual(current(renderShell(model, route("reports", { id: "week/2026-10-19" }), "")), ["#/reports"]);
   assert.deepEqual(current(renderShell(model, route("analytics", { kind: "month", which: "previous" }), "")), ["#/analytics"]);
   // A unit's details belong to the Timeline; an unknown address shows the Overview.
   assert.deepEqual(current(renderShell(model, route("unit", { key: "me/a/pr-1", tab: "score" }), "")), ["#/timeline"]);
@@ -93,6 +100,8 @@ test("renderRoute draws the achievements, and the reviews with the severity of t
   assert.equal(renderRoute(model, parseHash("#/achievements")), renderAchievements(model));
   assert.equal(renderRoute(model, parseHash("#/reviews")), renderReviews(model, {}));
   assert.equal(renderRoute(model, parseHash("#/reviews?severity=high")), renderReviews(model, { severity: "high" }));
+  assert.equal(renderRoute(model, parseHash("#/reports")), renderReports(model));
+  assert.equal(renderRoute(model, parseHash("#/reports/week/2026-10-19")), renderReport(model, "week/2026-10-19"));
   assert.ok(!renderRoute(model, parseHash("#/reviews?severity=low")).includes("Nothing at this address"));
 });
 

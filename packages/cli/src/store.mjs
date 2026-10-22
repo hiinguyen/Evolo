@@ -2,7 +2,7 @@
 // Every write goes to a temporary file that is then renamed, so a reader never sees a half-written file.
 import { chmodSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 export function evoloHome() {
   return process.env.EVOLO_HOME || join(homedir(), ".evolo");
@@ -54,6 +54,22 @@ export function jsonFiles(dir) {
     if (error.code === "ENOENT") return [];
     throw error;
   }
+}
+
+// Every JSON record anywhere under `root`, in no particular order; temporary files are skipped, and so is a file that
+// vanished while being listed. Nothing under `root` yet is no records.
+export function readJsonTree(root) {
+  let paths;
+  try {
+    paths = readdirSync(root, { recursive: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  return paths
+    .filter((path) => path.endsWith(".json") && !basename(path).startsWith("."))
+    .map((path) => readJson(join(root, path), null))
+    .filter(Boolean);
 }
 
 // One log for every background part of Evolo: the hook writes nothing to the terminal, so this is where it reports.
