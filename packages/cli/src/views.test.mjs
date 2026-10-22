@@ -204,3 +204,10 @@ test("an unlock is announced alone or with the others found at the same time, es
     title: "2 achievements unlocked", body: "<b>Contributor I</b>: scored units\n<b>R&amp;D</b>: a &lt;b&gt; tag",
   });
 });
+
+test("a ref that is a hex prefix skips records whose result has no facts", () => {
+  const odd = { id: "push-1111111-2222222", result: { xp: 0 } };
+  const real = { id: "pr-7", result: { facts: { commits: [{ sha: "ccccccc222" }], excluded: [] } } };
+  assert.equal(findByRef([odd, real], "cccc"), real);
+  assert.equal(findByRef([odd], "cccc"), null);
+});

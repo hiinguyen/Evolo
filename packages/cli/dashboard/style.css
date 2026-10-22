@@ -1,0 +1,448 @@
+/* Evolo dashboard. Colours are tokens on :root and change with the system's light or dark mode; spacing keeps to an
+   8 px grid. The page loads no font: system-ui is the one the desktop already uses. */
+
+:root {
+  color-scheme: light;
+  --bg: #f7f7f8;
+  --card: #ffffff;
+  --border: #e5e5ea;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0a84ff;
+  /* The accent is too light for small text on white (3.6:1); links and the level use this darker step (5.6:1). */
+  --accent-text: #0066cc;
+  --accent-soft: rgba(10, 132, 255, 0.1);
+  --hover: #f2f2f5;
+  --track: #ebebef;
+  /* The open segment of a switcher, raised off the track. */
+  --raised: #ffffff;
+  --badge-from: #ffb020;
+  --badge-to: #ff6a3d;
+  /* The dashed outline of a secret not found yet. */
+  --dash: #c7c7cc;
+  --green: #1a7f37;
+  --red: #cf222e;
+  --red-soft: rgba(207, 34, 46, 0.08);
+  --amber: #9a6700;
+  --amber-soft: rgba(191, 135, 0, 0.12);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --radius: 10px;
+  --radius-sm: 6px;
+  --font: system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", "DejaVu Sans Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #111113;
+    --card: #1c1c1f;
+    --border: #2c2c31;
+    --text: #ececf1;
+    --muted: #9a9aa3;
+    --accent: #3b9dff;
+    --accent-text: #3b9dff;
+    --accent-soft: rgba(59, 157, 255, 0.16);
+    --hover: #242428;
+    --track: #2c2c31;
+    --raised: #3a3a40;
+    --dash: #4a4a52;
+    --green: #3fb950;
+    --red: #f85149;
+    --red-soft: rgba(248, 81, 73, 0.14);
+    --amber: #d29922;
+    --amber-soft: rgba(210, 153, 34, 0.16);
+    --shadow: none;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/20px var(--font);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+}
+
+h1, h2, h3, p, ul { margin: 0; }
+ul { padding: 0; list-style: none; }
+a { color: inherit; text-decoration: none; }
+
+code {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--hover);
+  font: 13px/18px var(--mono);
+}
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.muted { color: var(--muted); }
+
+/* Frame: sidebar and content. */
+
+.frame {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100vh;
+  padding: 16px 12px;
+  border-right: 1px solid var(--border);
+  background: var(--card);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.brand-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--badge-from), var(--badge-to));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+.nav { display: flex; flex-direction: column; gap: 2px; }
+
+.nav a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.nav a:hover { background: var(--hover); color: var(--text); }
+.nav a[aria-current="page"] { background: var(--accent-soft); color: var(--text); font-weight: 600; }
+.nav a[aria-current="page"] svg { color: var(--accent); }
+.nav svg { flex: none; width: 16px; height: 16px; }
+
+.sidebar-foot {
+  margin-top: auto;
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.content {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.content:focus { outline: none; }
+
+.screen { display: flex; flex-direction: column; gap: 24px; }
+
+.page-head h1 { font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.page-head p { margin-top: 4px; color: var(--muted); }
+
+.page-foot { color: var(--muted); font-size: 12px; line-height: 16px; }
+
+.notice {
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.notice-bad { background: var(--red-soft); color: var(--red); }
+
+.noscript { max-width: 480px; margin: 64px auto; padding: 0 16px; text-align: center; }
+
+/* Shown in place of the whole frame when the page cannot be drawn, so it needs nothing but these lines. */
+.failure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+  margin: 64px auto;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--red-soft);
+  color: var(--red);
+}
+
+.failure a { color: var(--accent-text); font-weight: 500; text-decoration: underline; }
+
+/* Panels. */
+
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-head h2 { font-size: 14px; line-height: 20px; font-weight: 600; }
+.panel-head .muted { font-size: 13px; }
+.panel-body { padding: 16px; }
+
+.panel-link { border-radius: 4px; color: var(--accent-text); font-size: 13px; font-weight: 500; }
+.panel-link:hover { text-decoration: underline; }
+
+/* The end of a capped strip of badges: a link to the screen that has them all. */
+.badges-more {
+  display: inline-block;
+  margin: 0 16px 16px;
+  border-radius: 4px;
+  color: var(--accent-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.badges-more:hover { text-decoration: underline; }
+
+.list-panel { overflow: hidden; }
+
+.empty { padding: 32px 16px; color: var(--muted); text-align: center; }
+.empty p + p { margin-top: 8px; }
+
+/* Panel content: a column of blocks, a list without bullets, a list with them, and rows split by a line. */
+
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.plain-list { display: flex; flex-direction: column; gap: 4px; }
+.bullets { display: flex; flex-direction: column; gap: 8px; padding: 16px 16px 16px 36px; list-style: disc; }
+.rows > li + li { border-top: 1px solid var(--border); }
+.pills { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Bars: the level meter and the rubric bars. */
+
+.meter { height: 8px; overflow: hidden; border-radius: 4px; background: var(--track); }
+.meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.score-bar { display: block; height: 8px; overflow: hidden; border-radius: 4px; background: var(--track); }
+.score-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+
+/* Stats: a small card with a label, a value and a line of detail. */
+
+.stat-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+
+.stat { display: flex; flex-direction: column; min-width: 0; padding: 16px; }
+.stat-label { color: var(--muted); font-size: 12px; line-height: 16px; font-weight: 500; }
+
+/* A value as long as "+12,345 XP" or "$9,999.99" wraps before its unit, and breaks rather than leave its card. */
+.stat-value {
+  margin-top: 8px;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.stat-unit { margin-left: 4px; color: var(--muted); font-size: 13px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
+.stat-detail { margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 16px; }
+
+/* Badges: a round emblem with the tier's numeral, the name, and one pip per tier. */
+
+/* Columns of equal width, as many as fit: the same grid holds 3 badges at 360 px and 10 on a wide screen. */
+.badges { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 16px; }
+
+.badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.emblem {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0) 55%),
+    linear-gradient(145deg, var(--badge-from), var(--badge-to));
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.3), 0 2px 6px rgba(255, 106, 61, 0.3);
+  color: #ffffff;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgba(122, 40, 0, 0.5);
+}
+
+.badge-name { max-width: 100%; font-size: 12px; line-height: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.pips { display: flex; gap: 4px; }
+.pip { width: 10px; height: 4px; border-radius: 2px; background: var(--track); }
+.pip.on { background: var(--badge-to); }
+
+.badge.locked .emblem { background: var(--track); box-shadow: none; color: var(--muted); text-shadow: none; }
+.badge.locked .badge-name { color: var(--muted); }
+
+/* Unit rows: label and summary over repo, type and day; XP or the status on the right. */
+
+.unit-list > li + li { border-top: 1px solid var(--border); }
+
+.unit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 56px;
+  padding: 10px 16px;
+}
+
+.unit-row:hover { background: var(--hover); }
+.unit-row:focus-visible { outline-offset: -2px; }
+
+.unit-main { display: flex; flex-direction: column; min-width: 0; }
+.unit-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.unit-label { flex: none; font-weight: 600; }
+
+.unit-summary { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The meta line wraps rather than lose the day off its end on a phone; the day itself stays whole. */
+.unit-meta { min-width: 0; color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.unit-meta time { white-space: nowrap; }
+.unit-xp { font-weight: 600; white-space: nowrap; }
+
+/* A unit that lost its XP: the XP struck through beside the status. In a row the two stack, so the row keeps its height. */
+.unit-worth { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.unit-lost { color: var(--muted); font-weight: 500; }
+.unit-row .unit-worth { flex-direction: column; align-items: flex-end; gap: 0; }
+.unit-row .unit-lost { font-size: 12px; line-height: 16px; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.pill-bad, .sev-high { border-color: transparent; background: var(--red-soft); color: var(--red); }
+.sev-medium { border-color: transparent; background: var(--amber-soft); color: var(--amber); }
+
+/* The command and its Copy button are one height, 36 px. */
+.command { display: flex; align-items: center; gap: 8px; }
+.command code { flex: 1; min-width: 0; padding: 8px 12px; line-height: 18px; overflow-wrap: anywhere; }
+
+.copy {
+  flex: none;
+  min-width: 80px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.copy:hover { background: var(--hover); }
+
+/* A track of 32 px with the open segment raised off it, like a native segmented control. */
+.segmented { display: inline-flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--track); }
+
+.segment {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.segment:hover { color: var(--text); }
+.segment[aria-current="page"] { background: var(--raised); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); color: var(--text); }
+
+/* Narrower screens: five stats wrap, and under 720 px the sidebar becomes a bar across the top. Each screen's own file
+   narrows that screen's blocks. */
+
+@media (max-width: 1079px) {
+  .stat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* The Overview's five cards are three over two, each row filling the width; the six figures of Analytics keep 3 + 3. */
+  .overview-top .stat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .overview-top .stat-grid > .stat { grid-column: span 2; }
+  .overview-top .stat-grid > .stat:nth-child(n + 4) { grid-column: span 3; }
+}
+
+@media (max-width: 719px) {
+  /* The bar keeps its own height on a short page: two auto rows would share the leftover height of the frame. */
+  .frame { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+
+  /* Scrolls sideways by touch or trackpad; a scrollbar track under a 48 px bar only looks broken. */
+  .sidebar {
+    z-index: 1;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    height: auto;
+    padding: 8px 16px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar { display: none; }
+
+  .nav { flex-direction: row; }
+  .sidebar-foot { display: none; }
+  .content { padding: 24px 16px; }
+}
+
+@media (max-width: 559px) {
+  .stat-grid, .overview-top .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-top .stat-grid > .stat, .overview-top .stat-grid > .stat:nth-child(n + 4) { grid-column: auto; }
+  /* The summary takes its own line rather than a few letters beside a long push label. */
+  .unit-title { flex-direction: column; align-items: stretch; gap: 0; }
+  /* On its own line the summary gets two lines before it is cut. */
+  .unit-summary { display: -webkit-box; white-space: normal; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+  .stat-value { font-size: 20px; line-height: 28px; }
+  .badges { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 16px 8px; }
+  .emblem { width: 48px; height: 48px; font-size: 16px; }
+}

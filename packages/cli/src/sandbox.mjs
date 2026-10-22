@@ -1,5 +1,5 @@
 // The end-to-end sandbox: a real clone with a bare repository as its remote, the real pre-push hook and a real
-// background worker. Only `gh`, `claude` and `notify-send` are stand-ins (fakes/), put first on PATH.
+// background worker. Only `gh`, `claude`, `notify-send`, `gdbus` and `xdg-open` are stand-ins (fakes/), put first on PATH.
 // Imported by the end-to-end tests; the sandboxes are removed after the test file that made them.
 import assert from "node:assert/strict";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -27,7 +27,7 @@ export function makeSandbox() {
   sandboxes.push(dir);
   const [home, bin, remote, work] = ["home", "bin", "remote.git", "work"].map((name) => join(dir, name));
   mkdirSync(bin);
-  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"], ["gdbus", "gdbus.mjs"]]) {
+  for (const [name, script] of [["gh", "gh.mjs"], ["claude", "claude.mjs"], ["notify-send", "notify-send.mjs"], ["gdbus", "gdbus.mjs"], ["xdg-open", "xdg-open.mjs"]]) {
     writeFileSync(join(bin, name), `#!/bin/sh\nexec '${process.execPath}' '${join(FAKES, script)}' "$@"\n`);
     chmodSync(join(bin, name), 0o755);
   }
@@ -41,8 +41,10 @@ export function makeSandbox() {
   writeFileSync(ghState, JSON.stringify(github));
   const claudeLog = join(dir, "claude.log");
   const notifyLog = join(dir, "notify.log");
+  const openLog = join(dir, "open.log");
   const env = {
     ...process.env, PATH: `${bin}:${process.env.PATH}`, EVOLO_HOME: home, FAKE_GH: ghState, FAKE_CLAUDE_LOG: claudeLog, FAKE_NOTIFY_LOG: notifyLog,
+    FAKE_OPEN_LOG: openLog,
   };
   delete env.EVOLO_JUDGE;
 
@@ -76,6 +78,8 @@ export function makeSandbox() {
   // The first line of every task the fake judge was given, in order.
   const judgeTasks = () => (existsSync(claudeLog) ? readFileSync(claudeLog, "utf8").split("\n").filter(Boolean) : []);
   const notifications = () => (existsSync(notifyLog) ? readFileSync(notifyLog, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
+  // The arguments of each call to the fake `xdg-open`, in order.
+  const opened = () => (existsSync(openLog) ? readFileSync(openLog, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line)) : []);
   const lockPath = join(home, "worker.lock");
 
   // Polls `check` until it returns something truthy, failing with the log after WAIT_MS.
@@ -119,7 +123,7 @@ export function makeSandbox() {
   };
   return {
     home, remote, work, git, commit, push, evolo, evoloRun, setGithub, setClaudeDown, setClaudeInvalid, setClaudeBadPath, setClaudeSummary, setNotifyMarkup, judgeCalls, judgeTasks,
-    notifications,
+    notifications, opened,
     settled, retrying, crashWorker, retryNow, lockPath, waitFor,
   };
 }

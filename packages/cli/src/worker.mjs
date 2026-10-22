@@ -5,12 +5,13 @@ import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { achievementsOf, notifyUnlocks } from "./achievements.mjs";
 import { BudgetExceededError, assertWithinBudget, isWithinBudget, nextLocalDay } from "./budget.mjs";
+import { refreshDashboard } from "./dashboard.mjs";
 import { evaluateUnit } from "./evaluate.mjs";
 import { git } from "./facts.mjs";
 import { listMergedPrs, mergedPrsOfCommits } from "./github.mjs";
 import { createJudge } from "./judges/index.mjs";
 import { isJudged, isLive, landedAt, listAllRecords, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
-import { acquireLock, addJob, hasSyncRequest, isAlive, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
+import { acquireLock, addJob, hasSyncRequest, isAlive, isParked, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
@@ -157,10 +158,6 @@ async function scoreUnit(home, job, repo, unit, judge) {
   const record = scoredRecord(result, { landedAt: result.facts.pr?.mergedAt ?? job.landedAt ?? job.enqueuedAt });
   return finish(home, job, isLive(record) ? addSignals(home, job.repo, repo, record) : record);
 }
-
-// A job waiting for the next local day because the day's judge budget is spent. It is not in flight, so it does not
-// hold the sync back, and no worker stays up for it: the first worker of the next day scores it.
-const isParked = (job, now = new Date()) => job.budgetDay === localDay(now);
 
 // Lets the jobs waiting for tomorrow run now when the day's spending is below the cap again: the cap was raised.
 function releaseParked(home) {
@@ -312,9 +309,13 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
       const inFlight = jobs.some((job) => job.attempts === 0 && !isParked(job));
       if (ready) {
         await processJob(home, ready, judge);
+        // Writing the page costs about a second on a ledger of thousands of units, so a burst of jobs writes it once,
+        // after the last of them; the sync that follows writes it again with what the sync found.
+        if (!listJobs(home).some((job) => job.notBefore <= Date.now())) refreshDashboard(home);
         worked = true;
       } else if (worked && !inFlight) {
         syncAll(home).forEach((note) => logLine(home, note));
+        refreshDashboard(home);
         worked = false;
       } else if (jobs.every((job) => isParked(job))) {
         break;

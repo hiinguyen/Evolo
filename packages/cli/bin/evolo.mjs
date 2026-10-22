@@ -11,6 +11,8 @@
 //   evolo stats [week|month|quarter] [--previous]   analytics of this calendar period (or the previous one) against
 //                                         the one before it, the streak of workdays and the achievements unlocked
 //   evolo achievements                    every achievement's tier and progress, and the secrets found
+//   evolo dashboard [--no-open]           writes <home>/dashboard.html, one page of the scores, analytics, achievements
+//                                         and reviews, prints its path and opens it in the browser unless --no-open
 //   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
 //   evolo review [<commit>|#<pr>|<unit id>] [--repo <clone>] [--again] [--judge claude|opencode] [--model M]
 //       a code review of a unit by a separate judge, saved under <home>/reviews; the saved one unless --again
@@ -28,6 +30,7 @@
 // For evaluate, each --range is one push, each --pr one merged PR, and each bare <sha> a push of that commit alone.
 // A range leaves out commits that belong to a merged PR (they are scored with the PR) and, when --author is given,
 // commits by anyone else.
+import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -39,6 +42,7 @@ import { levelFor } from "../src/score.mjs";
 import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
 import { createJudge } from "../src/judges/index.mjs";
+import { refreshDashboard, writeDashboard } from "../src/dashboard.mjs";
 import { installClaude, uninstallClaude } from "../src/claude.mjs";
 import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs";
 import { listAllRecords, listRecords, localDay, localTime, readSummary, writeSummary } from "../src/ledger.mjs";
@@ -52,11 +56,11 @@ import { terminalSafe } from "../src/safe-text.mjs";
 import { explain, findByRef, formatAchievements, formatStats, recentXp, statusLine, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|stats|achievements|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|stats|achievements|dashboard|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
-  evolo stats [week|month|quarter] [--previous] | evolo achievements
+  evolo stats [week|month|quarter] [--previous] | evolo achievements | evolo dashboard [--no-open]
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
   evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]
   evolo claude install|uninstall
@@ -273,6 +277,23 @@ function achievements(argv) {
   console.log(formatAchievements(achievementsOf(listAllRecords(evoloHome()))).join("\n"));
 }
 
+// Writes the page and prints its path, which is all `--no-open` does. Otherwise the browser is started detached, so the
+// command returns at once; a desktop without xdg-open is no error, since the path to open by hand is already printed.
+function dashboard(argv) {
+  const { values } = parseArgs({ args: argv, options: { "no-open": { type: "boolean", default: false } } });
+  let path;
+  try {
+    path = writeDashboard(evoloHome());
+  } catch (error) {
+    fail(`the dashboard could not be written: ${error.message}`);
+  }
+  console.log(path);
+  if (values["no-open"]) return;
+  const opener = spawn("xdg-open", [path], { detached: true, stdio: "ignore" });
+  opener.on("error", () => {});
+  opener.unref();
+}
+
 // The record of the unit `ref` names, searched in the registered clone `repoDir` when it is one, else in every
 // repository; a commit given by name ("HEAD~2", a branch) is resolved in that clone. The latest unit without `ref`.
 // Exits with a message when nothing matches.
@@ -361,6 +382,7 @@ async function review(argv) {
     costUsd: result.costUsd, durationMs: result.durationMs, review: result.review, issues: result.issues,
   };
   writeReview(home, stored);
+  refreshDashboard(home);
   logLine(home, `reviewed ${record.repo} ${record.id}: ${result.review.findings.length} finding(s)`);
   console.log(formatReview(stored));
 }
@@ -417,7 +439,7 @@ function config(argv) {
   }
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, achievements, why, review, retry, statusline, claude, config, evaluate };
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, achievements, dashboard, why, review, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();

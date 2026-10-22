@@ -272,6 +272,9 @@ Prompt giờ bắt buộc đọc hết diff, và validator loại mọi kết qu
 ## 6. Xem kết quả
 
 Mọi cách xem đều chỉ đọc ledger và `~/.evolo/summary.json`, không gọi judge.
+Ngoài ra có `evolo dashboard`, một trang HTML tĩnh (`~/.evolo/dashboard.html`, thiết kế ở `docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md`).
+Sau job cuối của một loạt job (không phải giữa hai job liền nhau) và mỗi lần sync, worker ghi lại trang này nếu nó đã tồn tại; `evolo review` cũng vậy sau khi lưu một review.
+Lỗi khi ghi trang chỉ được ghi vào `evolo.log`, không bao giờ làm dừng việc chấm điểm.
 Điểm chỉ đến người dùng, không vào context của agent đang code (mục 1).
 
 ### `evolo status`
@@ -450,7 +453,7 @@ packages/cli/                 # gói npm "evolo"
   src/achievements/           # [có] catalog.mjs (achievement hiện), secret.mjs (achievement ẩn), fixtures.mjs (bản ghi giả cho test)
   src/views.mjs               # [có] nội dung thông báo, status line, why, stats, achievements; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line
-  fakes/                      # [có] gh, claude, notify-send và gdbus giả cho test E2E (sandbox.mjs)
+  fakes/                      # [có] gh, claude, notify-send, gdbus và xdg-open giả cho test E2E (sandbox.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator
   claude/skills/evolo/SKILL.md  # [có] skill /evolo

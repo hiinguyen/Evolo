@@ -1,0 +1,54 @@
+/* Achievements: each achievement a tile with its badge, description, progress and day, then the secrets. */
+
+.achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
+
+/* A tile is a card filled by its badge. The progress and the day sit at the foot, so they line up across a row. */
+.achievement > .badge {
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+/* Short centred lines wrap into even halves rather than leave one word alone under the rest. */
+.achievement .badge-name { font-size: 14px; line-height: 20px; text-wrap: balance; }
+.badge-desc { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; text-wrap: balance; }
+.badge-foot { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: auto; }
+
+/* The bar takes the room its count leaves; it is drawn in the badge's colours, thinner than the level meter. */
+.badge-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.badge-progress .meter { height: 4px; border-radius: 2px; }
+.badge-progress .meter > span { background: linear-gradient(90deg, var(--badge-from), var(--badge-to)); }
+.badge-count { font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
+.badge-when { color: var(--muted); font-size: 12px; line-height: 16px; }
+.badge-when time { white-space: nowrap; }
+
+/* A locked tile keeps its progress readable; only its emblem and name are greyed, by the shared badge rules. */
+.badge.locked .badge-progress .meter > span { opacity: 0.6; }
+
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.section-head h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
+.section-head .muted { font-size: 13px; }
+
+/* The secrets still hidden: one small dashed circle each, in a row that wraps under the secrets found. */
+.secret-slots { display: flex; flex-wrap: wrap; gap: 8px; }
+.achievement-grid + .secret-slots { margin-top: 16px; }
+
+.secret-slot {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px dashed var(--dash);
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+@media (max-width: 559px) {
+  .achievement-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+}

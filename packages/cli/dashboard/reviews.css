@@ -1,0 +1,38 @@
+/* Reviews: the severity switch over a grid of cards, each a link to the Review tab of its unit. */
+
+.severity-switch { display: flex; margin-top: -8px; }
+
+.review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+
+.review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.review-card:hover { background: var(--hover); }
+
+/* The label and the day on one line, the repository and the language under them. */
+.review-head { display: flex; flex-direction: column; min-width: 0; }
+.review-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.review-label { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
+.review-title time { color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
+.review-meta { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+
+/* The whole overview is in the page; the card shows its first two lines. */
+.review-overview {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* The pills sit at the card's foot, so they line up across a row of cards. */
+.review-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }

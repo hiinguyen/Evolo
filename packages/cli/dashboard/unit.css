@@ -1,0 +1,106 @@
+/* Unit details: the head, the tabs, and the panels of the open tab. */
+
+.unit-head { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.crumbs { display: flex; gap: 8px; min-width: 0; color: var(--muted); font-size: 13px; }
+.crumbs a { border-radius: 4px; color: var(--accent-text); font-weight: 500; }
+.crumbs a:hover { text-decoration: underline; }
+.crumbs span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.unit-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.unit-heading h1 { min-width: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.unit-heading .unit-xp { color: var(--accent-text); font-size: 16px; line-height: 24px; }
+.unit-facts { color: var(--muted); }
+.unit-lede { max-width: 72ch; overflow-wrap: anywhere; }
+.ext-link { border-radius: 4px; color: var(--accent-text); font-weight: 500; white-space: nowrap; }
+.ext-link:hover { text-decoration: underline; }
+
+.tabs { display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid var(--border); scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+
+.tabs a {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  margin-bottom: -1px;
+  padding: 0 8px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tabs a:hover { color: var(--text); }
+.tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--text); }
+.tabs a:focus-visible { outline-offset: -2px; }
+
+/* The tabs sit closer to their panel than the screen's other blocks sit to each other. */
+.tabs + .tab-panel { margin-top: -8px; }
+.tab-panel { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.tab-panel .notice { margin: 0; }
+.tab-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+
+/* Score: one row per criterion, its reason and evidence lined up under the bar. */
+
+.criteria > li { padding: 16px; }
+.criteria > li + li { border-top: 1px solid var(--border); }
+.criterion-head { display: grid; grid-template-columns: 112px minmax(0, 1fr) 40px; align-items: center; gap: 16px; }
+.criterion-name { font-weight: 600; }
+.criterion-score { font-weight: 600; text-align: right; white-space: nowrap; }
+.criterion-reason, .evidence { padding-left: 128px; }
+.criterion-reason { margin-top: 8px; }
+.evidence { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.evidence code, .finding-meta code { min-width: 0; overflow-wrap: anywhere; }
+
+.formula { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+.term {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  white-space: nowrap;
+}
+
+.term strong { font-weight: 600; }
+.term-xp { background: var(--accent-soft); color: var(--accent-text); }
+.op { color: var(--muted); }
+
+.fact-list { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.fact-row { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 16px; }
+.fact-row dt { color: var(--muted); }
+.fact-row dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.rule-xp { color: var(--muted); }
+.rule-xp s { text-decoration-thickness: 1px; }
+.rule-xp s strong { color: var(--muted); }
+.rule-xp strong { color: var(--accent-text); font-size: 24px; line-height: 32px; font-weight: 600; }
+
+/* Review: the overview, strengths beside improvements, then the findings, the most severe first. */
+
+.review-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; gap: 16px; }
+.findings > li { padding: 16px; }
+.findings > li + li { border-top: 1px solid var(--border); }
+.finding-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.finding h3 { margin-top: 8px; font-size: 14px; line-height: 20px; font-weight: 600; }
+.finding p { margin-top: 4px; overflow-wrap: anywhere; }
+.finding .finding-fix { margin-top: 8px; }
+
+/* Files and commits: rows of a path or a commit, the lines on the right. */
+
+.file-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 16px; padding: 10px 16px; }
+.file-path { font: 13px/20px var(--mono); overflow-wrap: anywhere; }
+.diff { font: 13px/20px var(--mono); white-space: nowrap; }
+.add { color: var(--green); }
+.del { color: var(--red); }
+
+.commit-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 40px; padding: 10px 16px; }
+.commit-row .sha { flex: none; }
+.commit-subject { flex: 1 1 240px; min-width: 0; overflow-wrap: anywhere; }
+.commit-row time { font-size: 12px; line-height: 16px; white-space: nowrap; }
+
+@media (max-width: 559px) {
+  .criterion-head { grid-template-columns: 96px minmax(0, 1fr) 32px; gap: 12px; }
+  .criterion-reason, .evidence { padding-left: 0; }
+  .fact-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
