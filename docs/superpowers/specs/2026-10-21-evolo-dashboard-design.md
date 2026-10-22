@@ -166,7 +166,7 @@ Giao diện:
 | `dashboard/overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs` | Mỗi file vẽ một màn hình từ model |
 | `dashboard/app.mjs` | Router hash, khung trang (thanh bên), bộ lọc, khởi động trong trình duyệt |
 | `bin/evolo.mjs` | Lệnh `dashboard [--no-open]`; `review` gọi `refreshDashboard` sau khi lưu |
-| `src/worker.mjs` | Gọi `refreshDashboard` sau mỗi job và mỗi lần sync |
+| `src/worker.mjs` | Gọi `refreshDashboard` sau job cuối của một loạt job (không phải giữa hai job liền nhau) và mỗi lần sync |
 | `src/store.mjs` | Ghi file chữ atomic giữ quyền (dùng chung với `writeJson`) |
 
 Skill `/evolo` không đổi: nó chỉ chạy `status`, `why`, `retry`.
