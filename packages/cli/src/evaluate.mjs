@@ -47,19 +47,18 @@ export function describeUnit(facts) {
 const scoringTask = (facts) =>
   `Evaluate ${describeUnit(facts)} Judge the change set as one contribution. Answer with the JSON object defined in your instructions.`;
 
-// Runs `spec` on the judge until `validate(output, knownPaths)` accepts its answer, at most MAX_ATTEMPTS times.
+// Runs `spec` on the judge in `workDir` until `validate(output)` accepts its answer, at most MAX_ATTEMPTS times.
 // Returns the validation and the run, or { ok: false, failures, unavailable } when no attempt was accepted.
-export async function judgeWithRetries({ judge, spec = SCORE_TASK, validate, checkoutDir, facts, inputs, task, onProgress }) {
-  const knownPaths = knownPathsFor(checkoutDir, facts);
+export async function judgeWithRetries({ judge, spec = SCORE_TASK, validate, workDir, inputs, task, onProgress }) {
   const failures = [];
   let costUsd = 0;
   // Stays true while every attempt failed before the judge could answer: then nothing is wrong with this unit.
   let unavailable = true;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
-      const run = await judge.judge({ checkoutDir, inputs, task, spec, onProgress });
+      const run = await judge.judge({ workDir, inputs, task, spec, onProgress });
       costUsd += run.costUsd ?? 0;
-      const validation = validate(run.output, knownPaths);
+      const validation = validate(run.output);
       if (validation.ok) return { ...validation, ...run, attempts: attempt, failures, costUsd };
       failures.push(`attempt ${attempt}: invalid output: ${validation.problems.join("; ")}`);
       unavailable = false;
@@ -129,13 +128,14 @@ export async function evaluateUnit({ options, judge, unit, onProgress, beforeJud
 
   beforeJudging();
 
-  const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) =>
-    judgeWithRetries({
-      judge, checkoutDir, facts, inputs, onProgress,
+  const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) => {
+    const knownPaths = knownPathsFor(checkoutDir, facts);
+    return judgeWithRetries({
+      judge, workDir: checkoutDir, inputs, onProgress,
       task: scoringTask(facts),
-      validate: (output, knownPaths) => validateEvaluation(output, facts, knownPaths),
-    }),
-  );
+      validate: (output) => validateEvaluation(output, facts, knownPaths),
+    });
+  });
 
   const judgeInfo = { backend: judge.backend, model: judge.model };
   const common = { facts, method: "ai", judge: judgeInfo, failures: judged.failures, costUsd: judged.costUsd };

@@ -1,14 +1,15 @@
-// Judge backend that runs a task (scoring or review) in a sandboxed, headless Claude Code session (`claude -p`).
+// Judge backend that runs a task (scoring, review or report) in a sandboxed, headless Claude Code session (`claude -p`).
 import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { FatalJudgeError, JudgeUnavailableError, READ_ONLY_COMMANDS, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
+import { FatalJudgeError, JudgeUnavailableError, runJsonl, SCORE_TASK, taskPrompt } from "./common.mjs";
 
 export const DEFAULT_CLAUDE_MODEL = "claude-sonnet-5-5";
 const DEFAULT_BUDGET_USD = 1;
-const JUDGE_TOOLS = "Read,Grep,Glob,Bash";
+// A task that may run commands also searches the checkout; one that may not only reads its input files.
+const toolsOf = (spec) => (spec.commands.length > 0 ? "Read,Grep,Glob,Bash" : "Read");
 
 export function claudeArgs({ model, budgetUsd, inputsDir, task, spec = SCORE_TASK }) {
-  const settings = { permissions: { allow: READ_ONLY_COMMANDS.map((command) => `Bash(${command}:*)`) } };
+  const settings = { permissions: { allow: spec.commands.map((command) => `Bash(${command}:*)`) } };
   return [
     "-p",
     // --restricted ignores user, project and local settings and every CLAUDE.md, so neither the user's setup
@@ -18,7 +19,7 @@ export function claudeArgs({ model, budgetUsd, inputsDir, task, spec = SCORE_TAS
     "--strict-mcp-config",
     "--no-session-persistence",
     "--model", model,
-    "--tools", JUDGE_TOOLS,
+    "--tools", toolsOf(spec),
     // In print mode any command not allowed here is denied, because nobody can approve it.
     "--settings", JSON.stringify(settings),
     // --restricted confines file tools to the working directories, so the inputs dir is added explicitly.
@@ -73,13 +74,13 @@ export function createClaudeJudge({ model = DEFAULT_CLAUDE_MODEL, budgetUsd = DE
   return {
     backend: "claude",
     model,
-    async judge({ checkoutDir, inputs, task, spec = SCORE_TASK, onProgress }) {
+    async judge({ workDir, inputs, task, spec = SCORE_TASK, onProgress }) {
       const inputList = Object.values(inputs).map((path) => `- ${path}`).join("\n");
       const args = claudeArgs({ model, budgetUsd, inputsDir: dirname(inputs.facts), task: `${task}\n\nInput files:\n${inputList}`, spec });
       // EVOLO_JUDGE marks every process below this one, so Evolo's git hooks ignore anything a judge might trigger.
       const env = { ...process.env, EVOLO_JUDGE: "1" };
       const onEvent = (event) => toolUses(event).forEach((block) => onProgress?.(...describeTool(block)));
-      return readClaudeRun(await runJsonl("claude", args, { cwd: checkoutDir, env, onEvent }));
+      return readClaudeRun(await runJsonl("claude", args, { cwd: workDir, env, onEvent }));
     },
   };
 }

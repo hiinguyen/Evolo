@@ -3,7 +3,7 @@
 // <home>/reviews/<owner>/<name>/<unit id>.json, so scoring a unit again leaves its review in place.
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import { basename, join } from "node:path";
-import { describeUnit, judgeWithRetries, withJudgeInputs } from "./evaluate.mjs";
+import { describeUnit, judgeWithRetries, knownPathsFor, withJudgeInputs } from "./evaluate.mjs";
 import { REVIEW_TASK } from "./judges/common.mjs";
 import { localTime } from "./ledger.mjs";
 import { evidencePath } from "./score.mjs";
@@ -139,13 +139,14 @@ const reviewTask = (facts, language) =>
 // Returns { ok: true, review, issues, judge, costUsd, durationMs }, or { ok: false, failures, unavailable, costUsd }.
 export async function reviewUnit({ options, judge, facts, language, onProgress }) {
   const startedAt = Date.now();
-  const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) =>
-    judgeWithRetries({
-      judge, spec: REVIEW_TASK, checkoutDir, facts, inputs, onProgress,
+  const judged = await withJudgeInputs(options, facts, (checkoutDir, inputs) => {
+    const knownPaths = knownPathsFor(checkoutDir, facts);
+    return judgeWithRetries({
+      judge, spec: REVIEW_TASK, workDir: checkoutDir, inputs, onProgress,
       task: reviewTask(facts, language),
-      validate: (output, knownPaths) => validateReview(output, knownPaths, lineCounter(checkoutDir)),
-    }),
-  );
+      validate: (output) => validateReview(output, knownPaths, lineCounter(checkoutDir)),
+    });
+  });
   const common = { judge: { backend: judge.backend, model: judge.model }, costUsd: judged.costUsd, durationMs: Date.now() - startedAt };
   if (!judged.ok) return { ok: false, failures: judged.failures, unavailable: judged.unavailable, ...common };
   return { ok: true, review: judged.review, issues: judged.issues, ...common };

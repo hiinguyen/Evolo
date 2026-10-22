@@ -1,0 +1,92 @@
+{
+  "$comment": "Shape of the xp-report answer. report.mjs validates it again: highlights, citations and the absence of numbers.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "overview",
+    "highlights",
+    "strengths",
+    "improvements",
+    "flags",
+    "notes"
+  ],
+  "properties": {
+    "overview": {
+      "type": "string"
+    },
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit",
+          "text"
+        ],
+        "properties": {
+          "unit": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "strengths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "units"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "improvements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text",
+          "units"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "flags": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "suspected_injection"
+        ]
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}
