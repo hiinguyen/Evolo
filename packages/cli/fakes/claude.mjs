@@ -5,6 +5,10 @@
 // Given the review schema (judge/review.schema.json) it answers like a reviewer instead, with one finding in the first
 // changed file; while $FAKE_CLAUDE_LOG.badpath exists it adds a finding in a file that does not exist.
 // While $FAKE_CLAUDE_LOG.summary exists, its content is the judge's summary.
+// Given the report schema (judge/report.schema.json) it answers like the report writer, from the period.json it was
+// given: every highlight, and one strength and one improvement citing the first unit. While $FAKE_CLAUDE_LOG.badcite
+// exists it adds an improvement citing a unit that does not exist; while $FAKE_CLAUDE_LOG.digits exists its overview
+// states a number, which the validator rejects.
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 
 const args = process.argv.slice(2);
@@ -18,10 +22,34 @@ if (existsSync(`${process.env.FAKE_CLAUDE_LOG}.down`)) {
 }
 const task = args.at(-1);
 appendFileSync(process.env.FAKE_CLAUDE_LOG, `${task.split("\n")[0]}\n`);
-const factsPath = /^- (.*facts\.json)$/m.exec(task)[1];
-const facts = JSON.parse(readFileSync(factsPath, "utf8"));
-const evidence = [facts.files[0].path];
 const schema = args[args.indexOf("--json-schema") + 1];
+const switchOn = (name) => existsSync(`${process.env.FAKE_CLAUDE_LOG}.${name}`);
+// The input file `name` listed in the task.
+const input = (name) => JSON.parse(readFileSync(new RegExp(`^- (.*/${name})$`, "m").exec(task)[1], "utf8"));
+const answerWith = (output) => {
+  const result = { type: "result", subtype: "success", is_error: false, session_id: "fake", total_cost_usd: 0.01, structured_output: output };
+  process.stdout.write(`${JSON.stringify(result)}\n`);
+};
+
+if (schema.includes('"highlights"')) {
+  const period = input("period.json");
+  const first = period.units[0].key;
+  answerWith({
+    overview: switchOn("digits") ? "You earned 100 XP this week." : "A fake look back at the period.",
+    highlights: period.highlights.map((unit) => ({ unit, text: "Fake highlight." })),
+    strengths: [{ text: "Fake strength.", units: [first] }],
+    improvements: [
+      { text: "Fake improvement.", units: [first] },
+      ...(switchOn("badcite") ? [{ text: "Invented improvement.", units: ["nobody/none/pr-0"] }] : []),
+    ],
+    flags: [],
+    notes: "",
+  });
+  process.exit(0);
+}
+
+const facts = input("facts.json");
+const evidence = [facts.files[0].path];
 const finding = (location) => ({
   severity: "medium", category: "test", location, title: "Fake finding", detail: "Fake detail.", suggestion: "Fake fix.",
 });
@@ -46,6 +74,4 @@ const answer = {
   flags: [],
   notes: "",
 };
-const output = schema.includes('"findings"') ? review : answer;
-const result = { type: "result", subtype: "success", is_error: false, session_id: "fake", total_cost_usd: 0.01, structured_output: output };
-process.stdout.write(`${JSON.stringify(result)}\n`);
+answerWith(schema.includes('"findings"') ? review : answer);

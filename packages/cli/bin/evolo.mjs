@@ -16,6 +16,9 @@
 //   evolo why [<commit>|#<pr>|<unit id>] [--repo <clone>]   how a unit was scored; the latest one by default
 //   evolo review [<commit>|#<pr>|<unit id>] [--repo <clone>] [--again] [--judge claude|opencode] [--model M]
 //       a code review of a unit by a separate judge, saved under <home>/reviews; the saved one unless --again
+//   evolo report [week|month|quarter] [--previous] [--again] [--judge claude|opencode] [--model M]
+//       a performance review of this calendar period (or the previous one), written by a separate judge from the
+//       ledger and saved under <home>/reports; the saved one unless --again
 //   evolo retry                           scores the failed units again, and retries waiting jobs now
 //   evolo statusline                      one line for Claude Code's status line
 //   evolo claude install|uninstall        the /evolo skill, a SessionStart sync hook and the status line in Claude Code
@@ -49,20 +52,22 @@ import { listAllRecords, listRecords, localDay, localTime, readSummary, writeSum
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "../src/stats.mjs";
-import { formatReview, readReview, reviewUnit, writeReview } from "../src/review.mjs";
+import { basisOf, formatReport, readReport, reportData, saveReport, storedReport, writeReport } from "../src/report.mjs";
+import { formatReview, listAllReviews, readReview, reviewUnit, writeReview } from "../src/review.mjs";
 import { evoloHome, logLine } from "../src/store.mjs";
 import { commitUnit, ensureCommit, fetchPullRequest, rangeUnit } from "../src/units.mjs";
 import { terminalSafe } from "../src/safe-text.mjs";
 import { explain, findByRef, formatAchievements, formatStats, recentXp, statusLine, unitLabel } from "../src/views.mjs";
 import { enqueuePush, retryFailed, runWorker, syncAll } from "../src/worker.mjs";
 
-const USAGE = `usage: evolo <init|uninstall|sync|status|stats|achievements|dashboard|why|review|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
+const USAGE = `usage: evolo <init|uninstall|sync|status|stats|achievements|dashboard|why|review|report|retry|statusline|claude|config|worker|enqueue|evaluate> [options]
   evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]
   evolo uninstall [--repo <dir>]
   evolo sync [--background] | evolo status | evolo retry | evolo statusline | evolo worker
   evolo stats [week|month|quarter] [--previous] | evolo achievements | evolo dashboard [--no-open]
   evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]
   evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]
+  evolo report [week|month|quarter] [--previous] [--again] [--judge claude|opencode] [--model M]
   evolo claude install|uninstall
   evolo config [get <key> | set <key> <value>]
   evolo evaluate --repo <dir> --out <dir> [--judge claude|opencode] [--model M] [--budget USD]
@@ -387,6 +392,65 @@ async function review(argv) {
   console.log(formatReview(stored));
 }
 
+// The language reports are written in; a value broken by hand in config.json stops the command with the reason.
+function reportLanguage(home) {
+  try {
+    return getConfig(home, "report.language");
+  } catch (error) {
+    return fail(error.message);
+  }
+}
+
+// Shows the saved performance review of a period, saying when the ledger changed since it was written, or has the
+// judge write one (and saves it) when there is none or with --again. A period without scored units costs nothing.
+async function report(argv) {
+  const { values, positionals } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      previous: { type: "boolean", default: false },
+      again: { type: "boolean", default: false },
+      judge: { type: "string", default: "claude" },
+      model: { type: "string" },
+    },
+  });
+  const [kind = "week", ...extra] = positionals;
+  if (!PERIODS.includes(kind) || extra.length > 0) {
+    usageError(`expected: evolo report [${PERIODS.join("|")}] [--previous] [--again] [--judge claude|opencode] [--model M]`);
+  }
+  const home = evoloHome();
+  const now = new Date();
+  const period = periodOf(kind, now, values.previous ? 1 : 0);
+  const records = listAllRecords(home);
+  const reviews = listAllReviews(home);
+  const again = `evolo report ${kind}${values.previous ? " --previous" : ""} --again`;
+  const saved = readReport(home, period);
+  if (saved && !values.again) {
+    console.log(formatReport(saved, { stale: saved.basis !== basisOf(records, reviews, period), again }));
+    return;
+  }
+  const data = reportData(records, reviews, period, now);
+  if (data.input.units.length === 0) {
+    console.log(`no scored contributions in ${period.label}: nothing to review`);
+    return;
+  }
+  const language = reportLanguage(home);
+  const judge = createJudge({ backend: values.judge, model: values.model });
+  console.error(`writing the report of ${period.label} in ${language} with ${judge.model}...`);
+  const written = await writeReport({
+    judge, input: data.input, language,
+    onProgress: (tool, detail) => console.error(terminalSafe(`  ${tool} ${String(detail).slice(0, 100)}`)),
+  });
+  if (!written.ok) {
+    fail(`report failed${written.unavailable ? " (the judge could not be reached)" : ""}:\n${written.failures.map((failure) => `  ${failure}`).join("\n")}`);
+  }
+  const stored = storedReport({ data, written, language, at: new Date().toISOString() });
+  saveReport(home, stored);
+  refreshDashboard(home);
+  logLine(home, `wrote the report of ${period.label}: ${data.input.units.length} unit(s), $${(written.costUsd ?? 0).toFixed(2)}`);
+  console.log(formatReport(stored, { again }));
+}
+
 function retry() {
   const home = evoloHome();
   const notes = retryFailed(home);
@@ -439,7 +503,7 @@ function config(argv) {
   }
 }
 
-const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, achievements, dashboard, why, review, retry, statusline, claude, config, evaluate };
+const COMMANDS = { init, uninstall, enqueue, worker, sync, status, stats, achievements, dashboard, why, review, report, retry, statusline, claude, config, evaluate };
 
 const [command, ...rest] = process.argv.slice(2);
 if (!COMMANDS[command]) usageError();
