@@ -52,7 +52,7 @@ gh pr merge <số> --merge --delete-branch # merge commit, như các PR trước
 ## Test
 
 - Test dùng `node:test` và `node:assert/strict`, đặt cạnh file nguồn: `src/<tên>.test.mjs`.
-- Test E2E dùng `src/sandbox.mjs`: repo thật, remote bare, hook và worker thật; chỉ `gh`, `claude`, `notify-send` và `gdbus` là bản giả trong `fakes/`.
+- Test E2E dùng `src/sandbox.mjs`: repo thật, remote bare, hook và worker thật; chỉ `gh`, `claude`, `notify-send`, `gdbus` và `xdg-open` là bản giả trong `fakes/`.
   Thêm lời gọi `gh` mới thì cập nhật `fakes/gh.mjs` cho khớp dữ liệu GitHub thật.
 - Test không được phụ thuộc vào máy: không cần git identity toàn cục, không gọi mạng, không dùng `~/.evolo` thật.
 - Sửa lỗi: viết test E2E tái hiện lỗi trước (phải đỏ), rồi mới sửa.

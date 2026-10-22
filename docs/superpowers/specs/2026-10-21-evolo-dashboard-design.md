@@ -96,7 +96,7 @@ Achievement ẩn chưa mở chỉ có mặt dưới dạng con số `secretsHidd
 
 | Lúc | Điều kiện |
 |---|---|
-| `evolo dashboard` | Luôn sinh lại, rồi mở bằng `xdg-open`; `--no-open` chỉ in đường dẫn; không có `xdg-open` thì in đường dẫn |
+| `evolo dashboard` | Luôn sinh lại và luôn in đường dẫn; trừ khi có `--no-open`, còn chạy `xdg-open` tách rời (lệnh trả về ngay, không có `xdg-open` cũng không báo lỗi) |
 | Worker xong một job hoặc một lần sync | Chỉ khi `dashboard.html` đã tồn tại; sinh lại cả khi sync không đổi gì, vì rẻ và làm mới ảnh chụp hàng đợi |
 | `evolo review` lưu một review | Chỉ khi `dashboard.html` đã tồn tại |
 
@@ -124,7 +124,7 @@ Achievement ẩn chưa mở chỉ có mặt dưới dạng con số `secretsHidd
   - Review · N (N là số vấn đề): nhận xét, điểm mạnh, điều cần cải thiện, vấn đề xếp theo mức độ kèm `file:dòng`; chưa có review thì hiện lệnh `evolo review <id>` để chép.
   - Files: file theo loại (source, test, docs, config...), số dòng thêm và xoá.
   - Commits: commit được tính kèm revert, commit bị bỏ kèm lý do.
-- **Analytics:** chọn kỳ (tuần, tháng, quý) và kỳ này hoặc kỳ trước; XP theo ngày (cột), cơ cấu loại việc, trung bình rubric so với kỳ trước, kỷ luật test, revert, repo, thư mục, nhịp theo giờ và theo thứ; số liệu giống hệt `evolo stats`.
+- **Analytics:** chọn kỳ (tuần, tháng, quý) và kỳ này hoặc kỳ trước (khoảng hở đã biết: model chỉ giữ hai kỳ cho mỗi loại, nên màn "previous" không có số thay đổi so với kỳ trước nữa như `evolo stats --previous`); XP theo ngày (cột), cơ cấu loại việc, trung bình rubric so với kỳ trước, kỷ luật test, revert, repo, thư mục, nhịp theo giờ và theo thứ; số liệu giống hệt `evolo stats`.
 - **Achievements:** đầu trang "13 / 33 · ★ 3 secrets · ? 25 hidden"; lưới huy hiệu với emblem, tên, vạch bậc, tiến độ tới bậc sau và ngày mở; achievement ẩn đã mở có ★; mỗi achievement ẩn còn lại là một ô "?".
 - **Reviews:** mọi review, mới nhất trước, mỗi review một thẻ có số vấn đề theo mức độ; lọc theo mức độ; bấm thì mở tab Review của đơn vị.
 
@@ -133,7 +133,11 @@ Giao diện:
 - Chữ tiếng Anh như CLI; chữ của judge và review giữ nguyên ngôn ngữ đã viết.
 - Font hệ thống, không tải font ngoài; một màu nhấn xanh; huy hiệu dùng màu cam ấm.
 - Màu là token CSS trên `:root`, đổi theo `prefers-color-scheme`.
-- Dùng tốt từ 360 px: dưới khoảng 720 px thanh bên thành thanh trên cùng, lưới thành một cột.
+- Dùng tốt từ 360 px: dưới khoảng 720 px thanh bên thành thanh trên cùng (cuộn ngang, mục đang mở được cuộn vào tầm nhìn).
+  - Thẻ số liệu giữ hai cột trên điện thoại và giá trị không bao giờ tràn khỏi thẻ.
+  - Lưới huy hiệu của Achievements xếp được 3 ô mỗi hàng ở 360 px.
+  - Từ 560 tới 1079 px năm thẻ của Overview xếp 3 rồi 2, mỗi hàng đủ bề ngang; sáu số của Analytics xếp 3 và 3.
+  - Dải huy hiệu mở trong tuần ở Overview hiện tối đa 10 huy hiệu, theo thứ tự của model, rồi một link "+N more" tới `#/achievements`; tiêu đề vẫn đếm tất cả.
 - Mọi trạng thái trống có câu hướng dẫn (chưa có đơn vị, chưa có review, kỳ không có gì).
 
 ## 7. Bảo mật
@@ -148,10 +152,11 @@ Giao diện:
 
 | File | Vai trò |
 |---|---|
-| `src/dashboard.mjs` | `dashboardModel`, `writeDashboard` (đọc template, nhúng CSS, JS và model, ghi atomic 0600), `refreshDashboard` (chỉ ghi khi file đã có, nuốt lỗi vào log) |
+| `src/dashboard.mjs` | `MODULES` và `STYLES` (thứ tự nối module và CSS), `dashboardModel` (mỗi đơn vị có `result.xp`, XP lúc chấm, để hiện số bị mất), `writeDashboard` (đọc template, nhúng CSS, JS và model, ghi atomic 0600), `refreshDashboard` (chỉ ghi khi file đã có, nuốt lỗi vào log) |
 | `dashboard/index.html` | Khung trang, CSP, chỗ nhúng |
-| `dashboard/style.css` | Token màu, khung trang, thành phần dùng chung (panel, hàng, pill, nút, segmented control, huy hiệu) |
-| `dashboard/overview.css`, `timeline.css`, `unit.css`, `analytics.css`, `achievements.css`, `reviews.css` | Quy tắc riêng của từng màn hình |
+| `dashboard/style.css` | Token màu, khung trang, thành phần dùng chung (panel, hàng, pill, nút, segmented control, huy hiệu); chạy đầu tiên trong `STYLES` |
+| `dashboard/overview.css`, `timeline.css`, `unit.css`, `analytics.css`, `achievements.css`, `reviews.css` | Quy tắc riêng của từng màn hình; `STYLES` nối theo thứ tự `style.css`, rồi các file này |
+| `dashboard/fixtures.mjs` | Model mẫu dùng chung cho test của các màn hình |
 | `dashboard/html.mjs` | `escape`, `safeUrl`, định dạng số và giờ dùng chung |
 | `dashboard/charts.mjs` | Biểu đồ SVG: cột theo ngày, thanh ngang, dải theo giờ và thứ |
 | `dashboard/overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs` | Mỗi file vẽ một màn hình từ model |
