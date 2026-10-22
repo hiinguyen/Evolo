@@ -143,8 +143,12 @@ Giao diện:
 ## 7. Bảo mật
 
 - Trang chứa tóm tắt, lý do của judge, đường dẫn file và review code, nên file mới được tạo với quyền 0600; file đã có giữ quyền của nó, như `writeJson`.
-- CSP trong `<meta>`: `default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:`.
+- CSP trong `<meta>`: `default-src 'none'; script-src 'sha256-<hash>'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`.
   Không có `connect-src`, nên trang không gọi được mạng dù chữ nào lọt vào.
+  Node dựng trang nên tính SHA-256 (base64) của đúng đoạn chữ nằm trong `<script type="module">` rồi ghi vào CSP.
+  Nhờ vậy chỉ script đó chạy được, và một lỗi thoát chữ sau này không biến chữ từ dữ liệu thành script chạy.
+  `style-src` vẫn là `'unsafe-inline'` vì các màn hình đặt `style="width:..."` trực tiếp.
+  Khối model là `type="application/json"`, trình duyệt không chạy nó nên không cần hash.
 - Mọi chữ đến từ dữ liệu đi qua một hàm `escape` duy nhất trong `dashboard/html.mjs`; link chỉ nhận URL bắt đầu bằng `https://`.
 - Model được nhúng trong `<script type="application/json">` với mọi `<` thoát thành `\u003c`, nên `</script>` trong commit hay PR không thoát ra khỏi khối dữ liệu.
 

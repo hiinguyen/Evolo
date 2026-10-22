@@ -1,7 +1,7 @@
 // End to end: `evolo dashboard` on a unit the real worker scored, in the sandbox of sandbox.mjs. The sandbox's
 // `xdg-open` is a fake (fakes/xdg-open.mjs), so no browser opens.
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -106,4 +106,5 @@ test("a page that cannot be written is logged and does not stop the worker scori
   const { id } = await pushMore(box, base, 40);
   assert.equal(readRecord(box.home, REPO, id).status, "scored");
   assert.match(readFileSync(join(box.home, "evolo.log"), "utf8"), /dashboard not updated/);
+  assert.deepEqual(readdirSync(box.home).filter((name) => name.startsWith(".tmp-")), [], "a failed refresh leaves no temporary file");
 });

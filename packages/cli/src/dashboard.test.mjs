@@ -3,6 +3,7 @@
 process.env.TZ = "Asia/Ho_Chi_Minh";
 
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,6 +17,7 @@ import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, rende
 import { listAllRecords, summarize, writeRecords } from "./ledger.mjs";
 import { addJob, updateJob } from "./queue.mjs";
 import { writeReview } from "./review.mjs";
+import { runWorker } from "./worker.mjs";
 import { levelFor } from "./score.mjs";
 import { computeStats, periodOf, streakOf } from "./stats.mjs";
 import { writeText } from "./store.mjs";
@@ -57,6 +59,15 @@ test("writeText creates a new file with the given mode, keeps the mode of an exi
     assert.equal(statSync(old).mode & 0o777, 0o644);
     assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".tmp-")), []);
     assert.deepEqual(readdirSync(join(home, "a")), ["fresh.html"]);
+  });
+});
+
+test("writeText removes its temporary file when the target cannot be replaced", () => {
+  withHome((home) => {
+    const target = join(home, "target");
+    mkdirSync(target);
+    assert.throws(() => writeText(target, "text"));
+    assert.deepEqual(readdirSync(home).filter((name) => name.startsWith(".tmp-")), []);
   });
 });
 
@@ -165,6 +176,26 @@ test("a locked secret achievement is only a count; an unlocked one is shown", ()
   });
 });
 
+test("achievements.recent holds the tiers unlocked this week, never a locked secret", () => {
+  withHome((home) => {
+    seed(home, [unit({ id: "old", landed: day("2026-09-01") }), unit({ id: "u1", landed: day("2026-10-19") })]);
+    const model = dashboardModel(home, NOW);
+    const { recent, secretsFound } = model.achievements;
+    const week = periodOf("week", NOW, 0);
+    assert.ok(recent.length > 0);
+    for (const entry of recent) {
+      assert.ok(entry.name && entry.label && Number.isInteger(entry.tier) && entry.tier >= 1, JSON.stringify(entry));
+      assert.ok(Date.parse(entry.at) >= week.start.getTime() && Date.parse(entry.at) < week.end.getTime(), `${entry.id} is from this week`);
+    }
+    const older = model.achievements.visible.flatMap((achievement) => achievement.unlocked.filter(({ at }) => Date.parse(at) < week.start.getTime()).map(({ tier }) => `${achievement.id}:${tier}`));
+    assert.ok(older.length > 0, "the earlier unit unlocked something");
+    assert.ok(!recent.some((entry) => older.includes(`${entry.id}:${entry.tier}`)), "an older unlock is not recent");
+    for (const rule of SECRET.filter((rule) => !secretsFound.some((entry) => entry.id === rule.id))) {
+      assert.ok(!JSON.stringify(recent).includes(rule.name) && !recent.some((entry) => entry.id === rule.id), `${rule.id} leaked`);
+    }
+  });
+});
+
 test("a unit keeps in its result the XP it was scored at, which a revert takes off the unit itself", () => {
   withHome((home) => {
     const scored = unit({ id: "pr-5", kind: "pr", landed: day("2026-10-20"), xp: 45 });
@@ -248,7 +279,7 @@ test("renderPage embeds the model once, and text in it cannot close the data blo
 test("the page is a complete document that loads nothing from the network", () => {
   const page = renderPage(sampleModel(), DASHBOARD_DIR);
   assert.match(page, /^<!doctype html>\n<html lang="en">/);
-  assert.ok(page.includes(`<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">`));
+  assert.match(page, /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-[A-Za-z0-9+\/]{43}='; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">/);
   assert.ok(page.includes("<title>Evolo</title>"));
   assert.ok(page.includes('<div id="app"></div>'));
   assert.ok(page.includes("<noscript>"));
@@ -256,6 +287,24 @@ test("the page is a complete document that loads nothing from the network", () =
   assert.ok(page.includes(`<style>${styles(DASHBOARD_DIR)}</style>`));
   assert.ok(page.includes(`<script type="module">${bundle(DASHBOARD_DIR)}</script>`));
   assert.ok(!/\b(src|href)="(https?:)?\/\//.test(page), "no remote script, style or font");
+});
+
+// The text a browser hashes: from the end of the module script's start tag to the first `</script>` after it.
+function scriptBlock(page) {
+  const start = page.indexOf('<script type="module">') + '<script type="module">'.length;
+  return page.slice(start, page.indexOf("</script>", start));
+}
+
+test("the policy lets only the module script run, named by the hash of its exact text", () => {
+  for (const model of [sampleModel(), hostileModel()]) {
+    const page = renderPage(model, DASHBOARD_DIR);
+    const policy = page.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/)[1];
+    const hash = createHash("sha256").update(scriptBlock(page), "utf8").digest("base64");
+    assert.ok(policy.includes(`script-src 'sha256-${hash}'`), "the hash is of the script block as the browser reads it");
+    const scriptSource = policy.split("; ").find((directive) => directive.startsWith("script-src "));
+    assert.ok(!scriptSource.includes("unsafe-inline") && !scriptSource.includes("unsafe-eval"));
+    assert.ok(policy.includes("base-uri 'none'") && policy.includes("form-action 'none'") && policy.startsWith("default-src 'none'"));
+  }
 });
 
 test("the stylesheets all exist, the shared one comes first, and none loads anything", () => {
@@ -345,4 +394,32 @@ test("a record whose result has no facts goes into the model with empty facts", 
     const found = units.find((candidate) => candidate.id === "nulled");
     assert.deepEqual(found.result.facts, { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null });
   });
+});
+
+// The joining convention of `bundle` is a rule on the module files, so a file that breaks it fails here, not in a browser.
+test("every module keeps to the joining convention: no export list, one-line sibling imports", () => {
+  for (const name of MODULES) {
+    const source = readFileSync(join(DASHBOARD_DIR, name), "utf8");
+    const lines = source.split("\n");
+    assert.deepEqual(lines.filter((line) => /^export\s*[{*]/.test(line)), [], `${name} has an export list`);
+    for (const [index, line] of lines.entries()) {
+      if (!/^import\b/.test(line)) continue;
+      assert.match(line, /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";$/, `${name}:${index + 1} is not a one-line import from a sibling`);
+    }
+  }
+});
+
+test("the worker writes the page after the last job of a burst, not after each one", async () => {
+  const home = mkdtempSync(join(tmpdir(), "evolo-dashboard-"));
+  try {
+    // Jobs of a repository that is not registered are dropped without scoring, which is all this test needs of a job.
+    for (let count = 0; count < 3; count++) addJob(home, { type: "push", repo: "me/unregistered", from: "a", to: "b" });
+    // A directory where the page goes makes every write fail and be logged, which makes each write countable.
+    mkdirSync(dashboardPath(home));
+    await runWorker(home, { judge: {} });
+    const writes = readFileSync(join(home, "evolo.log"), "utf8").split("\n").filter((line) => line.includes("dashboard not updated"));
+    assert.equal(writes.length, 2, "once after the last job, once after the sync");
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
 });

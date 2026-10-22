@@ -167,7 +167,7 @@ Trang chi tiết một đóng góp hiện cả review code đã lưu trong `~/.e
 Không cần server, không cần đăng nhập, dữ liệu không rời khỏi máy; CSP của trang không cho gọi mạng.
 
 Sáu màn hình: Overview (level, XP, streak, achievement mới trong tuần, đơn vị gần nhất), Timeline (có bộ lọc), chi tiết một đơn vị (điểm rubric, lý do, bằng chứng, công thức, review, file, commit), Analytics, Achievements, Reviews.
-Worker ghi lại trang sau mỗi job và mỗi lần sync, và `evolo review` sau khi lưu, nhưng chỉ khi file đã có.
+Worker ghi lại trang sau job cuối của một loạt job và mỗi lần sync, và `evolo review` sau khi lưu, nhưng chỉ khi file đã có.
 Thiết kế và các quyết định: `docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md`.
 
 ## 10. Mô hình dữ liệu

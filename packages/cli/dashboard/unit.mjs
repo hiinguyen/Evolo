@@ -42,15 +42,15 @@ function unitHead(unit) {
     + "</header>";
 }
 
-// The tabs as links; the open one is marked, and the Review tab counts the findings of the review when there is one.
+// The tabs as a navigation of links (not ARIA tabs, which would need arrow-key handling); the open one is marked, and the Review tab counts the findings of the review when there is one.
 function unitTabs(unit, stored, open) {
   const labels = { score: "Score", review: stored ? `Review · ${formatXp(stored.review.findings?.length ?? 0)}` : "Review", files: "Files", commits: "Commits" };
   const links = UNIT_TABS.map((tab) => {
     const href = escape(hashOf("unit", ...unit.key.split("/"), tab));
-    const panelRef = tab === open ? ' aria-controls="unit-panel"' : "";
-    return `<a role="tab" href="${href}" aria-selected="${tab === open}" id="unit-tab-${tab}"${panelRef}>${labels[tab]}</a>`;
+    const current = tab === open ? ' aria-current="page"' : "";
+    return `<a href="${href}"${current}>${labels[tab]}</a>`;
   });
-  return `<div class="tabs" role="tablist" aria-label="Unit details">${links.join("")}</div>`;
+  return `<nav class="tabs" aria-label="Unit sections">${links.join("")}</nav>`;
 }
 
 // What the XP signals added, worded as `evolo why` words them (views.mjs's signalsLine).
@@ -243,5 +243,5 @@ export function renderUnit(model, key, tab) {
   const content = { score: () => scoreTab(model, unit), review: () => reviewTab(unit, stored), files: () => filesTab(unit), commits: () => commitsTab(unit) };
   const open = Object.hasOwn(content, tab) ? tab : "score";
   return `<div class="screen">${unitHead(unit)}${unitTabs(unit, stored, open)}`
-    + `<div class="tab-panel" id="unit-panel" role="tabpanel" aria-labelledby="unit-tab-${open}">${content[open]()}</div></div>`;
+    + `<div class="tab-panel">${content[open]()}</div></div>`;
 }

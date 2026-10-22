@@ -25,11 +25,17 @@ export function writeText(path, text, { mode } = {}) {
   const temporary = join(dirname(path), `.tmp-${process.pid}-${Math.random().toString(36).slice(2)}`);
   writeFileSync(temporary, text, mode === undefined ? undefined : { mode });
   try {
-    chmodSync(temporary, statSync(path).mode & 0o7777);
+    try {
+      chmodSync(temporary, statSync(path).mode & 0o7777);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    renameSync(temporary, path);
   } catch (error) {
-    if (error.code !== "ENOENT") throw error;
+    // A failed write must not leave its temporary file behind: a refresh that keeps failing would fill the folder.
+    rmSync(temporary, { force: true });
+    throw error;
   }
-  renameSync(temporary, path);
 }
 
 export function writeJson(path, value) {

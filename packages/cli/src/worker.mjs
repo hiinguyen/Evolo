@@ -309,7 +309,9 @@ export async function runWorker(home, { judge = createJudge({ backend: "claude" 
       const inFlight = jobs.some((job) => job.attempts === 0 && !isParked(job));
       if (ready) {
         await processJob(home, ready, judge);
-        refreshDashboard(home);
+        // Writing the page costs about a second on a ledger of thousands of units, so a burst of jobs writes it once,
+        // after the last of them; the sync that follows writes it again with what the sync found.
+        if (!listJobs(home).some((job) => job.notBefore <= Date.now())) refreshDashboard(home);
         worked = true;
       } else if (worked && !inFlight) {
         syncAll(home).forEach((note) => logLine(home, note));

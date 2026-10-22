@@ -273,7 +273,7 @@ Prompt giờ bắt buộc đọc hết diff, và validator loại mọi kết qu
 
 Mọi cách xem đều chỉ đọc ledger và `~/.evolo/summary.json`, không gọi judge.
 Ngoài ra có `evolo dashboard`, một trang HTML tĩnh (`~/.evolo/dashboard.html`, thiết kế ở `docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md`).
-Sau mỗi job và mỗi lần sync, worker ghi lại trang này nếu nó đã tồn tại; `evolo review` cũng vậy sau khi lưu một review.
+Sau job cuối của một loạt job (không phải giữa hai job liền nhau) và mỗi lần sync, worker ghi lại trang này nếu nó đã tồn tại; `evolo review` cũng vậy sau khi lưu một review.
 Lỗi khi ghi trang chỉ được ghi vào `evolo.log`, không bao giờ làm dừng việc chấm điểm.
 Điểm chỉ đến người dùng, không vào context của agent đang code (mục 1).
 

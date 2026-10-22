@@ -3,6 +3,7 @@
 // the queue. The page is a function of this object alone, so what is left out here can never reach the HTML.
 // Left out on purpose: PR and commit bodies, the judge's `notes`, `sessionID`, `deniedCommands` and `job` are long and
 // not shown; a locked secret achievement is only counted, so its name and condition are not in the page source either.
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,6 +158,14 @@ export function styles(dir) {
   return STYLES.map((name) => readFileSync(join(dir, name), "utf8")).join("\n");
 }
 
+// Only the one module script may run: the policy names it by the SHA-256 of its exact text, so markup that gets into the
+// page through a future escaping mistake cannot run. Styles stay inline because the screens set `style="width:..."`.
+// The JSON model block is `type="application/json"`, which is data and never executed, so it needs no hash.
+export function contentSecurityPolicy(script) {
+  const hash = createHash("sha256").update(script, "utf8").digest("base64");
+  return `default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`;
+}
+
 // The page for `model`: the template of `dir` with its styles, the model and the script put in. Each is put in by a
 // function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The model
 // goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `\u003c`, which JSON
@@ -164,10 +173,12 @@ export function styles(dir) {
 export function renderPage(model, dir) {
   const template = readFileSync(join(dir, "index.html"), "utf8");
   const style = styles(dir);
+  const script = bundle(dir);
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
   return template
+    .replace("/*evolo:csp*/", () => contentSecurityPolicy(script))
     .replace("/*evolo:style*/", () => style)
-    .replace("/*evolo:script*/", () => bundle(dir))
+    .replace("/*evolo:script*/", () => script)
     .replace("/*evolo:model*/", () => data);
 }
 

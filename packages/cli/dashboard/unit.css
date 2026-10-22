@@ -29,7 +29,7 @@
 }
 
 .tabs a:hover { color: var(--text); }
-.tabs a[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
+.tabs a[aria-current="page"] { border-bottom-color: var(--accent); color: var(--text); }
 .tabs a:focus-visible { outline-offset: -2px; }
 
 /* The tabs sit closer to their panel than the screen's other blocks sit to each other. */

@@ -34,11 +34,11 @@ const withUnit = (model, key, change) => ({ ...model, units: model.units.map((un
 const withResult = (model, key, change) => withUnit(model, key, (unit) => ({ ...unit, result: change(unit.result) }));
 
 const tabsOf = (html) =>
-  [...html.matchAll(/<a role="tab" href="([^"]*)" aria-selected="(true|false)"[^>]*>(.*?)<\/a>/g)].map(([, href, selected, label]) => [href, selected, label]);
+  [...html.split('<nav class="tabs"')[1].split("</nav>")[0].matchAll(/<a href="([^"]*)"( aria-current="page")?>(.*?)<\/a>/g)].map(([, href, current, label]) => [href, current ? "true" : "false", label]);
 
 test("the head shows repo, label, XP, type, landing time, the PR link and the summary", () => {
   const html = renderUnit(sampleModel(), PR, "score");
-  const [head] = html.split('role="tablist"');
+  const [head] = html.split('<nav class="tabs"');
   const text = textOf(head);
   assert.match(text, /hiinguyen\/ai-orgs/);
   assert.match(text, /PR #1/);
@@ -50,9 +50,9 @@ test("the head shows repo, label, XP, type, landing time, the PR link and the su
 });
 
 test("a unit not worth XP shows its status in the head, with the XP it lost struck through", () => {
-  const reverted = renderUnit(sampleModel(), REVERTED, "score").split('role="tablist"')[0];
+  const reverted = renderUnit(sampleModel(), REVERTED, "score").split('<nav class="tabs"')[0];
   assert.match(reverted, /<s class="unit-lost"[^>]*>\+40 XP<\/s><span class="pill">reverted<\/span>/);
-  const failed = renderUnit(sampleModel(), FAILED, "score").split('role="tablist"')[0];
+  const failed = renderUnit(sampleModel(), FAILED, "score").split('<nav class="tabs"')[0];
   assert.match(failed, /<span class="pill pill-bad">failed<\/span>/);
   assert.ok(!textOf(failed).includes("XP"));
   assert.match(textOf(failed), /push · 2026-10-19 17:40/, "a failed unit has its kind for a type");
@@ -66,9 +66,11 @@ test("the tabs are links with their state, and the Review tab counts the finding
     ["#/unit/hiinguyen/ai-orgs/pr-1/files", "true", "Files"],
     ["#/unit/hiinguyen/ai-orgs/pr-1/commits", "false", "Commits"],
   ]);
-  assert.match(renderUnit(sampleModel(), PR, "files"), /<div class="tabs" role="tablist" aria-label="[^"]+">/);
+  assert.match(renderUnit(sampleModel(), PR, "files"), /<nav class="tabs" aria-label="Unit sections">/);
+  assert.ok(!/role="tab|aria-selected|tablist/.test(renderUnit(sampleModel(), PR, "files")), "links do not claim the tab ARIA roles");
   assert.equal(tabsOf(renderUnit(sampleModel(), UNREVIEWED, "score"))[1][2], "Review", "no review, no count");
-  assert.match(renderUnit(sampleModel(), PR, "review"), /role="tabpanel"/);
+  assert.match(renderUnit(sampleModel(), PR, "review"), /<a href="[^"]*\/review" aria-current="page">/);
+  assert.ok(!renderUnit(sampleModel(), PR, "review").includes("tabpanel"));
 });
 
 test("the Score tab of a judged unit has every criterion with its bar, score, reason and evidence", () => {
@@ -257,12 +259,12 @@ test("a key that is not in the ledger says so, with a way back to the Timeline",
   const html = renderUnit(sampleModel(), "me/gone/pr-404", "score");
   assert.match(textOf(html), /This unit is no longer in the ledger/);
   assert.match(html, /<a [^>]*href="#\/timeline"[^>]*>/);
-  assert.ok(!html.includes('role="tablist"'));
+  assert.ok(!html.includes('<nav class="tabs"'));
 });
 
 test("a unit whose result has no facts, breakdown or evaluation renders every tab", () => {
   const bare = withUnit(sampleModel(), AI_PUSH, (unit) => ({ ...unit, result: { xp: 0, failures: [], issues: [], facts: { diffMode: undefined, totals: null, files: [], commits: [], excluded: [], pr: null } } }));
   for (const tab of ["score", "review", "files", "commits"]) {
-    assert.match(renderUnit(bare, AI_PUSH, tab), /unit-panel/, tab);
+    assert.match(renderUnit(bare, AI_PUSH, tab), /class="tab-panel"/, tab);
   }
 });
