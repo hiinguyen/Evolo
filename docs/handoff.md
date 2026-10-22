@@ -271,7 +271,8 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - Đo trên 5.000 bản ghi giả (5 repo, một năm, 5-40 file mỗi bản ghi): `dashboardModel` khoảng 1,1-1,3 giây, `renderPage` 0,13-0,19 giây, trang 12,2 MiB; vì quá 1 giây nên worker chỉ ghi lại trang sau job cuối của một loạt job thay vì sau mỗi job.
 - Khoảng hở đã biết: màn Analytics "previous" không có số thay đổi so với kỳ trước, vì model chỉ giữ hai kỳ cho mỗi loại (`evolo stats --previous` so với kỳ ngay trước đó).
 - Test: `src/dashboard.test.mjs`, một test cho mỗi module trong `dashboard/`, `src/dashboard.e2e.test.mjs` (6 test); tổng 304 test của `npm test`, đều pass.
-- Agent review: xem PR.
+- Agent review từng task và review cuối cả nhánh: không có CRITICAL; đã sửa CSP còn `'unsafe-inline'` cho script (giờ dùng hash SHA-256), file tạm bị bỏ lại khi ghi lỗi, chi phí ghi lại trang sau mỗi job, `role="tab"` trên link không có phím mũi tên, và bản ghi thiếu `facts` làm hỏng cả trang.
+  Để sau: bộ lọc Type trộn `push`/`pr` với loại việc, số trong công thức có dấu phân cách hàng nghìn khác `evolo why`, Timeline chưa phân trang.
 
 ### Git
 
