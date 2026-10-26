@@ -345,7 +345,7 @@ function reviewInputs(home, record) {
   if (!repo) fail(`${record.repo} is not registered on this machine: run \`evolo init\` in its clone to review its units`);
   try {
     ensureCommit(repo.path, repo.remote, facts);
-    return { facts, repo, language: getConfig(home, "review.language") };
+    return { facts, repo, language: getConfig(home, "language") };
   } catch (error) {
     return fail(error.message);
   }
@@ -394,7 +394,7 @@ async function review(argv) {
 // The language reports are written in; a value broken by hand in config.json stops the command with the reason.
 function reportLanguage(home) {
   try {
-    return getConfig(home, "report.language");
+    return getConfig(home, "language");
   } catch (error) {
     return fail(error.message);
   }

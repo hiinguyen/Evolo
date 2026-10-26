@@ -448,7 +448,7 @@ packages/cli/                 # gói npm "evolo"
   src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, PR đã merge của tôi, chọn remote đúng, CI, review, issue
   src/signals.mjs             # [có] tín hiệu XP (CI, merge sạch, issue bug) và tính lại XP từ điểm đã lưu
   src/budget.mjs              # [có] chi phí judge theo ngày và trần budget.daily-usd
-  src/config.mjs              # [có] ~/.evolo/config.json: review.language, report.language, budget.daily-usd, dashboard.theme, dashboard.name
+  src/config.mjs              # [có] ~/.evolo/config.json: language, budget.daily-usd, dashboard.theme, dashboard.name
   src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, landedAt, summary.json
   src/stats.mjs               # [có] analytics theo kỳ và streak, cho evolo stats
   src/achievements.mjs        # [có] bậc, tiến độ và ngày mở của achievement; achievements.json nhớ bậc đã báo
