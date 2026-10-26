@@ -11,6 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { modelIn, sampleModel } from "../dashboard/fixtures.mjs";
 import { parseHash, renderRoute, renderShell } from "../dashboard/app.mjs";
+import { BRAND_MARK } from "../dashboard/brand.mjs";
 import { SECRET } from "./achievements/secret.mjs";
 import { SECRET_ICONS } from "./achievements/secret-icons.mjs";
 import { day, unit as fixtureUnit } from "./achievements/fixtures.mjs";
@@ -352,6 +353,18 @@ test("the page is a complete document that loads nothing from the network", () =
   assert.ok(page.includes(`<style>${styles(DASHBOARD_DIR)}</style>`));
   assert.ok(page.includes(`<script type="module">${bundle(DASHBOARD_DIR)}</script>`));
   assert.ok(!/\b(src|href)="(https?:)?\/\//.test(page), "no remote script, style or font");
+});
+
+test("the sidebar brand and the tab icon are the same drawing", () => {
+  const model = sampleModel();
+  const page = renderPage(model, DASHBOARD_DIR);
+  const href = page.match(/<link rel="icon" href="([^"]+)">/)?.[1];
+  assert.ok(href?.startsWith("data:image/svg+xml,"), "the tab icon is a data URL, so the page still loads nothing");
+  assert.equal(decodeURIComponent(href.slice("data:image/svg+xml,".length)), BRAND_MARK, "the icon is the brand drawing");
+  // The frame is drawn in the browser, so its mark travels in the module rather than in the template.
+  assert.ok(scriptBlock(page).includes("const BRAND_MARK ="), "the module carries the mark");
+  assert.ok(renderShell(model, parseHash("#/"), "").includes(`<span class="brand-mark" aria-hidden="true">${BRAND_MARK}</span>`),
+    "the frame draws the same mark");
 });
 
 // The text a browser hashes: from the end of a script's start tag to the first `</script>` after it.

@@ -4,6 +4,7 @@
 // in Node (the tests) it only exports its functions.
 import { renderAchievements } from "./achievements.mjs";
 import { renderAnalytics } from "./analytics.mjs";
+import { BRAND_MARK } from "./brand.mjs";
 import { escape, formatXp, localDate } from "./html.mjs";
 import { renderOverview } from "./overview.mjs";
 import { renderReport, renderReports } from "./reports.mjs";
@@ -109,7 +110,7 @@ export function renderShell(model, route, content) {
   const initials = initialsOf(model.name || rank.name);
   const version = model.appVersion ? `<span class="brand-version">v${escape(model.appVersion)}</span>` : "";
   return '<div class="frame"><nav class="sidebar" aria-label="Dashboard">'
-    + `<a class="brand" href="#/"><span class="brand-mark" aria-hidden="true"></span><span class="brand-name">Evolo</span>${version}</a>`
+    + `<a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">${BRAND_MARK}</span><span class="brand-name">Evolo</span>${version}</a>`
     + `<div class="nav-scroll"><ul class="nav">${items}</ul></div>`
     + '<div class="sidebar-foot"><div class="profile-head">'
     + `<span class="profile-avatar" aria-hidden="true">${escape(initials)}</span>`

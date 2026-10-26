@@ -55,6 +55,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Redesign dashboard | Theme Light/Dark/System, tên hiển thị, rank theo level, công thức level 1.1, nới trần achievement, polish 7 màn hình; Timeline bám mock `code.html` | chưa mở PR |
 | Redesign theo mock `codeui` | Top bar có sync mark và chip kỳ, Overview có tab lọc feed và rail gọn hơn, Reviews có health ring, finding breakdown và actionable findings, Reports có velocity history và sync sources, unit detail có hero metrics, tab gạch chân, lọc finding và checklist | chưa mở PR |
 | Secret emblems | Nét vẽ riêng cho từng achievement ẩn đã mở, huy hiệu niêm phong cho secret chưa mở; id và hình của secret chưa mở không vào page source | chưa mở PR |
+| Icon | Logo mới: ngoặc nhọn ôm nút commit trên nền amber, một nét vẽ dùng chung cho brand ở sidebar và favicon, không thêm file ảnh | chưa mở PR |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 | README | `README.md` ở gốc repo, viết bằng tiếng Anh với mục Languages (Anh/Việt cho review và report): giới thiệu, yêu cầu, cài đặt bằng `npm install -g evolo` trên Linux, macOS, Windows (kèm `npm link` khi làm từ bản clone), sử dụng, bảng lệnh và cấu hình, kèm 4 ảnh chụp thật (`docs/images/`: status, Overview dashboard, chi tiết đơn vị, Achievements) | #15 |
 | Ngôn ngữ dùng chung | Gộp `review.language` và `report.language` thành khoá `language` (mặc định `vi`), vẫn đọc khoá cũ của 1.0.x; `evolo config` và README chỉ còn một khoá | #19 |
@@ -89,7 +90,7 @@ Code trong `packages/cli/`:
 | `src/rank.mjs` | Bảng 11 rank theo level và `rankFor(level)`; hiệu ứng CSS của từng bậc do dashboard và terminal dùng chung |
 | `src/report.mjs` | Performance review: `reportData` (đầu vào của judge, số liệu, `basis`), `validateReport`, `writeReport`, `storedReport`, `readReport`, `saveReport`, `listAllReports`, `formatReport` |
 | `src/dashboard.mjs` | Dashboard: `dashboardModel` (một object chứa mọi thứ trang hiện), `writeDashboard`, `refreshDashboard` (chỉ ghi khi file đã có, lỗi chỉ vào log); `MODULES` và `STYLES` là thứ tự nối module và CSS |
-| `dashboard/` | Template, CSS và module vẽ của trang, không có bước build (`src/dashboard.mjs` nối chúng thành một script):<br>`index.html` khung trang và CSP; `html.mjs` `escape`, `safeUrl`, định dạng, `emptyPanel`; `charts.mjs` biểu đồ SVG; `icons.mjs` icon của từng achievement hiện; `theme.mjs` boot script, resolver, segmented control và hiệu ứng rank;<br>`overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs`, `reports.mjs` mỗi file một màn hình; `app.mjs` router hash, khung trang, bộ lọc, khởi động;<br>`style.css` và một file CSS cho mỗi màn hình; `fixtures.mjs` model mẫu cho test |
+| `dashboard/` | Template, CSS và module vẽ của trang, không có bước build (`src/dashboard.mjs` nối chúng thành một script):<br>`index.html` khung trang và CSP; `html.mjs` `escape`, `safeUrl`, định dạng, `emptyPanel`; `charts.mjs` biểu đồ SVG; `icons.mjs` icon của từng achievement hiện; `brand.mjs` nét vẽ logo dùng chung cho brand ở sidebar và favicon; `theme.mjs` boot script, resolver, segmented control và hiệu ứng rank;<br>`overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs`, `reports.mjs` mỗi file một màn hình; `app.mjs` router hash, khung trang, bộ lọc, khởi động;<br>`style.css` và một file CSS cho mỗi màn hình; `fixtures.mjs` model mẫu cho test |
 | `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic (giữ quyền của file cũ), `readJsonTree` (mọi bản ghi dưới một thư mục), `evolo.log` |
 | `src/views.mjs` | Nội dung thông báo, status line, `why`, `stats` và `achievements`; tìm đơn vị theo mã, `#PR` hoặc commit |
 | `src/review.mjs` | `evolo review`: kiểm tra đầu ra (đường dẫn và số dòng), lưu và in review |
@@ -115,7 +116,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 384 test, đều pass (19 test E2E, khoảng 40 giây); CI chạy cùng lệnh
+cd packages/cli && npm test                      # 385 test, đều pass (19 test E2E, khoảng 40 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất

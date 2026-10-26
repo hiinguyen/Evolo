@@ -174,6 +174,7 @@ Giao diện:
 | `dashboard/theme.mjs` | `bootScript(configured)` cho `<head>`, `resolveTheme`, segmented control và listener System, `rankClasses(rank)` cho hiệu ứng rank |
 | `src/rank.mjs` | Bảng rank theo level và `rankFor(level)`, dùng chung cho dashboard và terminal |
 | `dashboard/icons.mjs` | Icon SVG 24 px chi tiết cho mỗi achievement hiện, khung badge 80 px (tròn, khiên, lục giác, vuông, sao, kim cương), `achievementEmblem` cho cả thẻ Achievement và dải Overview, `secretEmblem(drawing)` cho secret đã mở; không có id nào của achievement ẩn trong file này |
+| `dashboard/brand.mjs` | Nét vẽ logo Evolo (ngoặc nhọn ôm nút commit trên nền amber); `src/dashboard.mjs` dùng nó cho favicon, `app.mjs` dùng cho brand ở sidebar, nên hai chỗ không lệch nhau |
 | `src/achievements/secret-icons.mjs` | Nét vẽ 24 px riêng cho từng achievement ẩn; chỉ chạy phía Node, chỉ nét vẽ của secret đã mở đi vào model, nên mã nguồn trang không lộ id hay hình của secret chưa mở |
 | `dashboard/overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs` | Mỗi file vẽ một màn hình từ model |
 | `dashboard/app.mjs` | Router hash, khung trang (thanh bên), bộ lọc, khởi động trong trình duyệt |
@@ -191,6 +192,7 @@ Skill `/evolo` không đổi: nó chỉ chạy `status`, `why`, `retry`.
   - achievement ẩn chưa mở không có tên hay mô tả nào trong model;
   - bản ghi chưa chấm (`push_failed`, `failed`) và bản ghi cũ thiếu trường vẫn vào model;
   - trang ghi ra có quyền 0600, `</script>` trong dữ liệu không phá khối JSON;
+  - favicon và brand ở sidebar dùng đúng một nét vẽ, favicon là data URL nên trang vẫn không tải gì;
   - CSP có đúng hai hash, khớp nguyên văn boot script và module, không có `unsafe-inline` hay `unsafe-eval` cho script;
   - bản nối các module nạp được như một module (không trùng tên, không còn `import` hay `export`).
 - `dashboard/*.test.mjs` (một file test cho mỗi module):
