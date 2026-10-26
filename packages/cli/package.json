@@ -1,10 +1,30 @@
 {
   "name": "evolo",
-  "version": "0.1.0",
-  "private": true,
-  "description": "Scores git contributions with an AI judge and a deterministic XP formula.",
+  "version": "1.0.1",
+  "description": "Scores your GitHub contributions with an AI judge and a deterministic XP formula.",
   "type": "module",
   "bin": { "evolo": "bin/evolo.mjs" },
+  "files": [
+    "bin",
+    "claude",
+    "dashboard",
+    "judge",
+    "src",
+    "LICENSE",
+    "!**/*.test.mjs",
+    "!src/sandbox.mjs"
+  ],
   "engines": { "node": ">=20" },
-  "scripts": { "test": "node --test" }
+  "scripts": { "test": "node --test" },
+  "keywords": ["ai", "cli", "gamification", "git", "github", "xp"],
+  "author": "Nguyễn Ngọc Hải",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hiinguyen/Evolo.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/hiinguyen/Evolo#readme",
+  "bugs": { "url": "https://github.com/hiinguyen/Evolo/issues" },
+  "publishConfig": { "access": "public" }
 }

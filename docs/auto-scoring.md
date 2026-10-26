@@ -311,7 +311,7 @@ Luật và ngưỡng của achievement hiện: `docs/superpowers/specs/2026-10-2
 
 ### Thông báo desktop
 
-Worker gửi `notify-send` khi một đơn vị được chấm xong:
+Worker gửi thông báo desktop khi một đơn vị được chấm xong, bằng công cụ của từng hệ điều hành (`src/platform.mjs`): `notify-send` trên Linux, `osascript` trên macOS, PowerShell balloon trên Windows.
 
 | Trạng thái | Tiêu đề | Nội dung |
 |---|---|---|
@@ -322,9 +322,9 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 | Hết ngân sách ngày | `Evolo Daily budget spent` | Số tiền đã tiêu, và gợi ý `evolo config set budget.daily-usd <USD>`; mỗi ngày một lần |
 
 `push_failed` và `skipped` không có thông báo, vì người dùng đã thấy push lỗi, còn đơn vị bị bỏ qua thì không có gì để báo.
-Không có `notify-send` (máy không có desktop) thì bỏ qua, kết quả vẫn ở log và ledger.
-Trình hiện thông báo báo có `body-markup` (hỏi qua `gdbus`) thì tên đơn vị được in đậm, và chữ của judge giữ lại `<b>`, `<i>`, `<u>` và `<a href>` tới địa chỉ `http(s)`, mỗi link kèm địa chỉ trong ngoặc; mọi thẻ khác (kể cả `<img>`) bị thoát, ký tự điều khiển bị bỏ (`src/safe-text.mjs`).
-Không có `body-markup` thì bỏ các thẻ đó, link thành `chữ (địa chỉ)`.
+Không có công cụ thông báo (máy không có desktop) thì bỏ qua, kết quả vẫn ở log và ledger.
+Trình hiện thông báo trên Linux báo có `body-markup` (hỏi qua `gdbus`) thì tên đơn vị được in đậm, và chữ của judge giữ lại `<b>`, `<i>`, `<u>` và `<a href>` tới địa chỉ `http(s)`, mỗi link kèm địa chỉ trong ngoặc; mọi thẻ khác (kể cả `<img>`) bị thoát, ký tự điều khiển bị bỏ (`src/safe-text.mjs`).
+Không có `body-markup`, hoặc trên macOS và Windows, thì bỏ các thẻ đó, link thành `chữ (địa chỉ)`; mọi thông báo đều hiện chữ thuần ở hai hệ điều hành này.
 SwayNotificationCenter 0.12.6 render `<b>`, `<i>`, `<u>` nhưng hiện thẻ `<a>` nguyên văn (2026-10-20).
 Đơn vị bị `reverted` hay `superseded` khi sync chưa có thông báo; `status` vẫn hiện chúng.
 Achievement chỉ được kiểm tra sau một bản ghi `scored`; `~/.evolo/achievements.json` nhớ các bậc đã báo để không báo lại bậc mất rồi mở lại.
@@ -455,6 +455,7 @@ packages/cli/                 # gói npm "evolo"
   src/achievements/           # [có] catalog.mjs (achievement hiện), secret.mjs (achievement ẩn), fixtures.mjs (bản ghi giả cho test)
   src/views.mjs               # [có] nội dung thông báo, status line, why, stats, achievements; tìm đơn vị theo commit, PR hoặc mã
   src/claude.mjs              # [có] claude install/uninstall: skill, hook SessionStart, status line
+  src/platform.mjs            # [có] phần khác nhau giữa Linux, macOS và Windows: mở browser, thông báo, tìm executable, quote lệnh cho hook
   fakes/                      # [có] gh, claude, notify-send, gdbus và xdg-open giả cho test E2E (sandbox.mjs)
   judge/xp-judge.md           # [có] rubric và prompt: một nguồn duy nhất cho cả hai backend
   judge/output.schema.json    # [có] schema đầu ra, có test kiểm tra khớp với validator
@@ -462,7 +463,7 @@ packages/cli/                 # gói npm "evolo"
 ```
 
 Chạy test: `cd packages/cli && npm test`.
-Cài lệnh `evolo` một lần: `ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo` (hoặc `npm link` trong `packages/cli` nếu thư mục global của npm ghi được không cần sudo).
+Cài lệnh `evolo`: `npm install -g evolo` (hoặc `npm link` trong `packages/cli` khi làm từ bản clone).
 Cài cho một repo: `evolo init` trong clone đó; xem kết quả bằng `evolo status`.
 Chấm thử: `evolo evaluate --repo <clone> --out <dir> --own [--judge opencode] [--model M] [--range <from>..<to>]... [--pr <number>]... [<sha>...]`.
 

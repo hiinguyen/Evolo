@@ -33,7 +33,6 @@
 // For evaluate, each --range is one push, each --pr one merged PR, and each bare <sha> a push of that commit alone.
 // A range leaves out commits that belong to a merged PR (they are scored with the PR) and, when --author is given,
 // commits by anyone else.
-import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,6 +51,7 @@ import { CONFIG_KEYS, getConfig, listConfig, setConfig } from "../src/config.mjs
 import { listAllRecords, listRecords, localDay, localTime, readSummary, writeSummary } from "../src/ledger.mjs";
 import { listJobs, requestSync, spawnWorker } from "../src/queue.mjs";
 import { findRepo, initRepo, loadRepos, uninstallRepo } from "../src/repos.mjs";
+import { openInBrowser } from "../src/platform.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "../src/stats.mjs";
 import { basisOf, formatReport, readReport, reportData, saveReport, storedReport, writeReport } from "../src/report.mjs";
 import { formatReview, listAllReviews, readReview, reviewUnit, writeReview } from "../src/review.mjs";
@@ -284,7 +284,7 @@ function achievements(argv) {
 }
 
 // Writes the page and prints its path, which is all `--no-open` does. Otherwise the browser is started detached, so the
-// command returns at once; a desktop without xdg-open is no error, since the path to open by hand is already printed.
+// command returns at once; a desktop without an opener is no error, since the path to open by hand is already printed.
 function dashboard(argv) {
   const { values } = parseArgs({ args: argv, options: { "no-open": { type: "boolean", default: false } } });
   let path;
@@ -295,9 +295,7 @@ function dashboard(argv) {
   }
   console.log(path);
   if (values["no-open"]) return;
-  const opener = spawn("xdg-open", [path], { detached: true, stdio: "ignore" });
-  opener.on("error", () => {});
-  opener.unref();
+  openInBrowser(path);
 }
 
 // The record of the unit `ref` names, searched in the registered clone `repoDir` when it is one, else in every

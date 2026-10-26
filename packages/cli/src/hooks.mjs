@@ -3,17 +3,16 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { git } from "./facts.mjs";
+import { quoteCommand } from "./platform.mjs";
 
 const MARKER = "# Installed by evolo.";
 const CHAINED = "pre-push.evolo-chained";
-
-const shellQuote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
 
 // `command` is the argv that runs the Evolo CLI, e.g. [node, ".../bin/evolo.mjs"].
 // Git gives the refs on stdin, which can be read only once, so the script keeps them and hands them to both.
 // Evolo's part never fails the push: only the previous hook can stop it, as it could before.
 export function hookScript(command) {
-  const evolo = command.map(shellQuote).join(" ");
+  const evolo = quoteCommand(command);
   return `#!/bin/sh
 ${MARKER} \`evolo uninstall\` removes it; the previous pre-push hook, if any, is ${CHAINED}.
 input=$(cat)

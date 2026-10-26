@@ -3,6 +3,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { judgeExecutable } from "../platform.mjs";
 
 const judgeFile = (name) => fileURLToPath(new URL(`../../judge/${name}`, import.meta.url));
 
@@ -51,8 +52,10 @@ function parseEvent(line) {
 // Runs a command that prints one JSON event per line.
 // `isFatal(event)` stops the child early, for CLIs that keep running after reporting an error.
 export function runJsonl(command, args, { cwd, env, onEvent, isFatal = () => false }) {
+  // On Windows the name alone may be a batch shim, which cannot carry the prompt; this throws with the reason.
+  const executable = judgeExecutable(command);
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(executable, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
     runningJudges.add(child);
     const events = [];
     let pending = "";

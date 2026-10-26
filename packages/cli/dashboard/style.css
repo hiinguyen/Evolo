@@ -467,10 +467,6 @@ code {
 .head-action:hover { border-color: var(--accent); }
 .head-action svg { width: 13px; height: 13px; }
 
-.page-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; color: var(--muted); font-size: 12px; line-height: 16px; }
-.page-foot-meta { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 10px; line-height: 16px; }
-.page-foot-meta .status-dot { width: 6px; height: 6px; }
-
 .notice {
   margin-bottom: 24px;
   padding: 12px 16px;

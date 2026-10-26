@@ -1,6 +1,5 @@
 // The background half of Evolo: the pre-push hook adds a job, one worker per machine scores the queue,
 // and a sync after the queue drains picks up merged PRs and re-checks the ledger (docs/auto-scoring.md sections 2-4).
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { setTimeout as sleep } from "node:timers/promises";
 import { achievementsOf, notifyUnlocks } from "./achievements.mjs";
@@ -13,6 +12,7 @@ import { createJudge } from "./judges/index.mjs";
 import { isJudged, isLive, landedAt, listAllRecords, listRecords, localDay, readRecord, readSummary, refreshLedger, scoredRecord, writeRecord, writeRecords } from "./ledger.mjs";
 import { acquireLock, addJob, hasSyncRequest, isAlive, isParked, listJobs, removeJob, takeSyncRequest, updateJob } from "./queue.mjs";
 import { findRepo, loadRepos } from "./repos.mjs";
+import { markupSupported, sendNotification } from "./platform.mjs";
 import { logLine } from "./store.mjs";
 import { NothingToScoreError, fetchPullRequest, hasCommit, isAncestor, pushedUnit } from "./units.mjs";
 import { terminalSafe } from "./safe-text.mjs";
@@ -29,8 +29,6 @@ const RETRY_DELAYS_MS = [60 * 1000, 5 * 60 * 1000, 30 * 60 * 1000];
 const MAX_IDLE_MS = 5 * 1000;
 // Bound on every call to a remote, which can hang on a dead network.
 const REMOTE_TIMEOUT_MS = 2 * 60 * 1000;
-// A notification daemon that does not answer must not hold the queue up.
-const NOTIFY_TIMEOUT_MS = 5 * 1000;
 
 const ZERO_SHA = /^0+$/;
 const short = (sha) => (sha ? sha.slice(0, 7) : "root");
@@ -70,32 +68,16 @@ export function remoteHead(repoDir, remote, branch) {
 
 const unitIdOf = (job) => (job.type === "pr" ? `pr-${job.number}` : `push-${short(job.from)}-${short(job.to)}`);
 
-// Whether the desktop's notification server reads the body as markup (freedesktop.org "body-markup").
-// Servers without it show markup as written, so it is used only when the server says so; no answer means no.
-function supportsBodyMarkup() {
-  try {
-    const capabilities = execFileSync(
-      "gdbus",
-      ["call", "--session", "--dest", "org.freedesktop.Notifications", "--object-path", "/org/freedesktop/Notifications",
-        "--method", "org.freedesktop.Notifications.GetCapabilities"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: NOTIFY_TIMEOUT_MS },
-    );
-    return capabilities.includes("'body-markup'");
-  } catch {
-    return false;
-  }
-}
-
-// Best effort: a machine without notify-send or without a desktop session still scores, and the log has every result.
+// Best effort: a machine without a notification tool or without a desktop session still scores, and the log has
+// every result. The tool itself is the platform's own (src/platform.mjs).
 function notify(home, record, totalBefore) {
-  send(home, notification(record, totalBefore, { markup: supportsBodyMarkup() }));
+  send(home, notification(record, totalBefore, { markup: markupSupported() }));
 }
 
 function send(home, message) {
   if (!message) return;
   try {
-    const args = ["--app-name=Evolo", "--", terminalSafe(`Evolo ${message.title}`), message.body];
-    execFileSync("notify-send", args, { stdio: "ignore", timeout: NOTIFY_TIMEOUT_MS });
+    sendNotification(terminalSafe(`Evolo ${message.title}`), message.body);
   } catch (error) {
     if (error.code !== "ENOENT") logLine(home, `notification failed: ${error.message}`);
   }
@@ -118,7 +100,7 @@ function announceAchievements(home) {
     const unlocks = notifyUnlocks(home, achievementsOf(listAllRecords(home)));
     if (unlocks.length === 0) return;
     logLine(home, `achievement unlocked: ${unlocks.map(({ label }) => label).join(", ")}`);
-    send(home, achievementNotification(unlocks, { markup: supportsBodyMarkup() }));
+    send(home, achievementNotification(unlocks, { markup: markupSupported() }));
   } catch (error) {
     logLine(home, `achievements failed: ${error.message}`);
   }
