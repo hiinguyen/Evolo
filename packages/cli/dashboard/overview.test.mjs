@@ -178,11 +178,6 @@ test("a badge wears the achievement's framed emblem, the tier's numeral and one 
   assert.match(badge({ name: "<i>", description: "", tiers: [1] }, 1), /&lt;i&gt;/);
 });
 
-test("the footer says when the page was made, in local time", () => {
-  const text = textOf(renderOverview(sampleModel()));
-  assert.match(text, /Generated 2026-10-21 13:00 · updates after each scored unit/);
-});
-
 test("an empty ledger shows how to get the first score", () => {
   const model = sampleModel();
   const html = renderOverview({ ...model, units: [], achievements: { ...model.achievements, recent: [] } });

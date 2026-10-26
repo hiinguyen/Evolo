@@ -56,6 +56,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Redesign theo mock `codeui` | Top bar có sync mark và chip kỳ, Overview có tab lọc feed và rail gọn hơn, Reviews có health ring, finding breakdown và actionable findings, Reports có velocity history và sync sources, unit detail có hero metrics, tab gạch chân, lọc finding và checklist | chưa mở PR |
 | Secret emblems | Nét vẽ riêng cho từng achievement ẩn đã mở, huy hiệu niêm phong cho secret chưa mở; id và hình của secret chưa mở không vào page source | chưa mở PR |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
+| README | `README.md` ở gốc repo, viết bằng tiếng Anh với mục Languages (Anh/Việt cho review và report): giới thiệu, yêu cầu, cài đặt bằng `npm install -g evolo` trên Linux, macOS, Windows (kèm `npm link` khi làm từ bản clone), sử dụng, bảng lệnh và cấu hình, kèm 4 ảnh chụp thật (`docs/images/`: status, Overview dashboard, chi tiết đơn vị, Achievements) | chưa mở PR |
 
 ### Chưa làm
 

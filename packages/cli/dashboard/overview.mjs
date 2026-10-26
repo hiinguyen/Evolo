@@ -2,7 +2,7 @@
 // like. `badge` is shared with the Achievements screen; the Timeline draws its cards with `activityCard`, which lives
 // here beside the unit facts they both show. Every number is the model's; the only arithmetic is a bar's width, a
 // percentage of a total, and the seven days of XP a sparkline draws.
-import { emptyPanel, escape, formatUsd, formatXp, hashOf, localDate, localTime, pageHead, periodChip, plural, syncStatus } from "./html.mjs";
+import { emptyPanel, escape, formatUsd, formatXp, hashOf, localDate, pageHead, periodChip, plural, syncStatus } from "./html.mjs";
 import { achievementEmblem, secretEmblem } from "./icons.mjs";
 import { rankClasses } from "./theme.mjs";
 
@@ -390,10 +390,6 @@ function latestUnits(units) {
     + `<p class="feed-more"><a class="panel-link" href="#/timeline">View full timeline (${plural(scored, "scored unit")})</a></p></section>`;
 }
 
-const overviewFoot = (model) =>
-  `<div class="page-foot"><p>Generated <time datetime="${escape(model.generatedAt)}">${escape(localTime(model.generatedAt))}</time> · updates after each scored unit</p>`
-  + `<p class="page-foot-meta">Evolo v${escape(model.appVersion ?? "0")} · API ledger status <span class="status-dot good" aria-hidden="true"></span></p></div>`;
-
 export function renderOverview(model) {
   const week = model.periods.week.current;
   const head = pageHead("Overview", plural(model.units.length, "unit"), {
@@ -403,11 +399,11 @@ export function renderOverview(model) {
   if (model.units.length === 0) {
     return `<div class="screen overview-screen">${head}`
       + `${emptyPanel("No scored units yet: push to the default branch or merge a PR in a repository set up with <code>evolo init</code>.")}`
-      + `${overviewFoot(model)}</div>`;
+      + "</div>";
   }
   return `<div class="screen overview-screen">${head}`
     + rankHero(model)
     + statGrid(model)
     + `<div class="overview-grid">${latestUnits(model.units)}${overviewRail(model)}</div>`
-    + `${overviewFoot(model)}</div>`;
+    + "</div>";
 }
