@@ -86,21 +86,26 @@ Phần đọc ledger đã có `evolo status`, `stats` (analytics, mục 7), `why
 Level tính từ tổng XP của các đơn vị đang `scored` trong ledger.
 XP không bị trừ theo thời gian, nhưng tổng có thể giảm khi một đơn vị bị revert hoặc bị force-push thay thế, vì đơn vị đó về 0 XP.
 
-Tổng XP cần để đạt level `L` là `20 × L²` (hạ từ `50 × L²` ngày 2026-10-19 vì lên level quá chậm).
+Tổng XP cần để đạt level `L` là `20 × L × (L + 9)`, công thức 1.1 từ 2026-10-25 (trước là `20 × L²`).
+Số hạng tuyến tính làm chậm đầu game: level 1 cần 200 XP thay vì 20, trong khi level 50 vẫn ở 59.000 XP.
 
 | Level | Tổng XP |
 |---|---|
-| 1 | 20 |
-| 5 | 500 |
-| 10 | 2.000 |
-| 20 | 8.000 |
-| 40 | 32.000 |
+| 1 | 200 |
+| 5 | 1.400 |
+| 10 | 3.800 |
+| 20 | 11.600 |
+| 40 | 39.200 |
+| 50 | 59.000 |
 
 Đường cong bậc hai cho cảm giác tiến bộ nhanh lúc đầu và chậm dần, nhưng không chạm trần.
-Với khoảng 100-300 XP mỗi ngày làm việc (đo trên Friday và lightrag), level 10 đến sau khoảng 1-2 tuần làm đều.
-Hằng số 20 sẽ được chỉnh lại ở giai đoạn 3, khi có vài tuần XP thật.
+Với khoảng 100-300 XP mỗi ngày làm việc (đo trên Friday và lightrag), level 10 đến sau khoảng 2-3 tuần làm đều.
 Hàm `levelFor(xp)` nằm trong `score.mjs`, cùng chỗ với công thức XP, và có `LEVEL_FORMULA_VERSION` riêng; `evolo status` hiện level, tổng XP và số XP còn thiếu để lên level kế tiếp.
 Tổng XP chỉ cộng các đơn vị đang `scored`.
+
+Mỗi level thuộc một rank, 5 level một bậc: Intern (0-4), Junior Dev (5-9), Mid-level Dev (10-14), Senior Dev (15-19), Staff Engineer (20-24), Principal Engineer (25-29), Architect (30-34), Distinguished Engineer (35-39), Master (40-44), Grandmaster (45-49), Legend (50+).
+Rank chỉ là cách hiển thị level; nó không thêm XP hay luật chấm.
+`src/rank.mjs` giữ bảng rank, effect CSS tương ứng và `rankFor(level)`; `evolo status`, status line và dashboard cùng dùng hàm này.
 
 ## 6. Achievement (đã xây)
 
@@ -108,6 +113,7 @@ Achievement là luật tất định trên ledger, viết dạng khai báo, khô
 Mỗi luật là một hàm thuần trên ledger, trả một giá trị không bao giờ giảm khi thêm bản ghi, kèm các ngưỡng cho từng bậc và id cố định.
 Vì là hàm thuần, toàn bộ achievement được tính lại từ đầu mỗi lần; bậc chỉ dựa vào một đơn vị đã bị revert thì mất.
 `~/.evolo/achievements.json` chỉ nhớ những bậc đã thông báo.
+Các bậc của achievement hiện được nới tới nhịp một năm làm việc chuyên cần; chỉ thêm bậc vào cuối, không đổi ngưỡng cũ, nên bậc đã mở giữ nguyên ngày.
 Có 33 achievement hiện nhiều bậc và một nhóm achievement ẩn, không hiện tên hay điều kiện cho tới khi mở.
 Thiết kế và danh sách đầy đủ của achievement hiện: `docs/superpowers/specs/2026-10-20-evolo-achievements-design.md`.
 
@@ -172,7 +178,9 @@ AI không đọc repo và chỉ có tool đọc file đầu vào; bản lưu bi�
 Trang chi tiết một đóng góp hiện cả review code đã lưu trong `~/.evolo/reviews/` (cùng mã đơn vị với ledger), nếu có.
 Không cần server, không cần đăng nhập, dữ liệu không rời khỏi máy; CSP của trang không cho gọi mạng.
 
-Bảy màn hình: Overview (level, XP, streak, achievement mới trong tuần, đơn vị gần nhất), Timeline (có bộ lọc), chi tiết một đơn vị (điểm rubric, lý do, bằng chứng, công thức, review, file, commit), Analytics, Achievements, Reviews, và Reports (performance review đã lưu, mục 8).
+Dashboard có theme Light, Dark hoặc System; lựa chọn lưu trong `localStorage` của trang và mặc định theo `dashboard.theme`.
+Một boot script trong `<head>` đặt theme trước lần vẽ đầu, nên không nhấp nháy sai màu; `dashboard.name` là tên hiển thị cạnh rank.
+Bảy màn hình: Overview (rank, level, XP, streak, achievement mới trong tuần, đơn vị gần nhất), Timeline (có bộ lọc), chi tiết một đơn vị (điểm rubric, lý do, bằng chứng, công thức, review, file, commit), Analytics, Achievements, Reviews, và Reports (performance review đã lưu, mục 8).
 Worker ghi lại trang sau job cuối của một loạt job và mỗi lần sync, `evolo review` và `evolo report` sau khi lưu, nhưng chỉ khi file đã có.
 Thiết kế và các quyết định: `docs/superpowers/specs/2026-10-21-evolo-dashboard-design.md`.
 
@@ -216,7 +224,7 @@ Mỗi giai đoạn chỉ xong khi đạt điều kiện nghiệm thu, đo bằng
 |---|---|---|
 | **0. Chấm điểm** | Rubric, judge Claude, công thức XP | **Xong** (PR #1) |
 | **1. Tự chấm** | Chấm theo change set nhiều commit và theo PR (**xong**, PR #2, #3); `evolo init`, hook `pre-push`, hàng đợi, worker, phát hiện PR merge, ledger, `status` (**xong**, PR #4); thông báo, `why`, `retry`, skill `/evolo`, status line, hook `SessionStart` (**xong**, PR #5); còn lại: `backfill`, `preview` (chi tiết trong `docs/auto-scoring.md` mục 6) | Test E2E trên repo tạm có remote giả: push thành công, push bị từ chối, force-push, merge PR, revert, mất mạng, push dồn dập; ledger đúng trạng thái; không để lại worktree hay tiến trình mồ côi (**đạt** cho phần đã xây) |
-| **2. Game hoá** | Level (**công thức xong**, `20 × L²`), analytics (**xong**, `evolo stats`), achievement (**xong**, `evolo achievements`), dashboard HTML (**xong**, `evolo dashboard`), performance review (**xong**, `evolo report`); mỗi phần một spec và một PR | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
+| **2. Game hoá** | Level (**công thức 1.1**, `20 × L × (L + 9)`) với rank, analytics (**xong**, `evolo stats`), achievement (**xong**, `evolo achievements`), dashboard HTML (**xong**, `evolo dashboard`), performance review (**xong**, `evolo report`); mỗi phần một spec và một PR | Tính lại toàn bộ từ ledger cho kết quả giống hệt; review không có trích dẫn nào sai |
 | **3. Hiệu chỉnh** | Golden set khoảng 30 đóng góp, gồm repo lớn; chạy mỗi đóng góp 3 lần; chỉnh trần điểm, hằng số level | Độ lệch giữa các lần chạy dưới ngưỡng đặt ra; xếp hạng khớp golden set |
 | **Sau này** | Khi dùng chung với người khác: server, GitHub App, judge trên server, chống gian lận, leaderboard | Chỉ thiết kế khi có nhu cầu thật |
 
