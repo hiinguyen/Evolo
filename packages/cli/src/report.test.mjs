@@ -217,8 +217,12 @@ test("a digit anywhere in the prose outside inline code rejects the report", () 
     assert.match(checked.problems.join(), /digit/);
   }
   assert.equal(validateReport(answer({ overview: "Moved to `Node 20` and `SHA-256`, with `i18n` and `utf-8`." }), INPUT).ok, true);
-  // Inline code names a thing; a count in it is still a number the writer made up.
-  for (const overview of ["You earned `100 XP`.", "It touched `12 files`.", "About `3` reverts.", "Only `about 40 lines`."]) {
+  // A digit-led name is a word the writer writes bare or in inline code; a count hides nowhere.
+  assert.equal(validateReport(answer({ overview: "Built a 3D world guarded by 2FA logins and 4K textures, on `Node 20`." }), INPUT).ok, true);
+  for (const overview of [
+    "You earned `100 XP`.", "It touched `12 files`.", "About `3` reverts.", "Only `about 40 lines`.",
+    "A `24/7` bridge.", "The `2026` merge.", "a `128MB` cache.", "the `1st` merge.", "a 10x speedup.", "the 80s.", "Done in 3d.",
+  ]) {
     assert.equal(validateReport(answer({ overview }), INPUT).ok, false, overview);
   }
 });

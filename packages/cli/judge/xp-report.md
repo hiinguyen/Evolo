@@ -53,9 +53,9 @@ Name what went well and what did not; do not pad with generic praise or generic 
 The prose fields (`overview` and every `text`) must not contain a single digit.
 Do not write XP, scores, percentages, counts, line numbers, dates, versions or pull request numbers.
 Refer to a contribution by what it did ("the dashboard work"), and let the citation in `units` point to it.
-When a technical name contains a digit, write it as inline code in backticks (`SHA-256`, `Node 20`): inline code may hold a digit only when it names a thing, starting with a letter.
-A count in backticks (`12 files`) is still a number.
-Any other digit makes the whole report invalid and it is written again.
+When a technical name contains a digit but does not start with one, write it in inline code (`SHA-256`, `Node 20`).
+A name read as a word may begin with its digit: `3D`, `4K`, `2FA` are fine outside inline code too.
+Any other digit — a count, a unit, an ordinal — invalidates the whole report, and it is written again.
 
 # Output
 

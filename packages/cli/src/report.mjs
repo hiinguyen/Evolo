@@ -144,18 +144,28 @@ function checkShape(raw) {
   ];
 }
 
-// Inline code may name a thing with a digit in it (`Node 20`, `SHA-256`, `i18n`): it starts with a letter, and a bare
-// number can only be its last word. `100 XP` or `about 40 lines` in backticks is still a count the writer made up.
+// A digit-led name tech writers use as words (`3D`, `4K`, `2FA`). Deliberately few: every other ending
+// (`128MB`, `100ms`, `512k`, `1st`, `10x`, `80s`) is a count, and would slip through a longer list.
+const DIGIT_LED_NAME = /^\p{Nd}+(?:D|K|FA)$/u;
+const BARE_NAME = /(?<![\p{L}\p{Nd}])\p{Nd}+(?:D|K|FA)(?![\p{L}\p{Nd}])/gu;
+
+// Inline code may hold a digit only when it names a thing: a name led by a letter (`Node 20`, `SHA-256`, `i18n`),
+// where a bare number can only be its last word, or a digit-led name (`3D`, `4K`, `2FA`).
+// `100 XP`, `12MB` or `about 40 lines` in backticks is still a count the writer made up.
 const isName = (code) => {
   const words = code.trim().split(/\s+/);
-  return /^\p{L}/u.test(code.trim()) && words.slice(0, -1).every((word) => !/^\p{Nd}+$/u.test(word));
+  return DIGIT_LED_NAME.test(code.trim()) ||
+    /^\p{L}/u.test(code.trim()) && words.slice(0, -1).every((word) => !/^\p{Nd}+$/u.test(word));
 };
 
-// A digit outside inline code, or inline code with a digit that does not name a thing: every number the report shows
-// comes from code.
+// A digit outside inline code is a number the writer made up (`256`, a PR number, a date, `128MB`, `100 ms`), unless
+// it is part of a digit-led name (`3D`, `4K`, `2FA`), which the writer reads as a word and writes bare, backticked or
+// not: six report runs failed on nothing else. Unlike for inline code, the bare side cannot test whole words, so the
+// name must be bounded on both sides (`-office` after `3D-` is fine; `3Ds` or `x3D` is not).
 const hasDigit = (text) => {
   const spans = [...text.matchAll(/`([^`]*)`/g)].map(([, code]) => code);
-  return /\p{Nd}/u.test(text.replace(/`[^`]*`/g, "")) || spans.some((code) => /\p{Nd}/u.test(code) && !isName(code));
+  const outside = text.replace(/`[^`]*`/g, "").replace(BARE_NAME, "");
+  return /\p{Nd}/u.test(outside) || spans.some((code) => /\p{Nd}/u.test(code) && !isName(code));
 };
 
 function digitProblems(raw) {
