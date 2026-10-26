@@ -12,14 +12,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { modelIn, sampleModel } from "../dashboard/fixtures.mjs";
 import { parseHash, renderRoute, renderShell } from "../dashboard/app.mjs";
 import { SECRET } from "./achievements/secret.mjs";
+import { SECRET_ICONS } from "./achievements/secret-icons.mjs";
 import { day, unit as fixtureUnit } from "./achievements/fixtures.mjs";
 import { bundle, dashboardModel, dashboardPath, MODULES, refreshDashboard, renderPage, STYLES, styles, writeDashboard } from "./dashboard.mjs";
+import { nextRankFor, rankFor } from "./rank.mjs";
 import { listAllRecords, summarize, writeRecords } from "./ledger.mjs";
 import { addJob, updateJob } from "./queue.mjs";
 import { reportData, saveReport, storedReport } from "./report.mjs";
 import { writeReview } from "./review.mjs";
 import { runWorker } from "./worker.mjs";
-import { levelFor } from "./score.mjs";
+import { levelFor, xpForLevel } from "./score.mjs";
 import { computeStats, periodOf, streakOf } from "./stats.mjs";
 import { writeText } from "./store.mjs";
 import { recentXp } from "./views.mjs";
@@ -83,8 +85,16 @@ test("level, recent and streak match the functions the terminal uses", () => {
     const summary = summarize(home);
     const model = dashboardModel(home, NOW);
     assert.equal(model.version, 1);
+    assert.match(model.appVersion, /^\d+\.\d+\.\d+$/);
     assert.equal(model.generatedAt, NOW.toISOString());
     assert.deepEqual(model.level, { ...levelFor(summary.total), total: summary.total });
+    assert.deepEqual(model.rank, rankFor(model.level.level));
+    const next = nextRankFor(model.level.level);
+    assert.deepEqual(model.nextRank, next
+      ? { name: next.name, effect: next.effect, deep: next.deep ?? false, level: next.min, xp: xpForLevel(next.min) }
+      : null);
+    assert.equal(model.theme, "system");
+    assert.equal(model.name, "");
     assert.deepEqual(model.recent, recentXp(summary, NOW));
     assert.deepEqual(model.streak, streakOf(listAllRecords(home), NOW));
   });
@@ -164,15 +174,20 @@ test("a locked secret achievement is only a count; an unlocked one is shown", ()
     for (const rule of locked) {
       assert.ok(!text.includes(rule.name), `${rule.id} name leaked`);
       assert.ok(!text.includes(rule.description), `${rule.id} description leaked`);
+      assert.ok(!text.includes(SECRET_ICONS[rule.id]), `${rule.id} drawing leaked`);
     }
     assert.equal(model.achievements.secretsHidden, locked.length);
     assert.equal(found.length + model.achievements.secretsHidden, SECRET.length);
-    // A reverted unit opens one secret, which then shows with its name and the day it opened.
+    for (const entry of found) assert.equal(entry.icon, SECRET_ICONS[entry.id], `${entry.id} keeps its drawing`);
+    // A reverted unit opens one secret, which then shows with its name, its drawing and the day it opened.
     seed(home, [unit({ id: "u2", landed: day("2026-10-20"), status: "reverted", xp: 0 })]);
     const opened = dashboardModel(home, NOW).achievements;
     const first = opened.secretsFound.find((entry) => entry.id === SECRET[0].id);
     assert.equal(first.name, SECRET[0].name);
+    assert.equal(first.icon, SECRET_ICONS[SECRET[0].id]);
     assert.ok(first.at);
+    assert.equal(opened.recent.find((entry) => entry.id === SECRET[0].id)?.icon, SECRET_ICONS[SECRET[0].id],
+      "the weekly strip draws the same secret");
     assert.equal(opened.secretsHidden, SECRET.length - opened.secretsFound.length);
   });
 });
@@ -233,6 +248,10 @@ test("a stored review is listed with its label, newest first", () => {
     const { reviews } = dashboardModel(home, NOW);
     assert.deepEqual(reviews.map((entry) => [entry.key, entry.label]), [["me/a/pr-8", "PR #8"], ["me/a/pr-7", "PR #7"]]);
     assert.equal(reviews[1].language, "en");
+    assert.equal(reviews[1].durationMs, 1);
+    assert.equal(reviews[1].kind, "pr");
+    assert.equal(reviews[1].xp, 50, "the review carries the unit's current XP");
+    assert.equal(reviews[1].status, "scored");
     assert.deepEqual(reviews[1].review, base.review);
   });
 });
@@ -260,6 +279,7 @@ test("saved reports are listed latest period first, with whether the ledger chan
     assert.ok(reports.every((report) => !report.stale));
     assert.deepEqual(reports[0].numbers.current, { label: "week 2026-10-19..2026-10-25", xp: 50, units: 1, level: levelFor(100).level });
     assert.equal(reports[0].report.notes, "");
+    assert.equal(reports[0].durationMs, 1);
     assert.equal(reports[0].basis, undefined, "the basis is compared in Node, not shipped to the page");
 
     writeRecords(home, "me/a", [{ ...records[0], status: "reverted", xp: 0 }, records[1]]);
@@ -324,7 +344,7 @@ test("renderPage embeds the model once, and text in it cannot close the data blo
 test("the page is a complete document that loads nothing from the network", () => {
   const page = renderPage(sampleModel(), DASHBOARD_DIR);
   assert.match(page, /^<!doctype html>\n<html lang="en">/);
-  assert.match(page, /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-[A-Za-z0-9+\/]{43}='; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">/);
+  assert.match(page, /<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-[A-Za-z0-9+\/]{43}=' 'sha256-[A-Za-z0-9+\/]{43}='; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'">/);
   assert.ok(page.includes("<title>Evolo</title>"));
   assert.ok(page.includes('<div id="app"></div>'));
   assert.ok(page.includes("<noscript>"));
@@ -334,22 +354,32 @@ test("the page is a complete document that loads nothing from the network", () =
   assert.ok(!/\b(src|href)="(https?:)?\/\//.test(page), "no remote script, style or font");
 });
 
-// The text a browser hashes: from the end of the module script's start tag to the first `</script>` after it.
-function scriptBlock(page) {
-  const start = page.indexOf('<script type="module">') + '<script type="module">'.length;
+// The text a browser hashes: from the end of a script's start tag to the first `</script>` after it.
+function scriptBlock(page, type = "module") {
+  const tag = type === "module" ? '<script type="module">' : "<script>";
+  const start = page.indexOf(tag) + tag.length;
   return page.slice(start, page.indexOf("</script>", start));
 }
 
-test("the policy lets only the module script run, named by the hash of its exact text", () => {
+test("the policy lets only the boot script and the module run, each named by the hash of its exact text", () => {
   for (const model of [sampleModel(), hostileModel()]) {
     const page = renderPage(model, DASHBOARD_DIR);
     const policy = page.match(/http-equiv="Content-Security-Policy" content="([^"]*)"/)[1];
-    const hash = createHash("sha256").update(scriptBlock(page), "utf8").digest("base64");
-    assert.ok(policy.includes(`script-src 'sha256-${hash}'`), "the hash is of the script block as the browser reads it");
+    for (const text of [scriptBlock(page), scriptBlock(page, "boot")]) {
+      const hash = createHash("sha256").update(text, "utf8").digest("base64");
+      assert.ok(policy.includes(`'sha256-${hash}'`), "the hash is of the script block as the browser reads it");
+    }
     const scriptSource = policy.split("; ").find((directive) => directive.startsWith("script-src "));
+    assert.equal(scriptSource.split(/\s+/).length, 3, "exactly the boot script and the module are allowed");
     assert.ok(!scriptSource.includes("unsafe-inline") && !scriptSource.includes("unsafe-eval"));
     assert.ok(policy.includes("base-uri 'none'") && policy.includes("form-action 'none'") && policy.startsWith("default-src 'none'"));
   }
+});
+
+test("the boot script starts the page in the configured theme before the first paint", () => {
+  const page = renderPage({ ...sampleModel(), theme: "dark" }, DASHBOARD_DIR);
+  assert.match(scriptBlock(page, "boot"), /const configured = "dark";/);
+  assert.ok(page.indexOf("<script>") < page.indexOf("<style>"), "the theme is set before the styles are read");
 });
 
 test("the stylesheets all exist, the shared one comes first, and none loads anything", () => {
@@ -374,6 +404,9 @@ test("bundle joins the drawing modules without import or export, and the result 
   // Text the HTML parser would end the script or the comment state on.
   assert.ok(!code.includes("</script") && !code.includes("<!--"));
   assert.deepEqual(MODULES.filter((name) => !existsSync(join(DASHBOARD_DIR, name))), []);
+  // Secret art lives in the model only once a secret is found; the page's script must carry none of it or its module.
+  for (const drawing of Object.values(SECRET_ICONS)) assert.ok(!code.includes(drawing), "no secret drawing is bundled");
+  assert.ok(!code.includes("SECRET_ICONS") && !code.includes("secret-icons"), "the secret drawing module is not bundled");
   const dir = mkdtempSync(join(tmpdir(), "evolo-bundle-"));
   try {
     // Loading it catches a name declared by two modules, a syntax error, or a name a module forgot to import.

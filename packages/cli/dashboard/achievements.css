@@ -1,54 +1,274 @@
-/* Achievements: each achievement a tile with its badge, description, progress and day, then the secrets. */
+/* Achievements: a wall of game badges. Each card has a framed icon, the tier pips, the rule's progress in a footer and
+   the state of the achievement (unlocked, in progress, locked). The colours are the state's: warm gold when unlocked,
+   cyan while a first tier is still out of reach, slate when nothing has counted yet. */
 
-.achievement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
-
-/* A tile is a card filled by its badge. The progress and the day sit at the foot, so they line up across a row. */
-.achievement > .badge {
-  height: 100%;
-  padding: 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: var(--shadow);
+.achievement-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
 }
 
-/* Short centred lines wrap into even halves rather than leave one word alone under the rest. */
-.achievement .badge-name { font-size: 14px; line-height: 20px; text-wrap: balance; }
-.badge-desc { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; text-wrap: balance; }
-.badge-foot { display: flex; flex-direction: column; gap: 4px; width: 100%; margin-top: auto; }
+.achievement-card {
+  --accent: #b45309;
+  --accent-bright: #f59e0b;
+  --ink: #7c3a00;
+  --accent-soft: color-mix(in srgb, var(--accent) 10%, transparent);
+  --accent-glow: color-mix(in srgb, var(--accent) 28%, transparent);
+  --ach-text: #1d1d1f;
+  --ach-muted: #6e6e73;
+  --ach-bg-top: #ffffff;
+  --ach-bg-bottom: #f7f8fb;
+  --ach-border: #e3e6ee;
+  --ach-divider: #e9ebf1;
+  --ach-track: #e8eaf0;
+  --ach-foot: rgba(15, 23, 42, 0.025);
+  --ach-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --status-unlocked: #15803d;
+  --status-progress: #a16207;
+  --status-locked: #64748b;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 252px;
+  padding: 16px 15px 0;
+  overflow: hidden;
+  border: 1px solid var(--ach-border);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 70% at 50% -20%, var(--accent-soft), transparent 60%),
+    linear-gradient(180deg, var(--ach-bg-top), var(--ach-bg-bottom));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), var(--ach-shadow);
+  transition:
+    transform 450ms cubic-bezier(0.32, 0.72, 0, 1),
+    border-color 450ms cubic-bezier(0.32, 0.72, 0, 1),
+    box-shadow 450ms cubic-bezier(0.32, 0.72, 0, 1);
+}
 
-/* The bar takes the room its count leaves; it is drawn in the badge's colours, thinner than the level meter. */
-.badge-progress { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
-.badge-progress .meter { height: 4px; border-radius: 2px; }
-.badge-progress .meter > span { background: linear-gradient(90deg, var(--badge-from), var(--badge-to)); }
-.badge-count { font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap; }
-.badge-when { color: var(--muted); font-size: 12px; line-height: 16px; }
-.badge-when time { white-space: nowrap; }
+.achievement-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 22% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.45;
+}
 
-/* A locked tile keeps its progress readable; only its emblem and name are greyed, by the shared badge rules. */
-.badge.locked .badge-progress .meter > span { opacity: 0.6; }
+.achievement-card[data-state="unlocked"] { border-color: color-mix(in srgb, var(--accent) 22%, var(--ach-border)); }
+.achievement-card[data-state="in-progress"] {
+  --accent: #0e7490;
+  --accent-bright: #06b6d4;
+  --ink: #155e75;
+}
+.achievement-card[data-state="locked"] {
+  --accent: #94a3b8;
+  --accent-bright: #cbd5e1;
+  --ink: #64748b;
+  --ach-text: #475569;
+  --ach-muted: #5b6475;
+  --ach-bg-top: #f8f9fc;
+  --ach-bg-bottom: #f1f3f8;
+  --ach-border: #e2e5ec;
+  --ach-divider: #e7eaf0;
+  --ach-shadow: none;
+  --status-locked: #5b6475;
+}
 
-.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+/* The emblem is a frame around the achievement's line drawing, with a soft halo behind it. */
+.card-emblem {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  margin: 4px auto 12px;
+  color: var(--accent);
+  isolation: isolate;
+}
+
+.card-emblem::before {
+  content: "";
+  position: absolute;
+  inset: 7px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow), transparent 68%);
+  filter: blur(7px);
+}
+
+.emblem-art { width: 76px; height: 76px; }
+.achievement-card[data-state="locked"] .emblem-art { filter: none; opacity: 0.72; }
+
+.card-name {
+  margin: 0;
+  color: var(--ach-text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.achievement-card .pips { justify-content: center; margin: 7px 0 6px; }
+.achievement-card .pip { width: 12px; height: 3px; border-radius: 2px; background: var(--ach-track); }
+.achievement-card .pip.on { background: var(--accent-bright); box-shadow: 0 0 6px var(--accent-glow); }
+
+.card-desc {
+  min-height: 32px;
+  margin: 0 0 14px;
+  color: var(--ach-muted);
+  font-size: 11.5px;
+  line-height: 16px;
+  text-align: center;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.card-foot {
+  margin: auto -15px 0;
+  padding: 11px 15px 13px;
+  border-top: 1px solid var(--ach-divider);
+  background: var(--ach-foot);
+}
+
+.achievement-card[data-state="unlocked"] .card-foot,
+.achievement-card[data-state="in-progress"] .card-foot {
+  border-top-color: color-mix(in srgb, var(--accent) 22%, var(--ach-divider));
+}
+
+.card-metric {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ach-muted);
+  font-size: 10.5px;
+  line-height: 14px;
+}
+.metric-value { color: var(--ach-text); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+.card-meter { height: 3px; margin-top: 7px; border-radius: 2px; background: var(--ach-track); overflow: hidden; }
+.card-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-bright));
+  box-shadow: 0 0 8px var(--accent-glow);
+  transition: width 600ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.card-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: var(--status-locked);
+  font-size: 10.5px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.card-status .status-icon { flex: none; width: 12px; height: 12px; filter: drop-shadow(0 0 4px currentColor); }
+.card-status time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.achievement-card[data-state="unlocked"] .card-status { color: var(--status-unlocked); }
+.achievement-card[data-state="in-progress"] .card-status { color: var(--status-progress); }
+.achievement-card[data-state="locked"] .card-status { color: var(--status-locked); font-weight: 500; }
+.achievement-card[data-state="locked"] .card-status .status-icon { filter: none; }
+
+@media (hover: hover) {
+  .achievement-card:hover {
+    transform: translateY(-3px);
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--ach-border));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65), 0 16px 30px rgba(15, 23, 42, 0.12);
+  }
+  .achievement-card:hover .emblem-art { filter: drop-shadow(0 0 8px var(--accent-glow)); }
+}
+
+:root[data-theme="dark"] .achievement-card {
+  --accent: #f0ad3c;
+  --accent-bright: #ffd479;
+  --ink: #ffe2ad;
+  --ach-text: #e6edf3;
+  --ach-muted: #8b949e;
+  --ach-bg-top: #1a212b;
+  --ach-bg-bottom: #141a22;
+  --ach-border: #2b333d;
+  --ach-divider: #252d37;
+  --ach-track: #212831;
+  --ach-foot: rgba(0, 0, 0, 0.18);
+  --ach-shadow: 0 14px 30px rgba(0, 0, 0, 0.28);
+  --status-unlocked: #4ade80;
+  --status-progress: #fbbf24;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), var(--ach-shadow);
+}
+:root[data-theme="dark"] .achievement-card[data-state="in-progress"] { --accent: #38bdf8; --accent-bright: #7dd3fc; --ink: #bae6fd; }
+:root[data-theme="dark"] .achievement-card[data-state="locked"] {
+  --accent: #64748b;
+  --accent-bright: #94a3b8;
+  --ink: #94a3b8;
+  --ach-text: #9aa3b2;
+  --ach-muted: #8b93a3;
+  --ach-bg-top: #141a21;
+  --ach-bg-bottom: #10151b;
+  --ach-border: #222932;
+  --ach-divider: #1e252d;
+  --ach-track: #1b222a;
+  --ach-shadow: none;
+  --status-locked: #8b93a3;
+}
+:root[data-theme="dark"] .achievement-card:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 18px 34px rgba(0, 0, 0, 0.38);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .achievement-card, .card-meter > span { transition: none; }
+}
+
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .section-head h2 { font-size: 16px; line-height: 24px; font-weight: 600; }
 .section-head .muted { font-size: 13px; }
 
-/* The secrets still hidden: one small dashed circle each, in a row that wraps under the secrets found. */
+/* The secrets still hidden: sealed badges in a row that wraps under the secrets found. The dashed rim is the seal,
+   the inner ring gives it a badge body, and the drawn question mark keeps the mark legible without a font. */
 .secret-slots { display: flex; flex-wrap: wrap; gap: 8px; }
 .achievement-grid + .secret-slots { margin-top: 16px; }
 
 .secret-slot {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   border: 1px dashed var(--dash);
   border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--muted) 12%, transparent), transparent 68%),
+    color-mix(in srgb, var(--muted) 4%, transparent);
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1;
-  font-weight: 700;
 }
 
+.secret-slot::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid color-mix(in srgb, var(--muted) 14%, transparent);
+  border-radius: inherit;
+}
+
+.secret-slot-art { width: 19px; height: 19px; opacity: 0.82; }
+
 @media (max-width: 559px) {
-  .achievement-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+  .achievement-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .achievement-card { min-height: 236px; padding: 14px 12px 0; }
+  .card-emblem { width: 68px; height: 68px; margin-bottom: 10px; }
+  .emblem-art { width: 66px; height: 66px; }
+  .card-name { font-size: 13px; line-height: 18px; }
+  .card-desc { min-height: 30px; margin-bottom: 12px; font-size: 11px; line-height: 15px; }
+  .card-foot { margin: auto -12px 0; padding: 10px 12px 12px; }
+  .card-metric, .card-status { font-size: 10px; }
+  .achievement-card .pip { width: 10px; }
+  .secret-slots { gap: 7px; }
+  .secret-slot { width: 36px; height: 36px; }
+  .secret-slot-art { width: 17px; height: 17px; }
 }

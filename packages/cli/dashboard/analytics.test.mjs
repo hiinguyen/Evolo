@@ -124,7 +124,8 @@ test("a period without units says so, under the switcher", () => {
   const html = renderAnalytics(model, "week", "previous");
   assert.match(textOf(html), /Nothing landed in week 2026-10-12\.\.2026-10-18/);
   assert.match(html, /class="segment"/);
-  assert.ok(!html.includes("<svg"));
+  assert.equal(html.split("<svg").length - 1, 1, "only the empty-state icon, no chart");
+  assert.ok(html.includes('class="empty-art"'));
 });
 
 test("the previous week has no units, so this week shows no change against it", () => {

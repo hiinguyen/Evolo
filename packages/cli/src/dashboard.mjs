@@ -2,24 +2,31 @@
 // The model (section 4) is one plain object holding everything the page shows, built from the ledger, the reviews, the
 // reports and the queue. The page is a function of this object alone, so what is left out here can never reach the HTML.
 // Left out on purpose: PR and commit bodies, the judge's `notes`, `sessionID`, `deniedCommands` and `job` are long and
-// not shown; a locked secret achievement is only counted, so its name and condition are not in the page source either.
+// not shown; a locked secret achievement is only counted, so its name, condition and drawing are not in the page source
+// either.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { achievementsOf, unlockedIn } from "./achievements.mjs";
+import { secretIcon } from "./achievements/secret-icons.mjs";
 import { dailyBudget } from "./budget.mjs";
+import { getConfig } from "./config.mjs";
 import { landedAt, listAllRecords, localDay, summarize } from "./ledger.mjs";
 import { isParked, listJobs } from "./queue.mjs";
+import { nextRankFor, rankFor } from "./rank.mjs";
 import { basisOf, listAllReports } from "./report.mjs";
 import { listAllReviews } from "./review.mjs";
-import { CRITERIA, levelFor } from "./score.mjs";
+import { CRITERIA, levelFor, xpForLevel } from "./score.mjs";
 import { computeStats, PERIODS, periodOf, streakOf } from "./stats.mjs";
 import { logLine, writeText } from "./store.mjs";
 import { recentXp, unitLabel } from "./views.mjs";
+import { bootScript } from "../dashboard/theme.mjs";
 
 const newestFirst = (time) => (a, b) => Date.parse(time(b)) - Date.parse(time(a));
 const keyOf = (repo, id) => `${repo}/${id}`;
+// The version of the package the page was written from, shown in the sidebar's brand.
+const APP_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
 
 // Every local day of `period` up to `now` (a finished period runs to its last day) with the XP that landed on it.
 function daysOf(period, xpByDay, now) {
@@ -67,6 +74,7 @@ const resultOf = (result) =>
     xp: result.xp,
     judge: result.judge,
     costUsd: result.costUsd,
+    durationMs: result.durationMs,
     failures: result.failures,
     issues: result.issues,
     evaluation: evaluationOf(result.evaluation),
@@ -100,6 +108,7 @@ const reviewOf = (stored) => ({
   language: stored.language,
   judge: stored.judge,
   costUsd: stored.costUsd,
+  durationMs: stored.durationMs,
   review: stored.review,
   issues: stored.issues,
 });
@@ -122,7 +131,7 @@ function reportOf(stored, { records, reviews, achievements, now }) {
   const { overview, highlights, strengths, improvements, flags, notes } = stored.report;
   return {
     id: stored.id, kind: stored.kind, label: stored.label, start: stored.start, end: stored.end, inProgress: stored.inProgress,
-    at: stored.at, language: stored.language, judge: stored.judge, costUsd: stored.costUsd,
+    at: stored.at, language: stored.language, judge: stored.judge, costUsd: stored.costUsd, durationMs: stored.durationMs,
     failed: stored.failed, omitted: stored.omitted, unlocked: stored.unlocked,
     numbers: { current: reportNumbers(stored.numbers.current), previous: reportNumbers(stored.numbers.previous) },
     units: stored.units,
@@ -154,9 +163,10 @@ function achievementsModel(records, now) {
   const secrets = all.filter((achievement) => achievement.hidden);
   return {
     visible: all.filter((achievement) => !achievement.hidden).map(({ id, name, description, tiers, value, tier, unlocked }) => ({ id, name, description, tiers, value, tier, unlocked })),
-    secretsFound: secrets.filter((achievement) => achievement.tier > 0).map(({ id, name, description, unlocked }) => ({ id, name, description, at: unlocked[0].at })),
+    // A secret carries its drawing only once it is found: a locked one stays a number, not art that would hint at it.
+    secretsFound: secrets.filter((achievement) => achievement.tier > 0).map(({ id, name, description, unlocked }) => ({ id, name, description, icon: secretIcon(id), at: unlocked[0].at })),
     secretsHidden: secrets.filter((achievement) => achievement.tier === 0).length,
-    recent: unlockedIn(all, periodOf("week", now, 0)).map(({ id, name, label, description, hidden, tier, at }) => ({ id, name, label, description, hidden, tier, at })),
+    recent: unlockedIn(all, periodOf("week", now, 0)).map(({ id, name, label, description, hidden, tier, at }) => ({ id, name, label, description, hidden, tier, at, ...(hidden ? { icon: secretIcon(id) } : {}) })),
   };
 }
 
@@ -165,10 +175,22 @@ export function dashboardModel(home, now = new Date()) {
   const summary = summarize(home);
   const jobs = listJobs(home);
   const reviews = listAllReviews(home);
+  const level = levelFor(summary.total);
+  const nextRank = nextRankFor(level.level);
+  // A review is of one unit: the card can show the XP and status that unit is worth now, without a second lookup in the
+  // page. A unit that left the ledger keeps the review with null facts, as the Review tab does.
+  const unitsByKey = new Map(records.map((record) => [keyOf(record.repo, record.id), record]));
   return {
     version: 1,
+    appVersion: APP_VERSION,
     generatedAt: now.toISOString(),
-    level: { ...levelFor(summary.total), total: summary.total },
+    theme: getConfig(home, "dashboard.theme"),
+    name: getConfig(home, "dashboard.name"),
+    level: { ...level, total: summary.total },
+    rank: rankFor(level.level),
+    nextRank: nextRank
+      ? { name: nextRank.name, effect: nextRank.effect, deep: nextRank.deep ?? false, level: nextRank.min, xp: xpForLevel(nextRank.min) }
+      : null,
     recent: recentXp(summary, now),
     streak: streakOf(records, now),
     budget: dailyBudget(home, now),
@@ -180,7 +202,11 @@ export function dashboardModel(home, now = new Date()) {
     }])),
     achievements: achievementsModel(records, now),
     units: records.map(unitOf).sort(newestFirst((unit) => unit.landedAt)),
-    reviews: reviews.map(reviewOf).sort(newestFirst((review) => review.at)),
+    reviews: reviews.map((stored) => {
+      const review = reviewOf(stored);
+      const unit = unitsByKey.get(review.key);
+      return { ...review, kind: unit?.kind ?? null, xp: unit?.xp ?? null, status: unit?.status ?? null };
+    }).sort(newestFirst((review) => review.at)),
     reports: reportsModel(home, { records, reviews, achievements: achievementsOf(records), now }).sort(byPeriod),
   };
 }
@@ -192,7 +218,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "charts.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "reports.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "charts.mjs", "icons.mjs", "theme.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "reports.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
@@ -206,25 +232,28 @@ export function styles(dir) {
   return STYLES.map((name) => readFileSync(join(dir, name), "utf8")).join("\n");
 }
 
-// Only the one module script may run: the policy names it by the SHA-256 of its exact text, so markup that gets into the
-// page through a future escaping mistake cannot run. Styles stay inline because the screens set `style="width:..."`.
-// The JSON model block is `type="application/json"`, which is data and never executed, so it needs no hash.
-export function contentSecurityPolicy(script) {
-  const hash = createHash("sha256").update(script, "utf8").digest("base64");
-  return `default-src 'none'; script-src 'sha256-${hash}'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`;
+// Only the scripts the page carries may run: the boot script in <head> and the module that draws it, each named by the
+// SHA-256 of its exact text, so markup that gets into the page through a future escaping mistake cannot run. Styles stay
+// inline because the screens set `style="width:..."`. The JSON model block is `type="application/json"`, which is data
+// and never executed, so it needs no hash.
+export function contentSecurityPolicy(scripts) {
+  const hash = (script) => `'sha256-${createHash("sha256").update(script, "utf8").digest("base64")}'`;
+  return `default-src 'none'; script-src ${scripts.map(hash).join(" ")}; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'`;
 }
 
-// The page for `model`: the template of `dir` with its styles, the model and the script put in. Each is put in by a
-// function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The model
-// goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `\u003c`, which JSON
-// reads back as `<`, so a `</script>` in a commit subject cannot end the data block.
+// The page for `model`: the template of `dir` with its theme boot script, styles, model and script put in. Each is put in
+// by a function, so a `$&` or `$'` in the data is kept as written instead of being read as a replacement pattern. The
+// model goes in last, so nothing in the data can be taken for a placeholder. Every `<` in it is written `\u003c`, which
+// JSON reads back as `<`, so a `</script>` in a commit subject cannot end the data block.
 export function renderPage(model, dir) {
   const template = readFileSync(join(dir, "index.html"), "utf8");
+  const boot = bootScript(model.theme);
   const style = styles(dir);
   const script = bundle(dir);
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
   return template
-    .replace("/*evolo:csp*/", () => contentSecurityPolicy(script))
+    .replace("/*evolo:csp*/", () => contentSecurityPolicy([boot, script]))
+    .replace("/*evolo:boot*/", () => boot)
     .replace("/*evolo:style*/", () => style)
     .replace("/*evolo:script*/", () => script)
     .replace("/*evolo:model*/", () => data);

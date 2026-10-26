@@ -1,38 +1,268 @@
-/* Reviews: the severity switch over a grid of cards, each a link to the Review tab of its unit. */
+/* Reviews: a toolbar of search, order and severity, a feed of review cards, and a rail of what the whole set says. The
+   shared rail, mini stat and status rules live in style.css. */
 
-.severity-switch { display: flex; margin-top: -8px; }
+.reviews-screen { gap: 18px; }
 
-.review-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.reviews-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--card) 78%, transparent);
+  box-shadow: var(--hairline), var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.reviews-filters { display: flex; flex: 1 1 360px; flex-wrap: wrap; align-items: center; gap: 10px; min-width: 0; }
+
+/* The label is for the reader of the page and the test; the placeholder says what the field is on screen. */
+.reviews-toolbar .filter-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.reviews-toolbar .search-field { flex: 1 1 240px; max-width: none; }
+.reviews-toolbar .filter { flex: 0 1 150px; }
+.reviews-toolbar .severity-switch { margin-left: auto; }
+
+.review-main { min-width: 0; }
+.review-feed { display: flex; flex-direction: column; gap: 12px; }
 
 .review-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  height: 100%;
-  padding: 16px;
+  gap: 10px;
+  padding: 18px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, var(--surface-2)), var(--card));
+  box-shadow: var(--hairline), var(--shadow);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
-.review-card:hover { background: var(--hover); }
+.review-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow: var(--hairline), 0 16px 34px -24px var(--glow);
+}
 
-/* The label and the day on one line, the repository and the language under them. */
-.review-head { display: flex; flex-direction: column; min-width: 0; }
-.review-title { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
-.review-label { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
-.review-title time { color: var(--muted); font-size: 12px; line-height: 16px; white-space: nowrap; }
-.review-meta { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.review-card:hover .review-overview { color: var(--accent-text); }
+.review-card:focus-visible { outline-offset: 2px; }
 
-/* The whole overview is in the page; the card shows its first two lines. */
+.review-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.review-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.review-label.tone-violet { border-color: rgba(139, 92, 246, 0.34); background: rgba(139, 92, 246, 0.12); color: #6d28d9; }
+.review-label.tone-cyan { border-color: rgba(6, 182, 212, 0.32); background: rgba(6, 182, 212, 0.12); color: #0e7490; }
+.review-label.tone-slate { border-color: var(--border); background: var(--hover); color: var(--muted); }
+:root[data-theme="dark"] .review-label.tone-violet { border-color: rgba(167, 139, 250, 0.36); background: rgba(139, 92, 246, 0.18); color: #c4b5fd; }
+:root[data-theme="dark"] .review-label.tone-cyan { border-color: rgba(34, 211, 238, 0.3); background: rgba(34, 211, 238, 0.14); color: #67e8f9; }
+
+.review-repo { color: var(--text); overflow-wrap: anywhere; }
+.review-sep { color: var(--muted); opacity: 0.7; }
+.review-meta-line time { color: var(--muted); white-space: nowrap; }
+.review-judge { overflow-wrap: anywhere; }
+.review-duration { color: var(--muted); }
+
+.review-xp {
+  flex: none;
+  padding: 3px 10px;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .review-overview {
+  color: var(--strong);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  overflow-wrap: anywhere;
+  transition: color 140ms ease;
   display: -webkit-box;
   overflow: hidden;
-  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
-/* The pills sit at the card's foot, so they line up across a row of cards. */
-.review-counts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.review-findings {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 68%, transparent);
+}
+
+.preview-finding { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; line-height: 16px; }
+.sev-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; }
+.sev-dot.sev-high { background: var(--red); box-shadow: 0 0 0 2px var(--red-soft); }
+.sev-dot.sev-medium { background: var(--amber); box-shadow: 0 0 0 2px var(--amber-soft); }
+.sev-dot.sev-low { background: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.preview-category { color: var(--muted); font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; }
+.preview-title { min-width: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+.finding-more { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+.review-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.review-counts { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-state-note { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--green); font-size: 11px; line-height: 16px; white-space: nowrap; }
+.review-state-note .status-dot { width: 6px; height: 6px; }
+.review-open { color: var(--accent-text); font-size: 12px; font-weight: 600; white-space: nowrap; }
+
+/* The health hero: the share of reviews with no finding, in a ring, then the four counts. */
+.health-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+}
+
+.health-ring {
+  --share: 0;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background:
+    radial-gradient(closest-side, var(--card) 78%, transparent 79% 99%, var(--card) 100%),
+    conic-gradient(var(--green) calc(var(--share) * 1%), var(--track) 0);
+}
+
+.health-ring span { color: var(--strong); font-family: var(--mono); font-size: 12px; font-weight: 700; }
+.health-copy { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.health-label { color: var(--muted); font-size: 10px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.health-copy strong { color: var(--strong); font-family: var(--mono); font-size: 13px; line-height: 18px; }
+.health-note { color: var(--muted); font-size: 10px; line-height: 14px; }
+.health-hero + .mini-grid { margin-top: 10px; }
+
+/* The severity legend under the finding breakdown's bar. */
+.sev-legend-row { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; color: var(--muted); font-size: 10px; line-height: 15px; }
+.sev-legend { display: inline-flex; align-items: center; gap: 5px; }
+.sev-legend strong { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.cat-list { margin-top: 14px; }
+
+/* The actionable findings: one link per finding, the unit and severity first, then the title. */
+.action-list { display: flex; flex-direction: column; }
+.action-item { display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-radius: 6px; }
+.action-item + .action-item { border-top: 1px solid var(--border); }
+.action-item:hover .action-title { color: var(--accent-text); }
+.action-item:focus-visible { outline-offset: 2px; }
+.action-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.action-unit { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.action-title { color: var(--text); font-size: 12px; line-height: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.action-meta { color: var(--muted); font-size: 10px; line-height: 15px; overflow-wrap: anywhere; }
+.action-meta code { padding: 0 3px; font-size: 10px; }
+
+
+/* The rail's severity rows, category bars and judge list. */
+.sev-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.sev-row { display: grid; grid-template-columns: auto 56px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 11px; line-height: 16px; }
+.sev-name { color: var(--text); }
+.sev-track { height: 5px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.sev-fill { display: block; height: 100%; border-radius: inherit; }
+.sev-fill.sev-high { background: var(--red); }
+.sev-fill.sev-medium { background: var(--amber); }
+.sev-fill.sev-low { background: var(--accent); }
+.sev-count { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+.cat-list { display: flex; flex-direction: column; gap: 10px; }
+.cat-row { display: grid; grid-template-columns: minmax(0, 96px) minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 11px; line-height: 16px; }
+.cat-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: capitalize; }
+.cat-track { height: 5px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.cat-fill { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+.cat-count { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+
+.coverage-line { color: var(--muted); font-size: 12px; line-height: 18px; }
+.coverage-line strong { color: var(--strong); font-family: var(--mono); font-weight: 600; }
+.coverage-bar { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.coverage-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+.judge-list { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border); }
+.judge-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: baseline; gap: 8px; font-size: 11px; line-height: 16px; }
+.judge-name { color: var(--text); overflow-wrap: anywhere; }
+.judge-count { color: var(--muted); white-space: nowrap; }
+.judge-cost { color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+
+@media (max-width: 1079px) {
+  .reviews-grid .rail { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 719px) {
+  .reviews-toolbar { padding: 10px; }
+  .reviews-filters { flex-basis: 100%; }
+  .reviews-toolbar .severity-switch { margin-left: 0; width: 100%; }
+  .reviews-toolbar .segmented { width: 100%; }
+  .reviews-toolbar .segment { flex: 1; justify-content: center; }
+  .review-card { padding: 16px; }
+  .review-overview { font-size: 14px; line-height: 21px; }
+  .review-head { flex-wrap: wrap; }
+  .preview-title { max-width: 100%; }
+}
+
+@media (max-width: 479px) {
+  .reviews-toolbar .filter { flex: 1 1 100%; }
+  .review-xp { margin-left: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-card, .review-overview { transition: none; }
+}

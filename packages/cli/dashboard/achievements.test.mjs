@@ -10,10 +10,10 @@ import { sampleModel } from "./fixtures.mjs";
 const textOf = (html) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
 const count = (html, needle) => html.split(needle).length - 1;
 
-// The markup of the tile whose badge is named `name`: from its <li> to the next one.
+// The markup of the card whose name is `name`: from its <li> to the next one.
 function tileOf(html, name) {
-  const at = html.indexOf(`<span class="badge-name">${name}</span>`);
-  assert.notEqual(at, -1, `no tile named ${name}`);
+  const at = html.indexOf(`<h3 class="card-name">${name}</h3>`);
+  assert.notEqual(at, -1, `no card named ${name}`);
   const start = html.lastIndexOf("<li", at);
   return html.slice(start, html.indexOf("</li>", at) + "</li>".length);
 }
@@ -27,7 +27,7 @@ function withContributor(changes) {
 
 test("the head counts the unlocked achievements, the secrets found and the ones still hidden", () => {
   const model = sampleModel();
-  assert.match(textOf(renderAchievements(model)), /Achievements 9 \/ 33 · ★ 2 secrets · \? 26 hidden /);
+  assert.match(textOf(renderAchievements(model)), /Achievements 9 \/ 33 · ★ 2 secrets · \? 29 hidden /);
   const one = { ...model, achievements: { ...model.achievements, secretsFound: model.achievements.secretsFound.slice(0, 1), secretsHidden: 1 } };
   assert.match(textOf(renderAchievements(one)), /Achievements 9 \/ 33 · ★ 1 secret · \? 1 hidden /);
 });
@@ -35,83 +35,99 @@ test("the head counts the unlocked achievements, the secrets found and the ones 
 test("the achievements come in the catalog's order, then the secrets found, then the hidden ones", () => {
   const model = sampleModel();
   const html = renderAchievements(model);
-  const names = [...html.matchAll(/<span class="badge-name">([^<]*)<\/span>/g)].map(([, name]) => name);
+  const names = [...html.matchAll(/<h3 class="card-name">([^<]*)<\/h3>/g)].map(([, name]) => name);
   const found = model.achievements.secretsFound.map((entry) => entry.name);
   assert.equal(found.length, 2);
   assert.deepEqual(names, [...model.achievements.visible.map((entry) => entry.name), ...found]);
-  assert.ok(html.lastIndexOf('<span class="badge-name">') < html.indexOf('class="secret-slots"'));
+  assert.ok(html.lastIndexOf('<h3 class="card-name">') < html.indexOf('class="secret-slots"'));
 });
 
-test("an emblem shows the Roman numeral of the tier reached, a dash before the first, and a star for a secret", () => {
-  const mark = (html, name) => tileOf(html, name).match(/<span class="emblem" aria-hidden="true">([^<]*)<\/span>/)[1];
+test("each achievement wears its frame and drawing, and an unlocked tier has a chip", () => {
   const model = sampleModel();
   const html = renderAchievements(model);
-  assert.equal(mark(html, "Contributor"), "I");
-  assert.equal(mark(html, "Bug Hunter"), "–");
-  for (const secret of model.achievements.secretsFound) assert.equal(mark(html, secret.name), "★");
-  assert.equal(mark(renderAchievements(withContributor({ tier: 3, value: 60 })), "Contributor"), "III");
-  assert.equal(mark(renderAchievements(withContributor({ tier: 4, value: 120 })), "Contributor"), "IV");
+  const contributor = tileOf(html, "Contributor");
+  assert.match(contributor, /<svg class="emblem-art[^"]*" data-frame="shield"/);
+  assert.match(contributor, /class="emblem-frame"/);
+  assert.match(contributor, /<span class="emblem-tier">I<\/span>/);
+  assert.match(tileOf(html, "Merge Master"), /data-frame="circle"/);
+  assert.match(tileOf(html, "Hoarder"), /data-frame="square"/);
+  assert.match(tileOf(html, "Jackpot"), /data-frame="star"/);
+  assert.match(tileOf(html, "Overdrive"), /data-frame="hex"/);
+  assert.match(tileOf(html, "Bug Hunter"), /emblem-art dashed/);
+  assert.ok(!tileOf(html, "Bug Hunter").includes("emblem-tier"), "a locked badge has no tier to show");
+  assert.equal(count(tileOf(renderAchievements(withContributor({ tier: 3, value: 60 })), "Contributor"), '<span class="emblem-tier">III</span>'), 1);
 });
 
-test("each tier is a pip, lit up to the tier reached, and a locked achievement is dimmed", () => {
+test("each tier is a pip, lit up to the tier reached, and the state is on the card", () => {
   const html = renderAchievements(sampleModel());
   const contributor = tileOf(html, "Contributor");
   assert.equal(count(contributor, '<i class="pip'), 5);
   assert.equal(count(contributor, '<i class="pip on">'), 1);
   assert.match(contributor, /aria-label="Tier 1 of 5"/);
-  assert.match(contributor, /class="badge"/);
+  assert.match(contributor, /data-state="unlocked"/);
   const locked = tileOf(html, "Bug Hunter");
-  assert.match(locked, /class="badge locked"/);
+  assert.match(locked, /data-state="locked"/);
+  assert.match(locked, /<svg class="emblem-art/);
   assert.equal(count(locked, '<i class="pip on">'), 0);
-  assert.equal(count(locked, '<i class="pip'), 3);
+  assert.equal(count(locked, '<i class="pip'), 4);
+  const progress = tileOf(html, "Scribe");
+  assert.match(progress, /data-state="in-progress"/);
+  assert.match(textOf(progress), / in progress /);
+  assert.ok(!progress.includes("emblem-tier"), "no tier is reached yet");
 });
 
 test("progress runs to the next tier, and an achievement at its last tier says max", () => {
   const html = renderAchievements(sampleModel());
   const contributor = tileOf(html, "Contributor");
-  assert.match(textOf(contributor), / scored units 7 \/ 10 /);
+  assert.match(textOf(contributor), / Progress 7 \/ 10 /);
   assert.match(contributor, /<span style="width:70%"><\/span>/);
   assert.match(contributor, /aria-valuenow="7" aria-valuemax="10"/);
-  assert.match(textOf(tileOf(html, "Hoarder")), / 1,040 \/ 5,000 /);
+  assert.match(textOf(tileOf(html, "Hoarder")), / Total XP 1,040 \/ 5,000 /);
   // A locked achievement counts toward its first tier.
-  assert.match(textOf(tileOf(html, "Scribe")), / 1 \/ 3 /);
+  assert.match(textOf(tileOf(html, "Scribe")), / Progress 1 \/ 3 /);
   // Past the next tier's threshold the bar stops full.
   assert.match(tileOf(renderAchievements(withContributor({ value: 12 })), "Contributor"), /<span style="width:100%"><\/span>/);
 
   const maxed = tileOf(renderAchievements(withContributor({ tier: 5, value: 640 })), "Contributor");
-  assert.match(textOf(maxed), / scored units max /);
+  assert.match(textOf(maxed), / Progress max /);
   assert.match(maxed, /<span style="width:100%"><\/span>/);
-  assert.ok(!maxed.includes(" / "), "no next tier to count toward");
+  assert.ok(!textOf(maxed).includes(" / "), "no next tier to count toward");
 });
 
 test("the day of the highest tier reached is shown in local time, and a locked achievement says so", () => {
   const html = renderAchievements(sampleModel());
   assert.match(textOf(tileOf(html, "Contributor")), / unlocked 2026-09-29 /);
   assert.match(tileOf(html, "Contributor"), /<time datetime="2026-09-29T15:00:00\+07:00">2026-09-29<\/time>/);
-  assert.match(textOf(tileOf(html, "Bug Hunter")), / locked /);
+  assert.match(textOf(tileOf(html, "Bug Hunter")), / Locked /);
   const twice = withContributor({ tier: 2, value: 12, unlocked: [{ tier: 1, at: "2026-09-29T08:00:00.000Z" }, { tier: 2, at: "2026-10-20T18:30:00.000Z" }] });
   // 18:30 UTC is the next day in Ho Chi Minh City.
   assert.match(textOf(tileOf(renderAchievements(twice), "Contributor")), / unlocked 2026-10-21 /);
 });
 
-test("a secret found shows its description and the local day it was found, without progress", () => {
+test("a secret found wears its own drawing with no frame, with its description and local day, without progress", () => {
   const model = sampleModel();
-  const secret = { id: "found", name: "Found One", description: "a thing that happened", at: "2026-10-15T18:30:00.000Z" };
+  const drawing = '<path d="M4 12h16"/><circle cx="12" cy="12" r="3"/>';
+  const secret = { id: "found", name: "Found One", description: "a thing that happened", at: "2026-10-15T18:30:00.000Z", icon: drawing };
   const tile = tileOf(renderAchievements({ ...model, achievements: { ...model.achievements, secretsFound: [secret] } }), "Found One");
-  assert.match(textOf(tile), / a thing that happened unlocked 2026-10-16 /);
+  assert.match(tile, /achievement-card secret/);
+  assert.ok(!tile.includes("emblem-frame"), "the secret wears no polygon frame");
+  assert.ok(tile.includes(drawing), "the secret's own drawing is on the tile");
+  assert.match(textOf(tile), / a thing that happened Secret found unlocked 2026-10-16 /);
   assert.ok(!tile.includes('role="progressbar"'));
+  assert.ok(!tile.includes("emblem-tier"));
 });
 
-test("every secret still hidden is one small ? in a group read out as their number, with no name", () => {
+test("every secret still hidden is one sealed ? badge in a group read out as their number, with no name", () => {
   const model = sampleModel();
   const html = renderAchievements(model);
   assert.equal(count(html, 'class="secret-slot"'), model.achievements.secretsHidden);
-  assert.equal(count(html, '<span class="secret-slot" aria-hidden="true">?</span>'), 26);
-  assert.match(html, /<div class="secret-slots" role="img" aria-label="26 hidden secrets">/);
+  assert.equal(count(html, 'class="secret-slot-art"'), 29);
+  assert.ok(!html.includes('<span class="secret-slot" aria-hidden="true">?</span>'), "the ? is drawn, not typed");
+  assert.match(html, /<div class="secret-slots" role="img" aria-label="29 hidden secrets">/);
   const group = html.slice(html.indexOf('<div class="secret-slots"'), html.indexOf("</div>", html.indexOf('<div class="secret-slots"')));
-  assert.equal(group.replace(/<span class="secret-slot" aria-hidden="true">\?<\/span>/g, ""), '<div class="secret-slots" role="img" aria-label="26 hidden secrets">',
-    "nothing but the circles: no name, no description");
-  // The secrets found keep their full tiles, before the circles.
+  assert.equal(group.replace(/<span class="secret-slot" aria-hidden="true">.*?<\/span>/g, ""), '<div class="secret-slots" role="img" aria-label="29 hidden secrets">',
+    "nothing but the sealed badges: no name, no description");
+  // The secrets found keep their full cards, before the circles.
   assert.ok(html.indexOf(model.achievements.secretsFound[1].name) < html.indexOf('class="secret-slots"'));
   const one = renderAchievements({ ...model, achievements: { ...model.achievements, secretsFound: [], secretsHidden: 1 } });
   assert.match(one, /aria-label="1 hidden secret"/);
@@ -127,7 +143,7 @@ test("every secret still hidden is one small ? in a group read out as their numb
 test("a comparison stays on one line with its number", () => {
   const html = renderAchievements(sampleModel());
   assert.ok(html.includes("refactors with centrality ≥\u00a03"));
-  const descriptions = [...html.matchAll(/<span class="badge-desc">([^<]*)<\/span>/g)].map(([, text]) => text);
+  const descriptions = [...html.matchAll(/<p class="card-desc">([^<]*)<\/p>/g)].map(([, text]) => text);
   assert.equal(descriptions.filter((text) => /[≥≤] \d/.test(text)).length, 0, "no plain space after ≥ before a number");
   assert.ok(renderAchievements(withContributor({ description: "at most ≤ 10 <b>" })).includes("at most ≤\u00a010 &lt;b&gt;"));
 });

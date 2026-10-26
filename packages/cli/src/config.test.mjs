@@ -17,8 +17,13 @@ test("a setting that was never set has its default", () => {
   const home = makeHome();
   assert.equal(getConfig(home, "review.language"), "en");
   assert.equal(getConfig(home, "report.language"), "en");
+  assert.equal(getConfig(home, "dashboard.theme"), "system");
+  assert.equal(getConfig(home, "dashboard.name"), "");
   assert.equal(getConfig(home, "budget.daily-usd"), "5");
-  assert.deepEqual(listConfig(home), [["review.language", "en", true], ["report.language", "en", true], ["budget.daily-usd", "5", true]]);
+  assert.deepEqual(listConfig(home), [
+    ["review.language", "en", true], ["report.language", "en", true], ["dashboard.theme", "system", true],
+    ["dashboard.name", "", true], ["budget.daily-usd", "5", true],
+  ]);
 });
 
 test("a setting is saved and read back, and listed as set", () => {
@@ -27,7 +32,10 @@ test("a setting is saved and read back, and listed as set", () => {
     setConfig(home, "review.language", language);
     assert.equal(getConfig(home, "review.language"), language);
   }
-  assert.deepEqual(listConfig(home), [["review.language", "pt-BR", false], ["report.language", "en", true], ["budget.daily-usd", "5", true]]);
+  assert.deepEqual(listConfig(home), [
+    ["review.language", "pt-BR", false], ["report.language", "en", true], ["dashboard.theme", "system", true],
+    ["dashboard.name", "", true], ["budget.daily-usd", "5", true],
+  ]);
   assert.deepEqual(JSON.parse(readFileSync(join(home, "config.json"), "utf8")), { review: { language: "pt-BR" } });
 });
 
@@ -69,4 +77,22 @@ test("the daily budget takes a positive amount in USD, with at most two decimals
     assert.throws(() => setConfig(home, "budget.daily-usd", bad), /budget.daily-usd must be a positive amount/, JSON.stringify(bad));
   }
   assert.equal(getConfig(home, "budget.daily-usd"), "9999.99");
+});
+
+test("the dashboard theme is one of three values, and the name is letters and spaces up to 24", () => {
+  const home = makeHome();
+  for (const theme of ["system", "light", "dark"]) {
+    setConfig(home, "dashboard.theme", theme);
+    assert.equal(getConfig(home, "dashboard.theme"), theme);
+  }
+  for (const bad of ["auto", "Light", "", "dark ", 1]) {
+    assert.throws(() => setConfig(home, "dashboard.theme", bad), /dashboard.theme must be one of/, JSON.stringify(bad));
+  }
+  for (const name of ["", "Minh", "Nguyễn Văn A", "A".repeat(24)]) {
+    setConfig(home, "dashboard.name", name);
+    assert.equal(getConfig(home, "dashboard.name"), name);
+  }
+  for (const bad of ["A".repeat(25), "Minh 2", "Minh-Nguyễn", " Minh", "Minh\n", 3]) {
+    assert.throws(() => setConfig(home, "dashboard.name", bad), /dashboard.name must be/, JSON.stringify(bad));
+  }
 });

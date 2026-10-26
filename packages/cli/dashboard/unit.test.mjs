@@ -43,10 +43,14 @@ test("the head shows repo, label, XP, type, landing time, the PR link and the su
   assert.match(text, /hiinguyen\/ai-orgs/);
   assert.match(text, /PR #1/);
   assert.match(text, /\+125 XP/);
-  assert.match(text, /feature · 2026-10-20 22:21 /);
+  assert.match(text, /Landed 2026-10-20 22:21 /);
   assert.match(head, /<a [^>]*href="https:\/\/github\.com\/hiinguyen\/ai-orgs\/pull\/1"[^>]*rel="noreferrer"[^>]*>/);
   assert.match(text, /Built the phase 1 foundation of AI Agent World/);
-  assert.match(head, /<h1[^>]*>PR #1<\/h1>/);
+  assert.match(head, /<h1[^>]*>PR #1: Phase 1 - scaffold, domain model and simulation engine<\/h1>/);
+  assert.match(text, /Code health 70 \/100/);
+  assert.match(text, /Judge spending \$0\.08/);
+  assert.match(text, /Evaluator engine claude-sonnet-5-5/);
+  assert.match(text, /Tests changed 1 1 test file/);
 });
 
 test("a unit not worth XP shows its status in the head, with the XP it lost struck through", () => {
@@ -55,7 +59,7 @@ test("a unit not worth XP shows its status in the head, with the XP it lost stru
   const failed = renderUnit(sampleModel(), FAILED, "score").split('<nav class="tabs"')[0];
   assert.match(failed, /<span class="pill pill-bad">failed<\/span>/);
   assert.ok(!textOf(failed).includes("XP"));
-  assert.match(textOf(failed), /push · 2026-10-19 17:40/, "a failed unit has its kind for a type");
+  assert.match(textOf(failed), /Landed 2026-10-19 17:40/, "a failed unit still says when it landed");
 });
 
 test("the tabs are links with their state, and the Review tab counts the findings", () => {
@@ -158,8 +162,8 @@ test("the Review tab shows the review with its findings, the most severe first",
   assert.match(text, /A solid first phase: the engine is deterministic and tested/);
   assert.match(text, /The seeded random source makes every simulation repeatable\./);
   assert.match(text, /Split scheduling from the state updates in the tick loop\./);
-  assert.match(text, /medium design src\/engine\/tick\.ts:42-48 Tick mixes scheduling and updates The loop both picks the next agent and mutates the world\. /);
-  assert.match(text, /Return the next state from a pure function\./);
+  assert.match(text, /medium design src\/engine\/tick\.ts:42-48 ID: FIND-001 Tick mixes scheduling and updates The loop both picks the next agent and mutates the world\. /);
+  assert.match(text, /Remediation suggestion Return the next state from a pure function\./);
   assert.match(html, /<code>src\/engine\/tick\.ts:42-48<\/code>/);
   const [stored] = model.reviews;
   const high = { severity: "high", category: "bug", location: "src/a.ts:1", title: "Loses state", detail: "d", suggestion: "s" };
@@ -167,6 +171,12 @@ test("the Review tab shows the review with its findings, the most severe first",
   const severities = [...renderUnit(sorted, PR, "review").matchAll(/class="pill sev-(high|medium|low)"/g)].map(([, severity]) => severity);
   assert.deepEqual(severities, ["high", "medium", "low"]);
   assert.equal(tabsOf(renderUnit(sorted, PR, "review"))[1][2], "Review · 3");
+  const onlyHigh = renderUnit(sorted, PR, "review", { severity: "high" });
+  assert.equal(count(onlyHigh, 'class="finding"'), 1, "the address filters the findings");
+  assert.match(onlyHigh, /href="#\/unit\/hiinguyen\/ai-orgs\/pr-1\/review\?severity=high"/);
+  assert.match(textOf(onlyHigh), /Inspection findings 1 of 3 findings/);
+  const unknown = renderUnit(sorted, PR, "review", { severity: "urgent" });
+  assert.equal(count(unknown, 'class="finding"'), 3, "an unknown severity is no filter");
   assert.equal(stored.review.findings[0].severity, "medium", "the model passed in is not changed");
 });
 
