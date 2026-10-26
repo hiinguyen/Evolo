@@ -32,7 +32,7 @@ Every number can be recomputed from stored data without calling the AI again.
 Evolo supports English and Vietnamese.
 
 - The interface - CLI output, notifications, the dashboard - is in English.
-- The judge's written feedback is configurable: code reviews (`evolo review`) and performance reviews (`evolo report`) are written in English by default, and in Vietnamese with `evolo config set review.language vi` and `report.language vi` (any other language name or code works too, e.g. `pt-BR`).
+- The judge's written feedback is configurable: code reviews (`evolo review`) and performance reviews (`evolo report`) are written in Vietnamese by default, and in English with `evolo config set language en` (any other language name or code works too, e.g. `pt-BR`).
 - The design documents in [`docs/`](docs/architecture.md) are written in Vietnamese.
 
 ## Requirements
@@ -128,40 +128,39 @@ evolo claude install    # the /evolo skill, a SessionStart hook that syncs, a st
 ## Commands
 
 
-| Command                                                                                                  | Meaning                                                                                          |
-| -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]`                                          | Register a repo and install the `pre-push` hook                                                  |
-| `evolo uninstall [--repo <dir>]`                                                                         | Remove the hook and the registration; scores are kept                                            |
-| `evolo sync [--background]`                                                                              | Queue newly merged PRs, re-check the ledger, start the worker                                    |
-| `evolo status`                                                                                           | Level, rank, XP, the queue, today's judge spending, the latest scores                            |
-| `evolo stats [week|month|quarter] [--previous]`                                                          | Analytics of this calendar period against the previous one, plus the workday streak              |
-| `evolo achievements`                                                                                     | Every achievement: tier, progress, and the hidden group                                          |
-| `evolo dashboard [--no-open]`                                                                            | Write the dashboard page and open the browser (with `--no-open` just print its path)             |
-| `evolo why [<commit>|#<pr>|<unit id>] [--repo <dir>]`                                                    | Explain a unit's rubric scores, evidence and XP formula                                          |
-| `evolo review [<commit>|#<pr>|<unit id>] [--repo <dir>] [--again] [--judge claude|opencode] [--model M]` | A code review of one unit by a separate judge, saved under `~/.evolo/reviews/`                   |
-| `evolo report [week|month|quarter] [--previous] [--again] [--judge claude|opencode] [--model M]`         | A performance review of a period, saved under `~/.evolo/reports/`                                |
-| `evolo retry`                                                                                            | Score the failed units again, and retry waiting jobs now                                         |
-| `evolo statusline`                                                                                       | One line for Claude Code's status line                                                           |
-| `evolo claude install|uninstall`                                                                         | Install or remove the `/evolo` skill, the `SessionStart` hook and the status line in Claude Code |
-| `evolo config [get <key> | set <key> <value>]`                                                           | Read and change the settings in `~/.evolo/config.json`                                           |
-| `evolo worker`                                                                                           | Run the worker until the queue is empty (the hook and sync start it on their own)                |
-| `evolo evaluate --repo <dir> --out <dir> [options...]`                                                   | Score by hand - `--range`, `--pr` or SHAs - into a directory of its own, outside the ledger      |
+| Command                                                                                                     | Meaning                                                                                          |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `evolo init [--repo <dir>] [--author EMAIL]... [--remote NAME]`                                             | Register a repo and install the `pre-push` hook                                                  |
+| `evolo uninstall [--repo <dir>]`                                                                            | Remove the hook and the registration; scores are kept                                            |
+| `evolo sync [--background]`                                                                                 | Queue newly merged PRs, re-check the ledger, start the worker                                    |
+| `evolo status`                                                                                              | Level, rank, XP, the queue, today's judge spending, the latest scores                            |
+| `evolo stats [week\|month\|quarter] [--previous]`                                                           | Analytics of this calendar period against the previous one, plus the workday streak              |
+| `evolo achievements`                                                                                        | Every achievement: tier, progress, and the hidden group                                          |
+| `evolo dashboard [--no-open]`                                                                               | Write the dashboard page and open the browser (with `--no-open` just print its path)             |
+| `evolo why [<commit>\|#<pr>\|<unit id>] [--repo <dir>]`                                                     | Explain a unit's rubric scores, evidence and XP formula                                          |
+| `evolo review [<commit>\|#<pr>\|<unit id>] [--repo <dir>] [--again] [--judge claude\|opencode] [--model M]` | A code review of one unit by a separate judge, saved under `~/.evolo/reviews/`                   |
+| `evolo report [week\|month\|quarter] [--previous] [--again] [--judge claude\|opencode] [--model M]`         | A performance review of a period, saved under `~/.evolo/reports/`                                |
+| `evolo retry`                                                                                               | Score the failed units again, and retry waiting jobs now                                         |
+| `evolo statusline`                                                                                          | One line for Claude Code's status line                                                           |
+| `evolo claude install\|uninstall`                                                                           | Install or remove the `/evolo` skill, the `SessionStart` hook and the status line in Claude Code |
+| `evolo config [get <key> \| set <key> <value>]`                                                             | Read and change the settings in `~/.evolo/config.json`                                           |
+| `evolo worker`                                                                                              | Run the worker until the queue is empty (the hook and sync start it on their own)                |
+| `evolo evaluate --repo <dir> --out <dir> [options...]`                                                      | Score by hand - `--range`, `--pr` or SHAs - into a directory of its own, outside the ledger      |
 
 
 ## Configuration
 
 
-| Key                | Default  | Meaning                                                           |
-| ------------------ | -------- | ----------------------------------------------------------------- |
-| `budget.daily-usd` | `5`      | Daily cap on judge spending; past it, units wait for the next day |
-| `review.language`  | `en`     | The language code reviews are written in, e.g. `vi`               |
-| `report.language`  | `en`     | The language performance reviews are written in, e.g. `vi`        |
-| `dashboard.theme`  | `system` | The dashboard's colour theme: `light`, `dark` or `system`         |
-| `dashboard.name`   | (empty)  | The name the dashboard shows next to your rank                    |
+| Key                | Default  | Meaning                                                                     |
+| ------------------ | -------- | --------------------------------------------------------------------------- |
+| `budget.daily-usd` | `5`      | Daily cap on judge spending; past it, units wait for the next day           |
+| `language`         | `vi`     | The language code reviews and performance reviews are written in, e.g. `en` |
+| `dashboard.theme`  | `system` | The dashboard's colour theme: `light`, `dark` or `system`                   |
+| `dashboard.name`   | (empty)  | The name the dashboard shows next to your rank                              |
 
 
 ```bash
-evolo config set review.language vi
+evolo config set language en
 evolo config set budget.daily-usd 2.50
 ```
 
@@ -195,7 +194,7 @@ Three signals add on top: green CI right away +5%, a clean merge after review +5
 ## Cost
 
 Each scoring costs about $0.03-0.31 depending on the size of the contribution (measured with Claude Sonnet), billed to your own Claude plan.
-The daily cap is set with `budget.daily-usd` (default$5); once it is spent, units wait for the next day.
+The daily cap is set with `budget.daily-usd` (default $5); once it is spent, units wait for the next day.
 Scoring by push and PR means far fewer judge calls than scoring every commit.
 
 ## Where the data lives

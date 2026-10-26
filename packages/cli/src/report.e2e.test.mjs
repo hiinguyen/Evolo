@@ -22,7 +22,7 @@ async function scoredPush() {
 
 test("a report is written in the configured language, saved, shown again without the judge, and redone with --again", async () => {
   const { box, id } = await scoredPush();
-  box.evolo("config", "set", "report.language", "vi");
+  box.evolo("config", "set", "language", "vi");
 
   const first = box.evolo("report");
   assert.match(box.judgeTasks().at(-1), /^Write the performance review of week \S+, a week that is not over yet\. Write the prose fields in this language: vi\./);

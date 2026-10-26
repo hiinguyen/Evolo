@@ -12,7 +12,7 @@ Trạng thái (2026-10-20): đã xây (PR #6), có test unit và E2E, đã chạ
 | Review chạy lúc nào? | Chỉ khi người dùng gọi `evolo review`, không chạy tự động sau mỗi lần chấm | Người dùng chọn; chỉ trả tiền judge cho đơn vị mình muốn xem kỹ |
 | Gộp vào lần chấm điểm hay chạy riêng? | Chạy riêng, prompt riêng, schema riêng | Review không làm lệch điểm, và đổi prompt review không phải chấm lại |
 | Review gồm gì? | Nhận xét tổng thể, điểm mạnh, điều cần cải thiện, danh sách vấn đề có vị trí `file:dòng`, mức độ và gợi ý sửa | Người dùng muốn cả nhận xét phát triển lẫn review code cụ thể |
-| Ngôn ngữ? | Theo cấu hình `review.language`, mặc định `en` | Người dùng muốn cấu hình được |
+| Ngôn ngữ? | Theo cấu hình `language`, mặc định `vi` | Người dùng muốn cấu hình được |
 | Lưu ở đâu? | `~/.evolo/reviews/`, tách khỏi ledger | Ledger chỉ giữ điểm và XP; chấm lại không xoá review |
 | Review có ảnh hưởng XP không? | Không | AI chỉ đánh giá, code mới tính; review không có điểm nào |
 | Tên lệnh? | `evolo review <ref>`; performance review theo kỳ đổi thành `evolo report` | Tránh trùng tên với `docs/architecture.md` mục 8 |
@@ -22,8 +22,8 @@ Trạng thái (2026-10-20): đã xây (PR #6), có test unit và E2E, đã chạ
 ```bash
 evolo review [<commit>|#<pr>|<unit id>] [--again] [--judge claude|opencode] [--model <id>]
 evolo config                              # liệt kê thiết lập và giá trị hiện tại
-evolo config get review.language
-evolo config set review.language vi
+evolo config get language
+evolo config set language en
 ```
 
 - Đơn vị được tìm giống `evolo why`, bằng chung hàm `findByRef` trong `src/views.mjs`.
@@ -42,11 +42,11 @@ evolo config set review.language vi
 File `~/.evolo/config.json` (hoặc `$EVOLO_HOME/config.json`), ghi bằng `writeJson` của `src/store.mjs`.
 
 ```json
-{ "review": { "language": "vi" } }
+{ "language": "vi" }
 ```
 
-- `evolo config` chỉ nhận các khoá đã biết; hiện chỉ có `review.language`.
-- `review.language` là tên hoặc mã ngôn ngữ (`vi`, `Vietnamese`, `pt-BR`...), tối đa 40 ký tự, chỉ gồm chữ cái, khoảng trắng và `-`.
+- `evolo config` chỉ nhận các khoá đã biết: `language`, `budget.daily-usd`, `dashboard.theme`, `dashboard.name`.
+- `language` là tên hoặc mã ngôn ngữ (`en`, `English`, `pt-BR`...), tối đa 40 ký tự, chỉ gồm chữ cái, khoảng trắng và `-`, dùng chung cho review code và performance review.
   Giá trị này được chèn vào câu lệnh gửi judge, nên phải được kiểm tra.
 - File không có hoặc thiếu khoá thì dùng giá trị mặc định.
 - File không phải JSON hợp lệ thì lệnh dừng và báo lỗi, không ghi đè.
@@ -83,7 +83,7 @@ Commit `tip` không còn trong clone thì được tải lại từ remote đã 
   - `low`: dễ đọc, dễ bảo trì, đặt tên.
 - `category`: `bug`, `security`, `performance`, `test`, `design`, `readability`, `other`.
 - Review không có điểm, không nhắc tới XP.
-- Câu lệnh gửi judge nêu ngôn ngữ: các trường chữ viết bằng `<review.language>`.
+- Câu lệnh gửi judge nêu ngôn ngữ: các trường chữ viết bằng `<language>`.
 
 ### 4.4 Schema `judge/review.schema.json`
 
@@ -153,7 +153,7 @@ Mỗi đơn vị một file `~/.evolo/reviews/<owner>/<repo>/<unit id>.json`, gh
   - `tip` không còn trong clone được tải lại từ remote;
   - judge không chạy được thì không lưu gì.
 - Mọi test chấm điểm hiện có vẫn pass sau khi tách task spec.
-- Chạy thật một lần bằng `claude` thật trên một đơn vị của lightrag với `review.language vi`, ghi chi phí, thời gian và nhận xét về chất lượng review vào tài liệu này.
+- Chạy thật một lần bằng `claude` thật trên một đơn vị của lightrag với `language vi`, ghi chi phí, thời gian và nhận xét về chất lượng review vào tài liệu này.
 
 ## 8. Ngoài phạm vi
 
@@ -163,7 +163,7 @@ Mỗi đơn vị một file `~/.evolo/reviews/<owner>/<repo>/<unit id>.json`, gh
 
 ## 9. Chạy thật (2026-10-20)
 
-Clone tạm của `hiinguyen/lightrag`, `EVOLO_HOME` riêng, `claude` thật, `review.language vi`, đơn vị PR #5 (21 file, +2075 -16).
+Clone tạm của `hiinguyen/lightrag`, `EVOLO_HOME` riêng, `claude` thật, `language vi`, đơn vị PR #5 (21 file, +2075 -16).
 
 - Chấm điểm sau khi tách prompt chung (`judge/shared.md`): 160 XP, khớp các lần chấm trước (160-162), nên việc tách task spec không làm lệch điểm.
 - Review: 28-34 giây, $0.26 mỗi lần, khoảng gấp đôi chi phí chấm điểm vì đầu ra dài hơn.

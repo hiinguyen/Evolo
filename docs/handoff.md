@@ -43,7 +43,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
 | XP và level | Công thức XP 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L × (L + 9)` XP (công thức level 1.1); `evolo status` hiện level, rank, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
 | Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
-| Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | #6 |
+| Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `language` dùng chung cho review và report; judge dùng task spec và prompt chung `judge/shared.md` | #6 |
 | Tín hiệu XP | CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug`/`security` +10%; đọc khi chấm và ở mỗi lần sync tới khi chốt (CI xong hoặc sau 24 giờ), XP tính lại từ điểm đã lưu | #7 |
 | Chi phí | Trần theo ngày `budget.daily-usd` (mặc định $5), tính từ `costUsd` trong ledger và review; hết thì đơn vị cần judge chờ sang ngày sau, có một thông báo mỗi ngày; `status` in chi phí hôm nay | #7 |
 | CI và bảo vệ `main` | `.github/workflows/test.yml` chạy test trên Node 20, 22 và 24; ruleset `main` bắt buộc PR và ba check xanh, cấm force push và xoá | #8; ruleset tạo trên web |
@@ -51,12 +51,13 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Achievement | `evolo achievements`: 33 achievement hiện nhiều bậc (cột mốc, XP, loại việc, chất lượng, đều đặn, phạm vi, thói quen, commit) kèm tiến độ, và một nhóm achievement ẩn; thông báo desktop khi mở bậc mới; `evolo stats` có dòng `unlocked` | #10 |
 | Giờ địa phương | `status`, `why` và `review` hiện giờ theo múi giờ máy thay vì UTC | #11 |
 | Dashboard | `evolo dashboard [--no-open]`: trang HTML tĩnh `~/.evolo/dashboard.html` (0600) với Overview, Timeline, chi tiết đơn vị (Score, Review, Files, Commits), Analytics, Achievements, Reviews; worker và `evolo review` ghi lại trang khi nó đã có | #12 |
-| Performance review | `evolo report [week\|month\|quarter] [--previous] [--again]`: code tính số liệu và chọn việc nổi bật, một judge riêng (`judge/xp-report.md`, chỉ có tool `Read`, không đọc repo) viết lời có trích dẫn; validator bỏ mục trích đơn vị lạ và từ chối lời có chữ số; lưu ở `~/.evolo/reports/`, báo khi ledger đổi sau lúc viết; `report.language`; màn Reports trên dashboard | #13 |
+| Performance review | `evolo report [week\|month\|quarter] [--previous] [--again]`: code tính số liệu và chọn việc nổi bật, một judge riêng (`judge/xp-report.md`, chỉ có tool `Read`, không đọc repo) viết lời có trích dẫn; validator bỏ mục trích đơn vị lạ và từ chối lời có chữ số; lưu ở `~/.evolo/reports/`, báo khi ledger đổi sau lúc viết; `language`; màn Reports trên dashboard | #13 |
 | Redesign dashboard | Theme Light/Dark/System, tên hiển thị, rank theo level, công thức level 1.1, nới trần achievement, polish 7 màn hình; Timeline bám mock `code.html` | chưa mở PR |
 | Redesign theo mock `codeui` | Top bar có sync mark và chip kỳ, Overview có tab lọc feed và rail gọn hơn, Reviews có health ring, finding breakdown và actionable findings, Reports có velocity history và sync sources, unit detail có hero metrics, tab gạch chân, lọc finding và checklist | chưa mở PR |
 | Secret emblems | Nét vẽ riêng cho từng achievement ẩn đã mở, huy hiệu niêm phong cho secret chưa mở; id và hình của secret chưa mở không vào page source | chưa mở PR |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
-| README | `README.md` ở gốc repo, viết bằng tiếng Anh với mục Languages (Anh/Việt cho review và report): giới thiệu, yêu cầu, cài đặt bằng `npm install -g evolo` trên Linux, macOS, Windows (kèm `npm link` khi làm từ bản clone), sử dụng, bảng lệnh và cấu hình, kèm 4 ảnh chụp thật (`docs/images/`: status, Overview dashboard, chi tiết đơn vị, Achievements) | chưa mở PR |
+| README | `README.md` ở gốc repo, viết bằng tiếng Anh với mục Languages (Anh/Việt cho review và report): giới thiệu, yêu cầu, cài đặt bằng `npm install -g evolo` trên Linux, macOS, Windows (kèm `npm link` khi làm từ bản clone), sử dụng, bảng lệnh và cấu hình, kèm 4 ảnh chụp thật (`docs/images/`: status, Overview dashboard, chi tiết đơn vị, Achievements) | #15 |
+| Ngôn ngữ dùng chung | Gộp `review.language` và `report.language` thành khoá `language` (mặc định `vi`), vẫn đọc khoá cũ của 1.0.x; `evolo config` và README chỉ còn một khoá | #19 |
 
 ### Chưa làm
 
@@ -92,7 +93,7 @@ Code trong `packages/cli/`:
 | `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic (giữ quyền của file cũ), `readJsonTree` (mọi bản ghi dưới một thư mục), `evolo.log` |
 | `src/views.mjs` | Nội dung thông báo, status line, `why`, `stats` và `achievements`; tìm đơn vị theo mã, `#PR` hoặc commit |
 | `src/review.mjs` | `evolo review`: kiểm tra đầu ra (đường dẫn và số dòng), lưu và in review |
-| `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`review.language`, `report.language`, `budget.daily-usd`, `dashboard.theme`, `dashboard.name`) |
+| `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`language`, `budget.daily-usd`, `dashboard.theme`, `dashboard.name`) |
 | `src/signals.mjs` | Tín hiệu XP từ CI, review và issue; tính lại XP của bản ghi từ điểm rubric đã lưu |
 | `src/budget.mjs` | Chi phí judge theo ngày (ledger, review và report) và trần `budget.daily-usd` |
 | `src/sandbox.mjs` | Sandbox E2E dùng chung (repo tạm, remote bare, `gh` và `claude` giả) |
@@ -114,7 +115,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 363 test, đều pass (41 test E2E, khoảng 40 giây); CI chạy cùng lệnh
+cd packages/cli && npm test                      # 384 test, đều pass (19 test E2E, khoảng 40 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
