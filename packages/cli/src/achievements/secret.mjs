@@ -3,7 +3,7 @@
 // Rules follow catalog.mjs's promise: the value never goes down when a record is added at the end.
 import { levelFor } from "../score.mjs";
 import {
-  commitDates, commitsOf, count, countedChange, judged, landedDate, scored, sum,
+  commitDates, commitsOf, count, countedChange, filesOf, judged, landedDate, scored, sum,
 } from "./catalog.mjs";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -11,6 +11,11 @@ const COMEBACK_DAYS = 14;
 const SPEEDRUN_MS = 5 * 60 * 1000;
 const PICTOGRAPH = /\p{Extended_Pictographic}/u;
 const LAZY_SUBJECT = /^(wip|fix|fixes|fixed|update|updates|changes|stuff|asdf|test|tmp|temp|oops|minor|done|commit|\.+)$/i;
+const RELEASE_SUBJECT = /^chore\(release\):/i;
+const SEMVER = /\bv?\d+\.\d+\.\d+\b/;
+const DEPLOY_SUBJECT = /^deploy\b/i;
+const DEPLOY_WORKFLOW = /(^|\/)\.github\/workflows\/[^/]*deploy[^/]*$/i;
+const ONE_POINT_OH = /\bv?1\.0\.0\b/;
 
 const any = (holds) => (records) => (records.some(holds) ? 1 : 0);
 const reached = (value, threshold) => (value >= threshold ? 1 : 0);
@@ -127,4 +132,19 @@ export const SECRET = [
   { id: "emoji", name: "Emoji Artist", description: "an emoji in a commit subject", value: anySubject((subject) => PICTOGRAPH.test(subject)) },
   { id: "caps-lock", name: "CAPS LOCK", description: "A COMMIT SUBJECT IN CAPITALS", value: anySubject(shouting) },
   { id: "undo-the-undo", name: "Undo the Undo", description: "reverted a revert", value: anySubject((subject) => subject.startsWith('Revert "Revert ')) },
+  {
+    id: "shipper", name: "Shipper", description: "a release commit or a commit subject with a version",
+    value: anySubject((subject) => RELEASE_SUBJECT.test(subject) || SEMVER.test(subject)),
+  },
+  {
+    id: "to-production", name: "To Production", description: "a deploy commit or a deploy workflow",
+    value: any((record) => isScored(record) && (
+      commitsOf(record).some((commit) => DEPLOY_SUBJECT.test((commit.subject ?? "").trim()))
+      || filesOf(record).some((file) => DEPLOY_WORKFLOW.test(file.path ?? ""))
+    )),
+  },
+  {
+    id: "one-point-oh", name: "One Point Oh", description: "a commit subject with version 1.0.0",
+    value: anySubject((subject) => ONE_POINT_OH.test(subject)),
+  },
 ].map((rule) => ({ ...rule, tiers: [1], hidden: true }));

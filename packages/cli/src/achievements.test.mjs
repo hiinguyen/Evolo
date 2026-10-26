@@ -70,6 +70,39 @@ test("every visible achievement reaches its first tier exactly at its threshold"
   }
 });
 
+test("the ceilings are the one-year pace of the redesign, with at most six tiers", () => {
+  const ceilings = Object.fromEntries(VISIBLE.map((rule) => [rule.id, rule.tiers.at(-1)]));
+  assert.deepEqual(ceilings, {
+    contributor: 500, "merge-master": 200, hoarder: 50000, jackpot: 100, overdrive: 2000,
+    builder: 50, "bug-hunter": 50, architect: 40, guardian: 25, "speed-demon": 20,
+    scribe: 60, "test-pilot": 60, plumber: 40, exterminator: 100, craftsman: 50,
+    perfectionist: 10, "hard-mode": 50, "on-target": 100, "tiny-but-mighty": 30, janitor: 75,
+    "test-believer": 100, "green-light": 200, "core-contributor": 15, streak: 120,
+    "hat-trick": 100, "full-week": 52, "night-owl": 100, "early-bird": 100, "weekend-warrior": 100,
+    explorer: 25, polyglot: 20, "by-the-book": 1000, "co-pilot": 300,
+  });
+  for (const rule of VISIBLE) {
+    assert.ok(rule.tiers.length <= 6, `${rule.id} has ${rule.tiers.length} tiers`);
+    assert.ok(rule.tiers.length <= 10, `${rule.id} fits the numerals`);
+  }
+});
+
+// `count` scored units on consecutive calendar days, when a tier needs more days than October has.
+const consecutive = (count, options = {}) => many(count, (index) => {
+  const date = new Date(2026, 9, 1 + index);
+  const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return unit({ ...options, id: `c${index}`, landed: day(key) });
+});
+
+test("the highest new tiers open exactly at their thresholds", () => {
+  assert.equal(tierOf(consecutive(500), "contributor"), 5);
+  assert.equal(tierOf(consecutive(499), "contributor"), 4);
+  assert.equal(tierOf(fullWeeks(52), "full-week"), 5);
+  assert.equal(tierOf(fullWeeks(51), "full-week"), 4);
+  assert.equal(tierOf(consecutive(1000), "by-the-book"), 5);
+  assert.equal(tierOf(consecutive(999), "by-the-book"), 4);
+});
+
 test("achievements have unique ids and tiers that start at 1 or more and grow; secrets have one tier", () => {
   assert.equal(new Set(ACHIEVEMENTS.map((rule) => rule.id)).size, ACHIEVEMENTS.length);
   for (const rule of ACHIEVEMENTS) {

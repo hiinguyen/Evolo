@@ -14,7 +14,8 @@ const committed = (date, extra = {}) => unit({ commits: [{ date, subject: "feat:
 test("every secret has a test", () => {
   const tested = ["ctrl-z", "revisionist", "yolo-friday", "friday-13", "three-am", "new-year", "christmas", "thanos-snap", "monolith",
     "leet", "the-answer", "comeback", "very-descriptive", "novelist", "typo-lord", "for-nothing", "big-spender",
-    "meta", "halloween", "pi-day", "valentine", "cinderella", "century", "speedrun", "prompt-engineer", "emoji", "caps-lock", "undo-the-undo"];
+    "meta", "halloween", "pi-day", "valentine", "cinderella", "century", "speedrun", "prompt-engineer", "emoji", "caps-lock", "undo-the-undo",
+    "shipper", "to-production", "one-point-oh"];
   assert.deepEqual(SECRET.map(({ id }) => id).sort(), tested.sort());
 });
 
@@ -49,8 +50,8 @@ test("sizes", () => {
 test("XP and level", () => {
   unlocks("leet", [unit({ xp: 1000 }), unit({ xp: 337 })]);
   staysLocked("leet", [unit({ xp: 1336 }), unit({ xp: 900, status: "reverted" })]);
-  unlocks("the-answer", [unit({ xp: 20 * 42 * 42 })]);
-  staysLocked("the-answer", [unit({ xp: 20 * 42 * 42 - 1 })]);
+  unlocks("the-answer", [unit({ xp: 20 * 42 * 51 })]);
+  staysLocked("the-answer", [unit({ xp: 20 * 42 * 51 - 1 })]);
 });
 
 test("a comeback is a unit landing 14 days or more after the one before", () => {
@@ -113,4 +114,17 @@ test("commit subjects, again", () => {
   staysLocked("caps-lock", [committed(day("2026-10-05"), { subject: "FIX CI" }), committed(day("2026-10-05"), { subject: "FIX THE build" })]);
   unlocks("undo-the-undo", [committed(day("2026-10-05"), { subject: 'Revert "Revert "feat: add stats""' })]);
   staysLocked("undo-the-undo", [committed(day("2026-10-05"), { subject: 'Revert "feat: add stats"' })]);
+});
+
+test("publishing: a release subject, a deploy commit or workflow, and 1.0.0", () => {
+  unlocks("shipper", [committed(day("2026-10-05"), { subject: "chore(release): publish 2.1.0" })]);
+  unlocks("shipper", [committed(day("2026-10-05"), { subject: "feat: v1.2.3" })]);
+  staysLocked("shipper", [committed(day("2026-10-05"), { subject: "feat: v1.2" }), unit({ status: "failed", xp: 0 })]);
+  unlocks("to-production", [committed(day("2026-10-05"), { subject: "deploy: the new worker" })]);
+  unlocks("to-production", [unit({ files: [file(".github/workflows/deploy.yml", "config", 10)] })]);
+  staysLocked("to-production", [committed(day("2026-10-05"), { subject: "fix: redeploy the worker" })]);
+  staysLocked("to-production", [unit({ files: [file(".github/workflows/ci.yml", "config", 10)] })]);
+  unlocks("one-point-oh", [committed(day("2026-10-05"), { subject: "feat: release 1.0.0" })]);
+  unlocks("one-point-oh", [committed(day("2026-10-05"), { subject: "feat: v1.0.0" })]);
+  staysLocked("one-point-oh", [committed(day("2026-10-05"), { subject: "feat: 1.0.1" }), committed(day("2026-10-05"), { subject: "feat: 11.0.0" })]);
 });
