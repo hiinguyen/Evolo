@@ -1,0 +1,38 @@
+name: publish-github
+
+# Mirrors the npm release to GitHub Packages, which is what the repository sidebar's Packages section lists.
+# The npmjs package stays the install path: GitHub Packages requires consumers to configure the registry and a token,
+# so this publish is for discoverability only.
+# GitHub Packages requires the scope to match the owner, so the package is renamed only inside this workflow. The
+# `repository` field in packages/cli/package.json links the package back to this repository on its own.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write # GITHUB_TOKEN publishes the package; a PAT would not link it to the repository
+
+concurrency:
+  group: publish-github
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          package-manager-cache: false # never cache in a release build
+      - run: npm test
+        working-directory: packages/cli
+      - run: npm pkg set name=@hiinguyen/evolo
+        working-directory: packages/cli
+      # A version already on the registry fails here, before anything is published.
+      - run: npm publish
+        working-directory: packages/cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
