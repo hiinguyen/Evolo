@@ -1,11 +1,15 @@
 name: publish
 
+# Publishes packages/cli to npm through a trusted publisher (OIDC), so the repository stores no NPM_TOKEN.
+# One-time setup on npmjs.com, after the first manual publish: package `evolo` -> Settings -> Trusted publishing
+# -> GitHub Actions, repository hiinguyen/Evolo, workflow publish.yml, allow `npm publish`.
+# npm then accepts this workflow and generates provenance on its own.
 on:
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # the OIDC token the trusted publisher exchanges for a short-lived npm credential
 
 concurrency:
   group: publish
@@ -21,10 +25,9 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+          package-manager-cache: false # never cache in a release build
       - run: npm test
         working-directory: packages/cli
-      # A checked-in version that is already on the registry fails here, before anything is published.
-      - run: npm publish --provenance --access public
+      # A version already on the registry fails here, before anything is published.
+      - run: npm publish
         working-directory: packages/cli
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
