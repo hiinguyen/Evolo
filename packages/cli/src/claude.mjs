@@ -6,6 +6,7 @@ import { existsSync, lstatSync, mkdirSync, readlinkSync, realpathSync, rmSync, s
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isWindows, quoteCommand } from "./platform.mjs";
 import { readJson, writeJson } from "./store.mjs";
 
 const SKILL_SOURCE = fileURLToPath(new URL("../claude/skills/evolo", import.meta.url));
@@ -16,9 +17,8 @@ const STATUS_ARGS = "statusline";
 
 export const claudeDir = () => process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude");
 
-const shellQuote = (value) => `'${value.replace(/'/g, `'\\''`)}'`;
-// Recognises Evolo's own entries whatever node or checkout path they were written with.
-const isEvoloCommand = (command, args) => typeof command === "string" && /evolo\.mjs'? /.test(command) && command.endsWith(` ${args}`);
+// Recognises Evolo's own entries whatever node or checkout path they were written with, quoted either way.
+const isEvoloCommand = (command, args) => typeof command === "string" && /evolo\.mjs["']? /.test(command) && command.endsWith(` ${args}`);
 
 // settings.json is often a symlink into a dotfiles repository: the file it points at is rewritten, not the link.
 function settingsPath() {
@@ -33,7 +33,9 @@ const skillLink = () => join(claudeDir(), "skills", "evolo");
 function skillAt(path) {
   try {
     if (!lstatSync(path).isSymbolicLink()) return { isLink: false, isOurs: false };
-    const target = resolve(dirname(path), readlinkSync(path));
+    // A Windows junction reads back as an absolute target with an NT prefix, which resolve() would keep.
+    const linked = readlinkSync(path).replace(/^\\\\\?\\/, "");
+    const target = resolve(dirname(path), linked);
     return { isLink: true, isOurs: target === SKILL_SOURCE || (target.endsWith("/claude/skills/evolo") && !existsSync(target)) };
   } catch (error) {
     if (error.code === "ENOENT") return null;
@@ -48,8 +50,9 @@ function installSkill() {
   if (current && !current.isOurs) return `left ${link} alone: it is not Evolo's; remove it to install the /evolo skill`;
   rmSync(link, { force: true });
   mkdirSync(dirname(link), { recursive: true });
-  // A link, not a copy, so the skill follows the checkout like the `evolo` command does.
-  symlinkSync(SKILL_SOURCE, link);
+  // A link, not a copy, so the skill follows the checkout like the `evolo` command does. Windows needs a junction:
+  // a directory symlink there requires a privilege that a normal user does not have.
+  symlinkSync(SKILL_SOURCE, link, isWindows ? "junction" : "dir");
   return `installed skill /evolo at ${link}`;
 }
 
@@ -74,7 +77,7 @@ function withoutSyncHook(settings) {
 // `command` is the argv that runs the Evolo CLI, e.g. [node, ".../bin/evolo.mjs"]. Returns the lines to print.
 // Running it again updates Evolo's entries (for example after the checkout moved) without adding new ones.
 export function installClaude(command) {
-  const evolo = command.map(shellQuote).join(" ");
+  const evolo = quoteCommand(command);
   const path = settingsPath();
   const settings = readJson(path, {});
   const notes = [installSkill()];

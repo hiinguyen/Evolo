@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import { git } from "./facts.mjs";
 import { githubLogin, githubRepo, remoteFor } from "./github.mjs";
 import { installHook, uninstallHook } from "./hooks.mjs";
+import { judgeExecutable } from "./platform.mjs";
 import { readJson, writeJson } from "./store.mjs";
 
 const reposPath = (home) => join(home, "repos.json");
@@ -30,10 +31,16 @@ export function findRepo(home, repoDir) {
 }
 
 function checkClaude() {
+  let executable;
   try {
-    execFileSync("claude", ["--version"], { stdio: "ignore" });
+    executable = judgeExecutable("claude");
+  } catch (error) {
+    throw new Error(`${error.message}; Evolo uses it to judge contributions`);
+  }
+  try {
+    execFileSync(executable, ["--version"], { stdio: "ignore" });
   } catch {
-    throw new Error("the `claude` CLI is not installed or not on PATH; Evolo uses it to judge contributions");
+    throw new Error(`the \`claude\` CLI is not installed or not on PATH; Evolo uses it to judge contributions`);
   }
 }
 
