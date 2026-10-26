@@ -284,7 +284,7 @@ In hàng đợi (kèm lỗi của job đang thử lại, hoặc job chờ sang n
 ```
 queue: empty
 judge spending today $0.12 of $5.00
-level 2  160 XP  (20 XP to level 3)
+level 0 · Intern  160 XP  (40 XP to level 1)
 today +160 XP  last 7 days +160 XP
 latest:
   2026-10-19 10:23  hiinguyen/lightrag pr-5  160 XP  Added secret-authenticated n8n AI Agent endpoints ...
@@ -315,7 +315,7 @@ Worker gửi `notify-send` khi một đơn vị được chấm xong:
 
 | Trạng thái | Tiêu đề | Nội dung |
 |---|---|---|
-| `scored` | `Evolo +160 XP`, thêm `· level 3!` khi lên level | `lightrag PR #5: feature` và lời tóm tắt của judge |
+| `scored` | `Evolo +160 XP`, thêm `· level N!` khi lên level | `lightrag PR #5: feature` và lời tóm tắt của judge |
 | `needs_review` | `Evolo Needs review` | Đơn vị, và gợi ý `evolo why <id>` |
 | `failed` | `Evolo Scoring failed` | Lý do, và gợi ý `evolo retry` |
 | Mở achievement | `Evolo achievement unlocked: Bug Hunter II`, hoặc `Evolo 3 achievements unlocked` | Mô tả, hoặc mỗi bậc một dòng; gửi sau thông báo XP |
@@ -363,7 +363,7 @@ Kết quả mới thay bản ghi `failed` vì cùng mã đơn vị.
   Worker sync trước rồi chấm những gì sync xếp hàng, nên PR merge trên GitHub được chấm ngay khi mở phiên mới.
   Một worker đang ngủ chờ thử lại cũng thấy yêu cầu và sync, vì worker mới không lấy được lock.
   Không in gì là bắt buộc: Claude Code đưa stdout của hook `SessionStart` vào context của agent.
-- **Status line:** `evolo statusline` in `Lv 7 · 1,245 XP · +105 today · 1 queued`.
+- **Status line:** `evolo statusline` in `Lv 15 · Senior Dev · 7,200 XP · +105 today · 1 queued`.
   Nó chỉ đọc `summary.json` (XP theo ngày, ghi lại mỗi khi ledger đổi) và đếm hàng đợi; mất khoảng 50 ms, gần hết là thời gian khởi động Node.
   `install` chỉ đặt status line khi người dùng chưa có; đã có (ví dụ của Orca) thì giữ nguyên và nhắc tự thêm output của `evolo statusline` vào.
 
@@ -434,7 +434,8 @@ packages/cli/                 # gói npm "evolo"
   bin/evolo.mjs               # [có] init, uninstall, enqueue, worker, sync, status, why, retry, statusline, claude, evaluate | [chưa] backfill, preview
   src/evaluate.mjs            # [có] facts → triage → worktree → judge → validate → xp cho một change set
   src/facts.mjs               # [có] số liệu diff ròng base..tip, danh sách commit, revert, thông tin PR
-  src/score.mjs               # [có] triage, validator, công thức XP 1.2, levelFor
+  src/score.mjs               # [có] triage, validator, công thức XP 1.2, levelFor (công thức level 1.1)
+  src/rank.mjs                # [có] rank theo level và hiệu ứng CSS
   src/judges/common.mjs       # [có] READ_ONLY_COMMANDS, chạy tiến trình JSONL, timeout, dọn tiến trình con
   src/judges/claude.mjs       # [có] backend claude -p (mục 5), mặc định
   src/judges/opencode.mjs     # [có] backend opencode, sinh file agent tạm từ judge/xp-judge.md
@@ -447,7 +448,7 @@ packages/cli/                 # gói npm "evolo"
   src/github.mjs              # [có] mọi lời gọi gh: đọc PR, PR chứa một commit, PR đã merge của tôi, chọn remote đúng, CI, review, issue
   src/signals.mjs             # [có] tín hiệu XP (CI, merge sạch, issue bug) và tính lại XP từ điểm đã lưu
   src/budget.mjs              # [có] chi phí judge theo ngày và trần budget.daily-usd
-  src/config.mjs              # [có] ~/.evolo/config.json: review.language, budget.daily-usd
+  src/config.mjs              # [có] ~/.evolo/config.json: review.language, report.language, budget.daily-usd, dashboard.theme, dashboard.name
   src/ledger.mjs              # [có] bản ghi, trạng thái, superseded và reverted khi sync, landedAt, summary.json
   src/stats.mjs               # [có] analytics theo kỳ và streak, cho evolo stats
   src/achievements.mjs        # [có] bậc, tiến độ và ngày mở của achievement; achievements.json nhớ bậc đã báo

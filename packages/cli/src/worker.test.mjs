@@ -7,7 +7,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { listRecords, readRecord } from "./ledger.mjs";
 import { listJobs } from "./queue.mjs";
+import { rankFor } from "./rank.mjs";
 import { loadRepos } from "./repos.mjs";
+import { levelFor } from "./score.mjs";
 import { periodOf } from "./stats.mjs";
 import { lines, makeSandbox, REPO, short } from "./sandbox.mjs";
 
@@ -186,8 +188,9 @@ test("pushes in quick succession are each scored, in order", async () => {
   const xps = listRecords(box.home, REPO).map((record) => record.xp);
   assert.ok(xps.every((xp) => xp > 0 && xp % 5 === 0), `XP comes in steps of 5: ${xps}`);
   const total = xps.reduce((sum, xp) => sum + xp, 0);
-  const level = Math.floor(Math.sqrt(total / 20));
-  assert.match(box.evolo("status"), new RegExp(`^level ${level}  ${total} XP  \\(${20 * (level + 1) ** 2 - total} XP to level ${level + 1}\\)$`, "m"));
+  const { level, next } = levelFor(total);
+  const rank = rankFor(level).name;
+  assert.match(box.evolo("status"), new RegExp(`^level ${level} · ${rank}  ${total} XP  \\(${next - total} XP to level ${level + 1}\\)$`, "m"));
 });
 
 test("while GitHub or the judge cannot be reached the unit waits in the queue, and survives a crashed worker", async () => {
@@ -240,9 +243,10 @@ test("a scored push raises a desktop notification, shows in the status line and 
   // The XP comes first; the achievements it unlocked follow, which hidden ones among them depends on the clock.
   const [shown, ...more] = box.notifications();
   assert.ok(more.every((other) => /^Evolo (achievement unlocked: |\d+ achievements unlocked$)/.test(other.title)), JSON.stringify(more));
-  assert.match(shown.title, new RegExp(`^Evolo \\+${record.xp} XP · level \\d+!$`), "the first score is a level up");
+  assert.equal(shown.title, `Evolo +${record.xp} XP`, "the first score does not reach level 1");
   assert.equal(shown.body, `proj push ..${short(sha)}: feature\nChanged 1 file(s).`);
-  assert.match(box.evolo("statusline").trim(), new RegExp(`^Lv \\d+ · ${record.xp} XP · \\+${record.xp} today$`));
+  const { level } = levelFor(record.xp);
+  assert.match(box.evolo("statusline").trim(), new RegExp(`^Lv ${level} · ${rankFor(level).name} · ${record.xp} XP · \\+${record.xp} today$`));
   assert.match(box.evolo("status"), new RegExp(`^today \\+${record.xp} XP  last 7 days \\+${record.xp} XP$`, "m"));
 
   const explained = box.evolo("why", short(sha));
@@ -416,7 +420,7 @@ test("signals: a push gains XP for the bug issue it closes at once, and for CI t
   assert.equal(settled.result.xp, settled.xp);
   assert.match(synced, new RegExp(`${scored.id}: signals, ${scored.xp} -> ${settled.xp} XP`));
   assert.match(box.evolo("why", scored.id), /^signals: CI passed the first time \+5%, closes bug issue #12 \+10%$/m);
-  assert.match(box.evolo("status"), new RegExp(`^level \\d+  ${readRecord(box.home, REPO, `push-root-${short(base)}`).xp + settled.xp} XP`, "m"));
+  assert.match(box.evolo("status"), new RegExp(`^level \\d+ · [A-Za-z ]+  ${readRecord(box.home, REPO, `push-root-${short(base)}`).xp + settled.xp} XP`, "m"));
 
   box.setGithub({ down: true });
   assert.equal(box.evolo("sync").trim(), `${REPO}: sync failed: gh pr list failed: error connecting to api.github.com`, "final signals are not read again");

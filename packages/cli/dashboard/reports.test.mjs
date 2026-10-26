@@ -23,25 +23,34 @@ function twoReports() {
   return { ...model, reports: [week, month] };
 }
 
-test("every saved report is a card, in the model's order, linking to its own address", () => {
+test("the latest report is featured and the rest are an archive, each linking to its own address", () => {
   const html = renderReports(twoReports());
-  assert.equal(count(html, 'class="report-card"'), 2);
+  assert.equal(count(html, "featured-report"), 1);
+  assert.equal(count(html, 'class="report-card"'), 1);
+  assert.match(html, /<a class="featured-open" href="#\/reports\/week\/2026-10-19">/);
   const links = [...html.matchAll(/<a class="report-card" href="([^"]*)"/g)].map(([, href]) => href);
-  assert.deepEqual(links, ["#/reports/week/2026-10-19", "#/reports/month/2026-09-01"]);
+  assert.deepEqual(links, ["#/reports/month/2026-09-01"]);
   const text = textOf(html);
   assert.match(text, /Reports 2 reports /);
-  assert.match(text, /week 2026-10-19\.\.2026-10-25 Week · en · written 2026-10-21 A week split between Evolo's views/);
-  assert.match(text, /2026-09 Month · vi · written 2026-10-01 Một tháng/);
+  assert.match(text, /Report needs a check week 2026-10-19\.\.2026-10-25 Week · en · written 2026-10-21 · claude-sonnet-5-5 · \$0\.04 · 9s/);
+  assert.match(text, /A week split between Evolo's views/);
+  assert.match(text, /Month 2026-09 2026-10-01 vi · claude-sonnet-5-5 · \$0\.04 · 9s Một tháng/);
+  assert.match(text, /Past &amp; archived reports Showing 1 earlier report/);
+  assert.match(text, /XP earned 195 XP Scored units 3 Level 4 Report cost \$0\.04/);
+  assert.match(text, /Velocity history 2 reports/);
+  assert.match(text, /Sync sources 2 repositories/);
 });
 
-test("a card says when its period was not over and when its data changed, and escapes the writer's words", () => {
+test("the featured report and the archive carry their state, and the writer's words are escaped", () => {
   const html = renderReports(twoReports());
-  const [week, month] = html.split('<li><a class="report-card"').slice(1);
+  const [week] = html.split('<article class="panel featured-report">').slice(1);
+  const [month] = html.split('<li><a class="report-card"').slice(1);
   assert.match(week, /<span class="pill">In progress<\/span>/);
-  assert.doesNotMatch(week, /Stale/);
+  assert.doesNotMatch(week.split("Report focus mix")[0], /Stale/);
   assert.match(month, /<span class="pill sev-medium">Stale<\/span>/);
   assert.doesNotMatch(month, /In progress/);
   assert.match(month, /Một tháng &lt;b&gt;đầy&lt;\/b&gt; việc\./);
+  assert.match(week, /The week was not over|Report integrity/);
 });
 
 test("without a saved report the screen says how to write one", () => {
@@ -52,17 +61,18 @@ test("without a saved report the screen says how to write one", () => {
 test("a report shows its figures, its words, and each highlight with the XP and type it was written with", () => {
   const html = renderReport(sampleModel(), ID);
   const text = textOf(html);
-  assert.match(text, /week 2026-10-19\.\.2026-10-25 Written 2026-10-21 08:00 in en · claude-sonnet-5-5 · \$0\.04 /);
+  assert.match(text, /Reports \/ week 2026-10-19\.\.2026-10-25 Report needs a check week 2026-10-19\.\.2026-10-25 Week · en · written 2026-10-21 08:00 · claude-sonnet-5-5 · \$0\.04 · 9s/);
+  assert.match(text, /XP earned 195 3 scored units · Level 4/);
   assert.match(text, /XP 195 /);
   assert.match(text, /Units 3 /);
-  assert.match(text, /Level 7 when written /);
+  assert.match(text, /Level 4 when written /);
   assert.doesNotMatch(text, /vs week/, "the previous week had no units to compare with");
   assert.match(text, /Overview A week split between Evolo's views/);
   assert.match(text, /Highlights ai-orgs PR #1 125 XP · feature It laid the agent world's foundation/);
   assert.match(text, /evolo push 7c1d2e9\.\.a2205df 60 XP · bugfix It fixed the times every view shows\./);
   assert.match(text, /Strengths Kept each change small and tested\. ai-orgs PR #1 evolo push 7c1d2e9\.\.a2205df /);
   assert.match(text, /Improvements The tick loop mixes scheduling/);
-  assert.match(html, /<a class="panel-link" href="#\/reports">All reports<\/a>/);
+  assert.match(html, /<nav class="crumbs" aria-label="Breadcrumb"><a href="#\/reports">Reports<\/a>/);
 });
 
 test("every citation is a link to the unit's page, or plain text once the unit is gone", () => {

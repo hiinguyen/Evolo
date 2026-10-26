@@ -1,6 +1,126 @@
-/* Reports: a grid of cards, each a link to one report; one report in full, with its citations as small links. */
+/* Reports: the latest report as a featured card, the archive below it, and the saved report in full. The shared rail,
+   mini stat, hero and fill rules live in style.css; the mix bar is shared with the Overview. */
 
-.report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.reports-screen { gap: 22px; }
+
+.reports-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+
+.featured-report {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+  background:
+    radial-gradient(520px 260px at 100% 0%, var(--accent-soft), transparent 70%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 6%, var(--card)), var(--card) 55%, color-mix(in srgb, var(--accent-2) 4%, var(--card)));
+  box-shadow: var(--hairline), 0 22px 55px -34px var(--glow);
+}
+
+.featured-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.featured-title { min-width: 0; }
+.featured-title h2 { margin-top: 4px; color: var(--strong); font-size: 24px; line-height: 30px; font-weight: 700; letter-spacing: -0.025em; overflow-wrap: anywhere; }
+.featured-meta { margin-top: 4px; color: var(--muted); font-family: var(--mono); font-size: 11px; line-height: 17px; overflow-wrap: anywhere; }
+
+.featured-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--green-soft);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 17px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.featured-badge.warn { border-color: var(--amber-soft); background: var(--amber-soft); color: var(--amber); }
+.featured-badge .status-dot { width: 6px; height: 6px; }
+
+.featured-open {
+  flex: none;
+  padding: 7px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.featured-open:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 70%, var(--accent) 8%); }
+
+.featured-overview {
+  max-width: 76ch;
+  margin-top: 16px;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 22px;
+  overflow-wrap: anywhere;
+}
+
+.featured-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.feat-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+}
+
+.feat-label { color: var(--muted); font-size: 10px; line-height: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.feat-value { color: var(--strong); font-family: var(--mono); font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+.feat-unit { color: var(--muted); font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; }
+
+.featured-highlights { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border); }
+.featured-subhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.featured-subhead h3 { color: var(--strong); font-size: 12px; line-height: 18px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.featured-highlights .highlight { padding: 10px 0; }
+.featured-highlights .highlight + .highlight { border-top: 1px solid var(--border); }
+.featured-unlocked { margin-top: 8px; color: var(--amber); font-size: 11px; line-height: 17px; }
+
+.featured-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.featured-foot-note { color: var(--muted); font-family: var(--mono); font-size: 10px; line-height: 15px; }
+
+/* The archive. */
+.archive { display: flex; flex-direction: column; gap: 14px; }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: 12px; }
 
 .report-card {
   display: flex;
@@ -10,34 +130,47 @@
   padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--card);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--card) 94%, var(--surface-2)), var(--card));
+  box-shadow: var(--hairline), var(--shadow);
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
-.report-card:hover { background: var(--hover); }
+.report-card:hover { border-color: var(--border-strong); }
+.report-card:hover .report-label { color: var(--accent-text); }
+.report-card:focus-visible { outline-offset: 2px; }
 
-/* The period's label has the card's whole width, so a week's two dates stay on one line; when it was written is meta. */
-.report-head { display: flex; flex-direction: column; min-width: 0; }
-.report-label { font-weight: 600; overflow-wrap: break-word; }
-.report-meta { color: var(--muted); font-size: 12px; line-height: 16px; }
+.report-card-top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.report-label { min-width: 0; color: var(--strong); font-weight: 600; overflow-wrap: anywhere; transition: color 140ms ease; }
+.report-at { margin-left: auto; color: var(--muted); font-family: var(--mono); font-size: 10px; white-space: nowrap; }
+.report-card-meta { color: var(--muted); font-family: var(--mono); font-size: 10px; line-height: 15px; overflow-wrap: anywhere; }
 
-/* The whole overview is in the page; the card shows its first three lines. */
 .report-overview {
   display: -webkit-box;
   overflow: hidden;
   overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
-.report-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.report-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.report-xp { color: var(--green); font-family: var(--mono); font-size: 11px; font-weight: 600; }
+.report-units { color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.report-pills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.report-open { margin-left: auto; color: var(--accent-text); font-size: 11px; font-weight: 600; white-space: nowrap; }
+
+/* One report in full. */
+.report-hero { margin-top: 2px; }
+.report-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* Three figures stay in one row at any width: three short numbers fit, and 2 + 1 would leave a hole. */
+.stat-grid.report-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 /* The notices sit together, closer than the screen's sections. */
 .report-notices { display: flex; flex-direction: column; gap: 8px; }
 .report-notices .notice { margin: 0; }
-
-/* Three figures stay in one row at any width: three short numbers fit, and 2 + 1 would leave a hole. */
-.stat-grid.report-figures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 
 .highlight, .report-points > li { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; }
 .highlight-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
@@ -47,5 +180,56 @@
 
 .cites { display: flex; flex-wrap: wrap; gap: 4px 12px; }
 .cite { color: var(--muted); font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
-a.cite { border-radius: 4px; color: var(--accent-text); font-weight: 500; }
+a.cite { border-radius: 4px; color: var(--accent-text); font-weight: 600; }
 a.cite:hover { text-decoration: underline; }
+
+/* The rail's integrity rows, unit citations and unlocked chips. */
+.check-list { display: flex; flex-direction: column; gap: 9px; }
+.check-row { display: flex; align-items: flex-start; gap: 9px; color: var(--muted); font-size: 11px; line-height: 17px; }
+.check-row .status-dot { margin-top: 5px; }
+
+.unit-cites { display: flex; flex-direction: column; }
+.unit-cite { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; font-size: 11px; line-height: 16px; }
+.unit-cite + .unit-cite { border-top: 1px solid var(--border); }
+.unit-cite-main { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; }
+.unit-cite-main .cite { min-width: 0; overflow-wrap: anywhere; }
+.unit-cite-type { padding: 0 5px; border-radius: 3px; font-family: var(--mono); font-size: 9px; }
+.unit-cite-xp { flex: none; color: var(--green); font-family: var(--mono); font-size: 10px; font-weight: 600; }
+
+.unlock-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.source-list { display: flex; flex-direction: column; }
+.source-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 8px 0; font-size: 11px; line-height: 16px; }
+.source-row + .source-row { border-top: 1px solid var(--border); }
+.source-name { color: var(--text); overflow-wrap: anywhere; }
+.source-count { flex: none; color: var(--muted); font-family: var(--mono); font-size: 10px; }
+.unlock-chip {
+  padding: 3px 8px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: 999px;
+  background: var(--amber-soft);
+  color: var(--amber);
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 500;
+}
+
+@media (min-width: 1200px) {
+  .reports-hero-grid { grid-template-columns: minmax(0, 1fr) 318px; }
+}
+
+@media (max-width: 1079px) {
+  .reports-hero-grid .rail { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+}
+
+@media (max-width: 719px) {
+  .featured-report { padding: 18px; }
+  .featured-title h2 { font-size: 21px; line-height: 27px; }
+  .featured-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .featured-foot { align-items: flex-start; }
+  .report-at { margin-left: 0; }
+  .stat-grid.report-figures { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .featured-open, .report-card, .report-label { transition: none; }
+}

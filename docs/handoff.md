@@ -1,6 +1,6 @@
 # Evolo: bàn giao để tiếp tục ở session mới
 
-Cập nhật: 2026-10-22.
+Cập nhật: 2026-10-26.
 Mở session mới và bảo Claude: "đọc `docs/handoff.md` rồi làm tiếp bước tiếp theo".
 Quy tắc làm việc trong repo (git, test, tài liệu) nằm ở `CLAUDE.md`, Claude Code tự nạp ở mỗi phiên.
 
@@ -41,7 +41,7 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Change set | Chấm một lần push hoặc một PR đã merge như một thay đổi; `evolo evaluate` để chấm tay | #2 |
 | Chọn commit | Bỏ commit của người khác và commit thuộc PR đã merge; chọn đúng remote cho PR; chỉ chấm PR vào nhánh mặc định | #3 |
 | Tự chấm | `evolo init` / `uninstall`, hook `pre-push`, hàng đợi, worker nền, xác nhận push, sync PR đã merge, ledger, `superseded` và `reverted`, thử lại khi mất mạng hoặc judge không chạy được | #4 |
-| XP và level | Công thức 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L²` XP; `evolo status` hiện level, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
+| XP và level | Công thức XP 1.2: XP là bội số của 5, tối thiểu 5; level L cần `20 × L × (L + 9)` XP (công thức level 1.1); `evolo status` hiện level, rank, tổng XP, hàng đợi, các lần chấm gần nhất | #4 |
 | Hiển thị | Thông báo desktop khi chấm xong (có báo lên level); `evolo why` giải thích điểm rubric, bằng chứng và công thức; `evolo retry`; `evolo statusline` đọc `summary.json`; `status` thêm XP hôm nay và 7 ngày; `evolo claude install` cài skill `/evolo`, hook `SessionStart` chạy `sync --background`, và status line khi chưa có | #5 |
 | Review code | `evolo review [<ref>] [--again]`: judge riêng (prompt `judge/xp-review.md`) viết nhận xét, điểm mạnh, điều cần cải thiện, vấn đề có `file:dòng`; lưu ở `~/.evolo/reviews/`; `evolo config set review.language vi`; judge dùng task spec và prompt chung `judge/shared.md` | #6 |
 | Tín hiệu XP | CI pass ngay +5%, merge sạch sau review +5%, đóng issue `bug`/`security` +10%; đọc khi chấm và ở mỗi lần sync tới khi chốt (CI xong hoặc sau 24 giờ), XP tính lại từ điểm đã lưu | #7 |
@@ -52,6 +52,9 @@ Thứ tự đọc khi bắt đầu: file này, rồi `architecture.md`, rồi `a
 | Giờ địa phương | `status`, `why` và `review` hiện giờ theo múi giờ máy thay vì UTC | #11 |
 | Dashboard | `evolo dashboard [--no-open]`: trang HTML tĩnh `~/.evolo/dashboard.html` (0600) với Overview, Timeline, chi tiết đơn vị (Score, Review, Files, Commits), Analytics, Achievements, Reviews; worker và `evolo review` ghi lại trang khi nó đã có | #12 |
 | Performance review | `evolo report [week\|month\|quarter] [--previous] [--again]`: code tính số liệu và chọn việc nổi bật, một judge riêng (`judge/xp-report.md`, chỉ có tool `Read`, không đọc repo) viết lời có trích dẫn; validator bỏ mục trích đơn vị lạ và từ chối lời có chữ số; lưu ở `~/.evolo/reports/`, báo khi ledger đổi sau lúc viết; `report.language`; màn Reports trên dashboard | #13 |
+| Redesign dashboard | Theme Light/Dark/System, tên hiển thị, rank theo level, công thức level 1.1, nới trần achievement, polish 7 màn hình; Timeline bám mock `code.html` | chưa mở PR |
+| Redesign theo mock `codeui` | Top bar có sync mark và chip kỳ, Overview có tab lọc feed và rail gọn hơn, Reviews có health ring, finding breakdown và actionable findings, Reports có velocity history và sync sources, unit detail có hero metrics, tab gạch chân, lọc finding và checklist | chưa mở PR |
+| Secret emblems | Nét vẽ riêng cho từng achievement ẩn đã mở, huy hiệu niêm phong cho secret chưa mở; id và hình của secret chưa mở không vào page source | chưa mở PR |
 | Cài đặt | Lệnh `evolo` là symlink `~/.local/bin/evolo` tới `packages/cli/bin/evolo.mjs` | không commit |
 
 ### Chưa làm
@@ -80,14 +83,15 @@ Code trong `packages/cli/`:
 | `src/ledger.mjs` | Bản ghi kết quả từng đơn vị và trạng thái (`scored`, `superseded`, `reverted`...), `landedAt(record)` (ngày của một đơn vị), `summary.json` (XP theo ngày) |
 | `src/stats.mjs` | Analytics: `periodOf` (tuần, tháng, quý theo lịch), `computeStats`, `streakOf`; hàm thuần trên bản ghi, cho `evolo stats` và các phần Game hoá sau |
 | `src/achievements.mjs` | Achievement: `achievementsOf` (bậc, tiến độ, ngày mở bằng tìm kiếm nhị phân trên ledger xếp theo `landedAt`), `unlockedIn`, `notifyUnlocks` (`achievements.json`) |
-| `src/achievements/` | `catalog.mjs` (achievement hiện và hàm đọc bản ghi dùng chung), `secret.mjs` và `secret.test.mjs` (achievement ẩn: đừng nêu tên hay điều kiện với người dùng), `fixtures.mjs` (bản ghi giả cho test) |
+| `src/achievements/` | `catalog.mjs` (achievement hiện và hàm đọc bản ghi dùng chung), `secret.mjs` và `secret.test.mjs` (achievement ẩn: đừng nêu tên hay điều kiện với người dùng), `secret-icons.mjs` và `secret-icons.test.mjs` (nét vẽ riêng của achievement ẩn, chỉ chạy phía Node), `fixtures.mjs` (bản ghi giả cho test) |
+| `src/rank.mjs` | Bảng 11 rank theo level và `rankFor(level)`; hiệu ứng CSS của từng bậc do dashboard và terminal dùng chung |
 | `src/report.mjs` | Performance review: `reportData` (đầu vào của judge, số liệu, `basis`), `validateReport`, `writeReport`, `storedReport`, `readReport`, `saveReport`, `listAllReports`, `formatReport` |
 | `src/dashboard.mjs` | Dashboard: `dashboardModel` (một object chứa mọi thứ trang hiện), `writeDashboard`, `refreshDashboard` (chỉ ghi khi file đã có, lỗi chỉ vào log); `MODULES` và `STYLES` là thứ tự nối module và CSS |
-| `dashboard/` | Template, CSS và module vẽ của trang, không có bước build (`src/dashboard.mjs` nối chúng thành một script):<br>`index.html` khung trang và CSP; `html.mjs` `escape`, `safeUrl`, định dạng; `charts.mjs` biểu đồ SVG;<br>`overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs`, `reports.mjs` mỗi file một màn hình; `app.mjs` router hash, khung trang, bộ lọc, khởi động;<br>`style.css` và một file CSS cho mỗi màn hình; `fixtures.mjs` model mẫu cho test |
+| `dashboard/` | Template, CSS và module vẽ của trang, không có bước build (`src/dashboard.mjs` nối chúng thành một script):<br>`index.html` khung trang và CSP; `html.mjs` `escape`, `safeUrl`, định dạng, `emptyPanel`; `charts.mjs` biểu đồ SVG; `icons.mjs` icon của từng achievement hiện; `theme.mjs` boot script, resolver, segmented control và hiệu ứng rank;<br>`overview.mjs`, `timeline.mjs`, `unit.mjs`, `analytics.mjs`, `achievements.mjs`, `reviews.mjs`, `reports.mjs` mỗi file một màn hình; `app.mjs` router hash, khung trang, bộ lọc, khởi động;<br>`style.css` và một file CSS cho mỗi màn hình; `fixtures.mjs` model mẫu cho test |
 | `src/store.mjs` | Thư mục `~/.evolo` (hoặc `$EVOLO_HOME`), ghi JSON atomic (giữ quyền của file cũ), `readJsonTree` (mọi bản ghi dưới một thư mục), `evolo.log` |
 | `src/views.mjs` | Nội dung thông báo, status line, `why`, `stats` và `achievements`; tìm đơn vị theo mã, `#PR` hoặc commit |
 | `src/review.mjs` | `evolo review`: kiểm tra đầu ra (đường dẫn và số dòng), lưu và in review |
-| `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`review.language`, `report.language`, `budget.daily-usd`) |
+| `src/config.mjs` | `~/.evolo/config.json` và `evolo config`; chỉ nhận khoá đã biết (`review.language`, `report.language`, `budget.daily-usd`, `dashboard.theme`, `dashboard.name`) |
 | `src/signals.mjs` | Tín hiệu XP từ CI, review và issue; tính lại XP của bản ghi từ điểm rubric đã lưu |
 | `src/budget.mjs` | Chi phí judge theo ngày (ledger, review và report) và trần `budget.daily-usd` |
 | `src/sandbox.mjs` | Sandbox E2E dùng chung (repo tạm, remote bare, `gh` và `claude` giả) |
@@ -98,7 +102,7 @@ Code trong `packages/cli/`:
 | `src/github.mjs` | Mọi lời gọi `gh`: đọc PR, PR đã merge chứa một commit, chọn remote trỏ đúng repo GitHub, CI và review của đơn vị, issue được đóng |
 | `src/evaluate.mjs` | Pipeline cho một unit: facts → triage → worktree tạm tại `tip` → judge → validate → XP; thử lại tối đa 3 lần |
 | `src/facts.mjs` | Số liệu diff ròng `base..tip` (file, dòng, loại file, test), danh sách commit, revert, thông tin PR, và bối cảnh repo |
-| `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.2 (bội số của 5, tối thiểu 5), `levelFor` (`20 × L²`) |
+| `src/score.mjs` | Triage bằng luật, validator kiểm bằng chứng và cap điểm, công thức XP 1.2 (bội số của 5, tối thiểu 5), `levelFor` (`20 × L × (L + 9)`, công thức level 1.1) |
 | `src/judges/claude.mjs` | Judge mặc định: `claude -p` sandbox, model `claude-sonnet-5-5` |
 | `src/judges/opencode.mjs` | Judge thay thế qua opencode (`--judge opencode`) |
 | `src/judges/common.mjs` | Task của judge (`SCORE_TASK`, `REVIEW_TASK`, `REPORT_TASK`, mỗi task khai báo lệnh shell được chạy), allowlist lệnh git chỉ-đọc, chạy tiến trình JSONL, timeout, dọn tiến trình con |
@@ -109,7 +113,7 @@ Code trong `packages/cli/`:
 Chạy:
 
 ```bash
-cd packages/cli && npm test                      # 341 test, đều pass (41 test E2E, khoảng 45 giây); CI chạy cùng lệnh
+cd packages/cli && npm test                      # 363 test, đều pass (41 test E2E, khoảng 40 giây); CI chạy cùng lệnh
 ln -s "$PWD/packages/cli/bin/evolo.mjs" ~/.local/bin/evolo   # cài một lần (đã làm trên máy này)
 evolo init                                       # trong clone cần chấm; sau đó cứ push hoặc merge PR
 evolo status                                     # hàng đợi và các lần chấm gần nhất
@@ -295,11 +299,70 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
   Agent không chạy được claude thật với `--tools Read`; lần chạy thật ở trên đã xác nhận structured output vẫn chạy với tổ hợp đó.
 - Giới hạn đã biết: `--again` thay bản cũ cả chi phí, và lần viết thất bại không lưu gì, nên chi phí của chúng không vào trần ngày (giống `evolo review`), chỉ có trong log; `evolo report` chỉ viết được kỳ này và kỳ trước, nên bản cũ hơn bị cũ thì dashboard không đưa lệnh viết lại.
 
+### Achievement wall (2026-10-22)
+
+- Màn Achievements giờ là một bức tường thẻ huy hiệu kiểu game thay cho lưới badge nhỏ: mỗi thẻ có emblem lớn, tên, vạch bậc, mô tả, và footer chia đôi bởi một đường với nhãn tiến độ, số `value / ngưỡng kế` (hoặc `max`), thanh tiến độ 3 px và trạng thái.
+- Sáu khung badge (tròn, khiên, lục giác, vuông, sao, kim cương) lấy theo achievement; icon 24 px chi tiết hơn, vẽ trong khung 80 px và phóng to trên thẻ. Khung và icon dùng `currentColor`, nên đổi màu theo trạng thái và tối/sáng.
+- Trạng thái theo dữ liệu: đã mở thì vàng ấm, ổ khoá xanh và ngày địa phương; có đơn vị nhưng chưa tới bậc đầu thì cyan, đồng hồ cát vàng, "in progress"; chưa có gì thì xám, ổ khoá xám, "Locked". Chip số La Mã chỉ hiện từ bậc 1, bậc 0 không có chip.
+- Footer có nhãn riêng cho 14 achievement (PR Count, Total XP, High XP Units, Record Peak, Shipped, Repositories, Languages, Commits...), còn lại là "Progress"; bậc cuối hiện "max" và thanh đầy.
+- `dashboard/icons.mjs` giữ `ACHIEVEMENT_ICONS` (nét vẽ), `FRAMES`/`FRAME_ART`, `achievementEmblem` cho thẻ và dải Overview, `secretEmblem(drawing)` cho secret đã mở. Không có id achievement ẩn nào trong file này, nên mã nguồn trang không lộ thêm tên hay điều kiện.
+- `dashboard/achievements.mjs` dựng thẻ và secret; `dashboard/achievements.css` sở hữu token màu, khung, footer, trạng thái và lưới 5 cột ở 1280 px, 2 cột ở 360 px. `overview.mjs` export `numeral` để chip dùng chung; dải "Unlocked this week" dùng lại đúng emblem có khung và màu vàng của thẻ, thu nhỏ còn 56 px (48 px trên điện thoại).
+- Test: `dashboard/icons.test.mjs` (2 test) đòi đúng một nét vẽ và một khung cho mỗi achievement hiện, không id lạ, không `<text>`, `<image>` hay link; `dashboard/achievements.test.mjs` (11 test) kiểm khung, chip, vạch bậc, ba trạng thái, tiến độ, ngày, secret và escape; `dashboard/overview.test.mjs` (15 test) kiểm badge và dải tuần. `npm test` 343 test pass.
+- Xem trang sinh từ `sampleModel()` bằng Firefox headless ở 1280 px và 360 px, chế độ sáng và tối: hàng thẻ đều chân footer, icon đọc được, không tràn ngang.
+
+### Dashboard redesign (2026-10-25)
+
+- Theme Light, Dark hoặc System: `dashboard.theme` là mặc định, lựa chọn trên trang lưu ở `localStorage["evolo.theme"]` và thắng cấu hình từ lần chọn đầu.
+- Boot script trong `<head>` chạy trước `<style>`, nên lần vẽ đầu đã đúng màu và không nhấp nháy; script này cũng theo dõi `prefers-color-scheme` khi đang ở System.
+- CSP giờ băm hai script: boot script và module vẽ, mỗi script một hash SHA-256; `contentSecurityPolicy(scripts)` nhận mảng và `renderPage` băm đúng thứ tự.
+- `dashboard.name` là tên hiển thị cạnh rank; tên rỗng thì identity block chỉ còn rank và vòng tiến độ.
+- Rank 11 bậc theo level (`src/rank.mjs`), mỗi bậc 5 level, Legend từ level 50; Overview dùng rank làm tiêu đề lớn, sidebar có chip rank và vòng tiến độ, terminal thêm rank vào `status` và status line.
+- Level curve 1.1: `20 × L × (L + 9)`, level 1 cần 200 XP, level 50 cần 59.000 XP; `LEVEL_FORMULA_VERSION` là `1.1`, XP trong ledger không đổi.
+- Achievement được nới trần theo nhịp một năm chuyên cần, tối đa 6 bậc; chỉ thêm ngưỡng vào cuối nên bậc đã mở giữ nguyên ngày.
+- Nhóm achievement ẩn vẫn chỉ nằm trong `src/achievements/secret.mjs`, `secret-icons.mjs` và test; tài liệu và giao diện không nêu tên hay điều kiện.
+- Polish: mọi trạng thái trống có icon và một câu, top bar dưới 720 px giữ brand, nav cuộn, chip rank và gear trong tầm tay; level card chỉ chiếu sáng khi mở trang ở level cao hơn lần trước.
+- Xem trang sinh từ `sampleModel()` bằng Firefox headless ở 1280 px và 360 px, chế độ sáng và tối: không tràn ngang, top bar không che nav, empty state đọc được.
+- Test: `src/rank.test.mjs`, `dashboard/theme.test.mjs`, cùng test mới ở config, score, achievements, views, dashboard và worker; `npm test` 357 test pass.
+
+### Timeline theo mock `code.html` (2026-10-26)
+
+- Màn Timeline bám `code.html` và `screen.png`: sidebar 264 px có chip phiên bản lấy từ `packages/cli/package.json`, badge số unit và chấm achievement; profile có avatar, rank, XP và thanh tiến độ; top bar dính với count, ô search và ba select.
+- Mỗi ngày là một nhóm: marker ngày, rail dọc, card hoạt động. Card lấy tiêu đề từ PR title hoặc commit subject (bỏ prefix conventional commit), mô tả là summary của judge; meta gồm kind, repo, type và status; bên phải là XP và ngày. Unit `reverted`/`superseded` giữ XP gạch ngang, `failed` có viền đỏ.
+- Search là thật: gõ vào ô search ghi `#/timeline?q=...` sau 220 ms, tìm mọi từ trên label, repo, id, summary, status, PR title và commit subject; focus được trả lại sau khi vẽ lại. Ba select vẫn lọc như cũ; count hiện "N of M recorded units" khi có lọc.
+- Dark tokens bám mock (`#080b11`, `#0b0f17`, `#0e131f`, `#192236`); light dùng lại token sáng. Không thêm web font, trang vẫn chạy offline.
+- Responsive: 960–1199 px đưa filters thành một hàng dưới tiêu đề; dưới 720 px bỏ sticky header của Timeline, card xếp dọc; dưới 560 px ẩn dấu `•` và cắt mô tả ba dòng.
+- Test: `timeline.test.mjs` thêm nhóm ngày, search và hash `q`; `app.test.mjs` thêm chip phiên bản, badge/dot trên nav và route `q`; `src/dashboard.test.mjs` kiểm `appVersion`; `npm test` 363 test pass.
+- Chưa commit, chưa mở PR.
+
+### Secret emblems (2026-10-26)
+
+- Achievement ẩn đã mở giờ có nét vẽ 24 px riêng, không có đa giác khung phía sau; mỗi secret là một huy hiệu khác nhau thay vì cùng một ngôi sao.
+- Achievement ẩn chưa mở vẫn chỉ là một con số, mỗi cái hiện thành huy hiệu niêm phong: vòng nét đứt, vòng trong và dấu hỏi vẽ bằng SVG, không tên, không mô tả, không gợi ý.
+- `src/achievements/secret-icons.mjs` giữ 31 nét vẽ và chỉ chạy phía Node; `dashboardModel` chỉ thêm `icon` cho secret đã mở (ở `secretsFound` và `recent`), nên bundle của trang không có id, art hay module này. `secretEmblem(drawing)` vẽ nét vẽ phóng to lấp đầy emblem, không khung; model không có nét vẽ thì lại ngôi sao 5 cánh cũ.
+- Cùng tiêu chí đó cho achievement hiện: nét vẽ tự nó đã kín hình thì bỏ khung, vì khung phía sau chỉ nhân đôi đường nét. 10 achievement bỏ khung: Guardian, Speed Demon, Perfectionist, On Target, Tiny but Mighty, Core Contributor, Full Week, Night Owl, Explorer, By the Book. 23 achievement còn lại giữ khung vì nét vẽ mở, cần khung để đọc thành huy hiệu (Jackpot giữ sao vì số 777 rời rạc; Craftsman giữ khiên vì gem khác silhouet khiên).
+- `dashboard/icons.mjs`: `FRAMES` thêm giá trị `none` (FRAME_ART rỗng); `emblem(drawing, frame, dashed)` dùng chung cho `achievementEmblem` và `secretEmblem`; nét vẽ không khung phóng 2.5× (đúng footprint mà khung từng chiếm), nét vẽ có khung giữ 2×.
+- Test: `secret-icons.test.mjs` (2 test) kiểm đúng một nét vẽ cho mỗi secret, không trùng, không text/image/link; test dashboard kiểm secret chưa mở không lộ nét vẽ vào model, secret đã mở giữ nét vẽ ở thẻ và dải tuần, bundle không chứa art; test achievements kiểm thẻ secret và huy hiệu niêm phong; `icons.test.mjs` ghim đúng bộ 10 id không khung và tỉ lệ phóng của nét vẽ. `npm test` 364 test pass.
+- Xem trang sinh từ `sampleModel()` bằng Chrome headless ở 1280 px, chế độ sáng và tối: icon không khung đọc được nhờ quầng sáng sau thẻ, chip bậc nằm góc dưới-phải icon không khung vẫn rõ, 29 huy hiệu niêm phong xuống hai hàng, không tràn ngang.
+- Chưa commit, chưa mở PR.
+
+### Dashboard theo mock `codeui` (2026-10-26)
+
+- Bốn mock trong `codeui/` (Overview, Reviews, Reports, PR review detail) được dùng làm hướng thiết kế; Timeline đã bám mock từ mục trên.
+- Dark tokens đổi sang nền xanh-đen của mock (`#070a10`, `#0b1220`, `#1a263d`, sidebar `#0b111e`), accent cyan `#22d3ee`; light giữ nguyên.
+- `pageHead` nhận thêm sync mark, chip kỳ và một câu ghi chú. `syncStatus` đặt `data-synced`; `app.mjs` đổi thành "Synced just now", "Synced 5 min ago" hay ngày khi trang đã cũ, nên trang tĩnh không giả vờ vừa đồng bộ.
+- Overview: feed giữ 12 unit gần nhất, 5 unit hiện trước; tab All units / PRs only / Pushes / Top XP lọc ngay trong trang (`feedSelection`, `drawFeed`), 5 unit đầu vẫn hiện khi không có JS. XP by type thành chip 2 cột; Weekly velocity thêm trung bình mỗi ngày làm việc và so với tuần trước; footer có phiên bản và trạng thái ledger.
+- Reviews: bộ lọc severity có số review mỗi mức; rail có health ring (tỉ lệ review không có finding), finding breakdown theo severity và category, actionable findings (4 finding nặng nhất, link tới review), coverage và judges; card có trạng thái "Reviewed & scored".
+- Reports: đầu trang có số report, số verified, chip kỳ và ghi chú; featured report có badge Verified / needs a check; rail thêm Velocity history (4 report gần nhất) và Sync sources (repo và số unit).
+- Unit detail: thanh crumb dính có sync mark và link PR; hero có dải 4 số (Code health theo rubric, Judge spending, Evaluator engine, Tests changed); tab là gạch chân; Review có AI executive summary, strengths/improvements có icon và số mục, lọc finding bằng `?severity=`, finding có ID và remediation; rail Review có Verification checklist, XP signals (từng hệ số) và Judge run.
+- Test: thêm test cho `syncText`, `feedSelection`, `pageHead`/`periodChip`/`periodLabel` và lọc finding; `npm test` 378 test pass.
+- Xem trang sinh từ `sampleModel()` bằng Firefox headless ở 1440 px và 390 px, chế độ sáng và tối: không tràn ngang, thẻ và rail đọc được ở cả hai cỡ, Overview chỉ hiện 5 unit trước khi bấm tab.
+- Chưa commit, chưa mở PR.
+
 ### Git
 
 - Repo: `github.com/hiinguyen/Evolo`.
 - `main` có judge, chấm change set và PR (PR #1 và PR #2), lọc commit của push, chọn đúng remote cho PR, chỉ chấm PR vào nhánh mặc định (PR #3).
-- Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L²` (PR #4).
+- Hook, hàng đợi, worker, sync, ledger, `status`, XP bội số của 5 và level `20 × L × (L + 9)` (PR #4, công thức level 1.1 từ 2026-10-25).
 - Thông báo, `why`, `retry`, status line và tích hợp Claude Code (PR #5, merge 2026-10-20).
 - `evolo review` (PR #6), tín hiệu XP và trần chi phí theo ngày (PR #7, merge 2026-10-20), CI chạy test trên mỗi PR và ruleset bảo vệ `main` (PR #8, merge 2026-10-20).
 - `evolo stats`, `landedAt` và lộ trình Game hoá; `CLAUDE.md` với quy tắc cho agent (PR #9, merge 2026-10-20).
@@ -307,6 +370,7 @@ Chi tiết và lý do chọn Sonnet ở `docs/auto-scoring.md` mục 5.
 - `status`, `why` và `review` hiện giờ địa phương thay vì UTC (PR #11).
 - `evolo dashboard` (PR #12).
 - `evolo report`, performance review (PR #13).
+- Redesign dashboard: theme Light/Dark/System, identity block có rank, level curve 1.1, nới trần achievement và polish 7 màn hình; Timeline theo mock `code.html`; secret đã mở có nét vẽ riêng, secret chưa mở là huy hiệu niêm phong; Overview, Reviews, Reports và unit detail theo mock `codeui` (chưa mở PR).
 
 ## 4. Việc tiếp theo
 

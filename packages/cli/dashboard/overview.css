@@ -1,28 +1,169 @@
-/* Overview: the level card. The stats under it are shared with Analytics and live in style.css. */
+/* Overview: a rank banner, five KPI cards, the newest units, and the week's rail. The shared rail, status and fill rules
+   live in style.css; the Timeline's card rules live in timeline.css and draw the feed here too. */
 
-.overview-top { display: flex; flex-direction: column; gap: 16px; }
+.overview-screen { gap: 20px; }
 
-.level-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 24px;
-  padding: 16px;
+/* The one card that shines when the page opens a level higher than the last opening; the shine is drawn in style.css. */
+.level-card { position: relative; overflow: hidden; }
+
+/* The rank banner. Its colours are mixed from the theme's accent so the light page keeps the same shape without the
+   mock's dark-only surfaces. */
+.rank-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 28px;
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--accent) 9%, var(--card)) 0%,
+      var(--card) 48%,
+      color-mix(in srgb, var(--accent-2) 7%, var(--card)) 100%);
+  box-shadow: var(--hairline), 0 24px 60px -34px var(--glow);
 }
 
-.level-number {
+.hero-orbit {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 50%;
+  opacity: 0.55;
+  pointer-events: none;
+  filter: blur(48px);
+}
+
+.hero-orbit-a { top: -170px; right: -90px; background: var(--accent-soft); }
+.hero-orbit-b { bottom: -190px; left: -110px; background: var(--violet-soft); }
+
+.hero-top {
+  position: relative;
+  z-index: 1;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius);
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.hero-rank { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hero-rank-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-width: 0; }
+
+.level-rank {
+  min-width: 0;
+  font-size: 32px;
+  line-height: 38px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+/* The rank ladder paints the title itself; the fallback size keeps a plain rank readable. */
+.level-rank.rank-muted { font-size: 30px; }
+.level-rank.rank-tint { font-size: 31px; }
+
+.level-pill {
+  padding: 2px 9px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-text);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.level-number .caption {
+.hero-xp { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; }
+.hero-xp strong {
+  color: var(--strong);
+  font-family: var(--mono);
+  font-size: 38px;
+  line-height: 42px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+}
+
+.hero-xp-unit { color: var(--accent-text); font-family: var(--mono); font-size: 13px; font-weight: 700; letter-spacing: 0.1em; }
+
+.hero-xp-next {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-2) 76%, transparent);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
+}
+
+.hero-progress { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+
+.hero-meter {
+  height: 12px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--track) 70%, var(--bg));
+}
+
+.hero-meter > span {
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22d3ee, #38bdf8 58%, #6366f1);
+  box-shadow: 0 0 16px var(--glow);
+}
+
+.hero-scale {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 15px;
+}
+
+.hero-percent { color: var(--accent-text); font-weight: 700; }
+
+.hero-foot {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.hero-next { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--muted); }
+.hero-next strong { color: var(--strong); }
+.hero-next-label { color: var(--muted); }
+.hero-next-meta { color: var(--muted); }
+
+/* The five numbers of the day. */
+.kpi-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  overflow: hidden;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+
+.kpi:hover { border-color: var(--border-strong); }
+
+.kpi-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 20px; }
+
+.kpi-label {
+  color: var(--muted);
   font-size: 11px;
   line-height: 16px;
   font-weight: 600;
@@ -30,30 +171,187 @@
   text-transform: uppercase;
 }
 
-.level-number strong { font-size: 28px; line-height: 32px; font-weight: 700; }
-
-.level-progress { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-
-.level-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 4px 16px;
+.kpi-badge {
+  margin-left: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  line-height: 17px;
+  white-space: nowrap;
 }
 
-.level-total { color: var(--muted); }
-.level-total strong { color: var(--text); font-size: 20px; line-height: 28px; font-weight: 600; }
+.kpi-badge.up { border-color: transparent; background: var(--green-soft); color: var(--green); }
+.kpi-badge.down { border-color: transparent; background: var(--red-soft); color: var(--red); }
+.kpi-badge.accent { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+.kpi-badge.warn { border-color: transparent; background: var(--amber-soft); color: var(--amber); }
+.kpi-badge.flat { background: var(--hover); }
 
-.level-scale {
+.kpi-flame { margin-left: auto; color: var(--amber); }
+.kpi-icon { width: 14px; height: 14px; }
+
+.kpi-value {
+  color: var(--strong);
+  font-family: var(--mono);
+  font-size: 25px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.kpi-unit { margin-left: 4px; color: var(--muted); font-family: var(--font); font-size: 11px; font-weight: 500; letter-spacing: 0; white-space: nowrap; }
+
+.kpi-visual { min-height: 18px; }
+.kpi-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; color: var(--muted); font-size: 11px; line-height: 16px; }
+.kpi-foot strong { color: var(--text); font-family: var(--mono); font-weight: 600; }
+
+.spark { display: flex; align-items: flex-end; gap: 3px; height: 18px; }
+.spark-bar { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 28%, transparent); }
+.spark-bar:last-child { background: var(--accent); box-shadow: 0 0 8px var(--glow); }
+
+.kpi-meter { height: 4px; overflow: hidden; border-radius: 999px; background: var(--track); }
+.kpi-meter > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+
+/* The newest units and the week's rail. */
+.overview-grid { margin-top: 4px; }
+.feed { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.activity-feed { display: flex; flex-direction: column; gap: 12px; }
+
+/* Achievements in the rail are half the emblem's size so four fit two by two. */
+.rail-badges { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 8px; }
+.rail-badges .emblem { width: 44px; height: 44px; font-size: 15px; }
+.rail-badges .emblem .emblem-art { width: 44px; height: 44px; }
+.rail-badges .badge-name { font-size: 11px; line-height: 15px; }
+.rail-badges .pips { gap: 3px; }
+.rail-badges .pip { width: 8px; }
+
+/* The last seven days as bars; today carries the accent glow. */
+.velocity {
   display: flex;
-  justify-content: space-between;
+  align-items: flex-end;
+  gap: 5px;
+  height: 122px;
+  padding-top: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.velocity-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  height: 100%;
+  min-width: 0;
+}
+
+.velocity-value { color: var(--muted); font-family: var(--mono); font-size: 9px; line-height: 12px; white-space: nowrap; }
+
+.velocity-bar {
+  width: 100%;
+  max-width: 22px;
+  min-height: 4px;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in srgb, var(--accent) 32%, var(--track));
+}
+
+.velocity-bar.today { background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 45%, var(--track))); box-shadow: 0 0 12px var(--glow); }
+.velocity-day { color: var(--muted); font-family: var(--mono); font-size: 9px; line-height: 12px; }
+
+/* The feed's quick filters, as the mock's "All units / PRs only / Pushes / Top XP" tabs. They narrow the short list in
+   the page; the Timeline remains the full record. */
+.feed-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--track);
+}
+
+.feed-tab {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 16px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.feed-tab:hover { color: var(--text); }
+.feed-tab[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--raised);
+  color: var(--strong);
+  box-shadow: var(--shadow);
+}
+
+.feed-more { margin-top: 2px; }
+.feed-more .panel-link { font-size: 12px; }
+
+/* The rail's category chips: a 2 x 2 grid under the stacked bar, as the mock shows them. */
+.mix-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.mix-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  font-size: 11px;
+  line-height: 15px;
+}
+.mix-chip .mix-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-chip .mix-value { font-size: 10px; }
+.mix-chip .mix-units { display: none; }
+
+.rail-note-sub { margin-top: 5px; color: var(--muted); font-family: var(--mono); font-size: 10px; line-height: 15px; }
+.rail-note-sub .up { color: var(--green); }
+.rail-note-sub .down { color: var(--red); }
+
+
+@media (max-width: 1079px) {
+  .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .kpi:nth-child(n + 4) { grid-column: span 1; }
 }
 
 @media (max-width: 719px) {
-  .level-card { gap: 16px; }
-  .level-number { width: 64px; height: 64px; }
+  .overview-screen { gap: 16px; }
+  .rank-hero { padding: 20px; }
+  .hero-top { align-items: flex-start; }
+  .level-rank { font-size: 26px; line-height: 32px; }
+  .level-rank.rank-muted { font-size: 25px; }
+  .level-rank.rank-tint { font-size: 26px; }
+  .hero-xp strong { font-size: 30px; line-height: 34px; }
+  .hero-xp-next { margin-left: 0; }
+  .hero-progress { margin-top: 18px; }
+  .hero-foot { margin-top: 16px; padding-top: 12px; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .kpi:last-child { grid-column: 1 / -1; }
+  .kpi-value { font-size: 22px; line-height: 28px; }
+  .feed-tabs { width: 100%; }
+  .feed-tab { flex: 1; padding: 0 6px; }
+}
+
+@media (max-width: 359px) {
+  .kpi-grid { grid-template-columns: minmax(0, 1fr); }
+  .kpi:last-child { grid-column: auto; }
+  .hero-scale { font-size: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi { transition: none; }
 }

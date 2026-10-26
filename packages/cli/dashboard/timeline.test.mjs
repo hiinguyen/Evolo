@@ -10,7 +10,8 @@ import { filterUnits, renderTimeline, timelineHash } from "./timeline.mjs";
 // The visible text of `html`, with tags dropped and runs of space joined, to match sentences that span elements.
 const textOf = (html) => html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
 const idsOf = (units) => units.map((unit) => unit.id);
-const linksOf = (html) => [...html.matchAll(/<a class="unit-row" href="([^"]*)"/g)].map(([, href]) => href);
+const linksOf = (html) => [...html.matchAll(/<a class="activity-card"[^>]* href="([^"]*)"/g)].map(([, href]) => href);
+const cardOf = (html, id) => html.split('<a class="activity-card"').find((card) => card.includes(`/${id}"`));
 
 // The options of the select called `name`: [value, text, selected].
 function optionsOf(html, name) {
@@ -61,38 +62,69 @@ test("a value only an old bookmark knows is still offered, so the select shows w
   assert.deepEqual(optionsOf(html, "type").filter(([, , selected]) => selected), [["perf", "perf", true]]);
 });
 
-test("every unit is listed newest first, each a link to its details", () => {
+test("every unit is listed newest first, each a card linking to its details", () => {
   const model = sampleModel();
   const html = renderTimeline(model, {});
   assert.equal(linksOf(html).length, model.units.length);
   assert.equal(linksOf(html)[0], "#/unit/hiinguyen/evolo/push-a2205df-b31f0c4");
-  assert.match(textOf(html), /Timeline 9 units /);
+  assert.match(textOf(html), /Timeline 9 recorded units /);
   const filtered = renderTimeline(model, { repo: ORGS });
   assert.deepEqual(linksOf(filtered), ["#/unit/hiinguyen/ai-orgs/pr-1", "#/unit/hiinguyen/ai-orgs/push-root-3c4d5e6", "#/unit/hiinguyen/ai-orgs/push-root-0a1b2c3"]);
-  assert.match(textOf(filtered), /Timeline 3 of 9 units /);
+  assert.match(textOf(filtered), /Timeline 3 of 9 recorded units /);
+});
+
+test("units are grouped under the local day they landed, newest day first", () => {
+  const html = renderTimeline(sampleModel(), {});
+  const groups = [...html.matchAll(/<section class="timeline-group" aria-label="([^"]*)">([\s\S]*?)<\/section>/g)];
+  assert.deepEqual(groups.map(([, label]) => label),
+    ["October 21, 2026", "October 20, 2026", "October 19, 2026", "October 16, 2026", "October 8, 2026", "October 7, 2026", "October 6, 2026", "September 29, 2026"]);
+  const [, , first] = groups[0];
+  assert.match(first, /<span class="day-marker">21<\/span>/);
+  assert.match(first, /<span class="day-count">\(2 updates\)<\/span>/);
+  assert.equal((first.match(/class="activity-card"/g) ?? []).length, 2, "the two units of the day share one group");
+});
+
+test("the search matches every word across the card, the commits and the PR title", () => {
+  const { units } = sampleModel();
+  assert.deepEqual(idsOf(filterUnits(units, { q: "local time" })), ["push-a2205df-b31f0c4", "push-7c1d2e9-a2205df"]);
+  assert.deepEqual(idsOf(filterUnits(units, { q: "time local" })), ["push-a2205df-b31f0c4", "push-7c1d2e9-a2205df"], "word order does not matter");
+  assert.deepEqual(idsOf(filterUnits(units, { q: "simulation engine" })), ["pr-1"], "a PR title is searched");
+  assert.deepEqual(idsOf(filterUnits(units, { q: "reverted" })), ["push-c94e2f0-5e0b7a1"], "the status is searched");
+  assert.equal(filterUnits(units, { q: "   " }).length, units.length, "blank text is no search");
+  assert.deepEqual(filterUnits(units, { q: "no such text" }), []);
+});
+
+test("the search box remembers the query and the count says how many match", () => {
+  const html = renderTimeline(sampleModel(), { q: "local time" });
+  assert.match(html, /<input type="search" name="q" data-filter value="local time"/);
+  assert.equal(linksOf(html).length, 2);
+  assert.match(textOf(html), /Timeline 2 of 9 recorded units /);
 });
 
 test("a unit not worth XP has its status, and the XP it lost is struck through", () => {
   const model = sampleModel();
   const html = renderTimeline(model, {});
-  const rowOf = (id) => html.split('<a class="unit-row"').find((row) => row.includes(`/${id}"`));
-  assert.match(rowOf("push-5e0b7a1-7c1d2e9"), /<span class="pill pill-bad">failed<\/span>/);
-  assert.ok(!rowOf("push-5e0b7a1-7c1d2e9").includes("unit-lost"), "a failed unit never had XP to lose");
-  assert.match(rowOf("push-c94e2f0-5e0b7a1"), /<s class="unit-lost"[^>]*>\+40 XP<\/s><span class="pill">reverted<\/span>/);
-  assert.ok(!rowOf("pr-7").includes("unit-lost"));
+  const failed = cardOf(html, "push-5e0b7a1-7c1d2e9");
+  assert.match(failed, /<span class="pill activity-state pill-bad">failed<\/span>/);
+  assert.ok(!failed.includes("unit-lost"), "a failed unit never had XP to lose");
+  const reverted = cardOf(html, "push-c94e2f0-5e0b7a1");
+  assert.match(reverted, /<s class="unit-lost activity-lost"[^>]*>\+40 XP<\/s>/);
+  assert.match(reverted, /<span class="pill activity-state">reverted<\/span>/);
+  assert.ok(!cardOf(html, "pr-7").includes("unit-lost"));
   // A force push that took a scored unit's commits away: superseded, and its XP struck through too.
   const [, second] = model.units;
   const superseded = { ...second, status: "superseded", previousStatus: "scored", xp: 0 };
   const struck = renderTimeline({ ...model, units: [superseded] }, {});
-  assert.match(struck, /<s class="unit-lost"[^>]*>\+60 XP<\/s><span class="pill">superseded<\/span>/);
+  assert.match(struck, /<s class="unit-lost activity-lost"[^>]*>\+60 XP<\/s>/);
+  assert.match(struck, /<span class="pill activity-state">superseded<\/span>/);
 });
 
 test("filters that leave nothing say so, with a way to clear them", () => {
   const html = renderTimeline(sampleModel(), { repo: ORGS, type: "bugfix" });
   assert.match(textOf(html), /No units match these filters/);
   assert.match(html, /<a [^>]*href="#\/timeline"[^>]*>Clear filters<\/a>/);
-  assert.ok(!html.includes("unit-row"));
-  assert.match(textOf(html), /Timeline 0 of 9 units /);
+  assert.ok(!html.includes("activity-card"));
+  assert.match(textOf(html), /Timeline 0 of 9 recorded units /);
 });
 
 test("an empty ledger shows how to get the first score, without filters", () => {
@@ -101,12 +133,12 @@ test("an empty ledger shows how to get the first score, without filters", () => 
   assert.ok(!html.includes("<select"));
 });
 
-test("timelineHash puts only the chosen filters in the address, which parseHash reads back", () => {
-  assert.equal(timelineHash({ repo: "", type: "", status: "" }), "#/timeline");
+test("timelineHash puts only the chosen search and filters in the address, which parseHash reads back", () => {
+  assert.equal(timelineHash({ repo: "", type: "", status: "", q: "" }), "#/timeline");
   assert.equal(timelineHash({}), "#/timeline");
-  const hash = timelineHash({ repo: "me/a b&c", type: "", status: "scored" });
-  assert.equal(hash, "#/timeline?repo=me%2Fa+b%26c&status=scored");
-  assert.deepEqual(parseHash(hash).query, { repo: "me/a b&c", status: "scored" });
+  const hash = timelineHash({ repo: "me/a b&c", type: "", status: "scored", q: "local time" });
+  assert.equal(hash, "#/timeline?repo=me%2Fa+b%26c&status=scored&q=local+time");
+  assert.deepEqual(parseHash(hash).query, { repo: "me/a b&c", status: "scored", q: "local time" });
 });
 
 test("names from the ledger are escaped in the selects", () => {

@@ -2,7 +2,7 @@
 
 export const RUBRIC_VERSION = "1.0";
 export const FORMULA_VERSION = "1.2";
-export const LEVEL_FORMULA_VERSION = "1.0";
+export const LEVEL_FORMULA_VERSION = "1.1";
 
 export const CRITERIA = ["impact", "centrality", "difficulty", "quality", "scope_fit"];
 const EVIDENCE_REQUIRED = CRITERIA.filter((criterion) => criterion !== "scope_fit");
@@ -28,8 +28,11 @@ const UNTESTED_QUALITY_CAP = 3;
 const UNFOCUSED_SIZE_CAP = 1.0;
 // XP is awarded in steps of XP_STEP, and a contribution that counts earns at least one step.
 const XP_STEP = 5;
-// Reaching level L takes LEVEL_XP_FACTOR × L² XP in total.
+// Reaching level L takes LEVEL_XP_FACTOR × L × (L + LEVEL_XP_DRIFT) XP in total: 20 × L² plus a linear term
+// 180 × L that paces the early game. Level 1 alone costs 200 XP instead of 20, while the ladder keeps one ceiling
+// (level 50 = 59,000 XP, up 18% from the old 50,000).
 const LEVEL_XP_FACTOR = 20;
+const LEVEL_XP_DRIFT = 9;
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -155,8 +158,19 @@ export function computeXp({ type, scores, countedLines, stars, isOwnRepo, signal
   };
 }
 
+// The XP in total needed to reach `level`, the inverse of levelFor for a level the caller already knows (a rank's
+// first level, for example).
+export const xpForLevel = (level) => LEVEL_XP_FACTOR * Math.max(0, Math.floor(level)) * (Math.max(0, Math.floor(level)) + LEVEL_XP_DRIFT);
+
 // The level reached with `totalXp`, and the XP totals where it started and where the next one starts.
 export function levelFor(totalXp) {
-  const level = Math.floor(Math.sqrt(Math.max(0, totalXp) / LEVEL_XP_FACTOR));
-  return { level, from: LEVEL_XP_FACTOR * level ** 2, next: LEVEL_XP_FACTOR * (level + 1) ** 2 };
+  // L(L + 9) = (L + 4.5)² − 20.25, so the inverse stays one closed form.
+  const level = Math.floor(
+    Math.sqrt(Math.max(0, totalXp) / LEVEL_XP_FACTOR + (LEVEL_XP_DRIFT / 2) ** 2) - LEVEL_XP_DRIFT / 2,
+  );
+  return {
+    level,
+    from: LEVEL_XP_FACTOR * level * (level + LEVEL_XP_DRIFT),
+    next: LEVEL_XP_FACTOR * (level + 1) * (level + 1 + LEVEL_XP_DRIFT),
+  };
 }

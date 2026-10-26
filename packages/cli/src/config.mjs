@@ -8,6 +8,9 @@ import { readJson, writeJson } from "./store.mjs";
 const LANGUAGE_MAX_LENGTH = 40;
 const LANGUAGE_PATTERN = /^\p{L}[\p{L} -]*$/u;
 const BUDGET_PATTERN = /^\d{1,4}(\.\d{1,2})?$/;
+const NAME_MAX_LENGTH = 24;
+const NAME_PATTERN = /^\p{L}[\p{L} ]*$/u;
+const THEMES = ["system", "light", "dark"];
 
 export const CONFIG_KEYS = {
   "review.language": {
@@ -21,6 +24,18 @@ export const CONFIG_KEYS = {
     describe: "the language performance reviews (evolo report) are written in, as a name or code (vi, Vietnamese, pt-BR)",
     check: (value) => value.length <= LANGUAGE_MAX_LENGTH && LANGUAGE_PATTERN.test(value),
     rule: `a language name or code: letters, spaces and "-", at most ${LANGUAGE_MAX_LENGTH} characters`,
+  },
+  "dashboard.theme": {
+    default: "system",
+    describe: "the dashboard's colour theme: system follows the desktop, light or dark stays fixed",
+    check: (value) => THEMES.includes(value),
+    rule: `one of ${THEMES.join(", ")}`,
+  },
+  "dashboard.name": {
+    default: "",
+    describe: "the name the dashboard shows next to your rank",
+    check: (value) => value === "" || (value.length <= NAME_MAX_LENGTH && NAME_PATTERN.test(value)),
+    rule: `a name of letters and spaces, at most ${NAME_MAX_LENGTH} characters, or empty`,
   },
   "budget.daily-usd": {
     default: "5",

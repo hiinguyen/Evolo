@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { renderAchievements } from "./achievements.mjs";
 import { renderAnalytics } from "./analytics.mjs";
-import { drawScreen, parseHash, readModel, renderRoute, renderShell } from "./app.mjs";
+import { drawScreen, feedSelection, parseHash, readModel, renderRoute, renderShell, syncText } from "./app.mjs";
 import { sampleModel } from "./fixtures.mjs";
 import { renderOverview } from "./overview.mjs";
 import { renderReport, renderReports } from "./reports.mjs";
@@ -40,6 +40,7 @@ test("parseHash reads every address of the spec", () => {
 
 test("parseHash decodes the query and each part of the path", () => {
   assert.deepEqual(parseHash("#/timeline?repo=a%2Fb&type=feature"), route("timeline", {}, { repo: "a/b", type: "feature" }));
+  assert.deepEqual(parseHash("#/timeline?q=local+time"), route("timeline", {}, { q: "local time" }));
   assert.deepEqual(parseHash("#/reviews?severity=high"), route("reviews", {}, { severity: "high" }));
   assert.deepEqual(parseHash("#/unit/me/a%20b/pr-1/review"), route("unit", { key: "me/a b/pr-1", tab: "review" }));
 });
@@ -55,10 +56,13 @@ test("parseHash sends an address it does not know to notFound", () => {
 
 test("renderShell lists the six screens and marks the open one", () => {
   const model = sampleModel();
-  const current = (html) => [...html.matchAll(/<a href="([^"]*)" aria-current="page"/g)].map(([, href]) => href);
+  const current = (html) => [...html.matchAll(/<a href="([^"]*)"[^>]*aria-current="page"/g)].map(([, href]) => href);
   const shell = renderShell(model, route("overview"), "<p>content</p>");
   for (const name of ["Overview", "Timeline", "Analytics", "Achievements", "Reviews", "Reports"]) assert.match(shell, new RegExp(`<span>${name}</span>`));
   assert.match(shell, /<a class="brand" href="#\/">/);
+  assert.match(shell, /<span class="brand-version">v\d+\.\d+\.\d+<\/span>/);
+  assert.match(shell, /<span>Timeline<\/span><span class="nav-badge">9<\/span>/);
+  assert.match(shell, /<span>Achievements<\/span><span class="nav-dot"/);
   assert.deepEqual(current(shell), ["#/"]);
   assert.ok(shell.includes("<p>content</p>"));
   assert.deepEqual(current(renderShell(model, route("reviews"), "")), ["#/reviews"]);
@@ -67,7 +71,20 @@ test("renderShell lists the six screens and marks the open one", () => {
   // A unit's details belong to the Timeline; an unknown address shows the Overview.
   assert.deepEqual(current(renderShell(model, route("unit", { key: "me/a/pr-1", tab: "score" }), "")), ["#/timeline"]);
   assert.deepEqual(current(renderShell(model, route("notFound"), "")), ["#/"]);
-  assert.match(shell, /Level 7 · 1,040 XP/);
+  assert.match(shell, /<span class="rank-chip rank-muted">Intern<\/span>/);
+  assert.match(shell, /aria-label="Level 4, 0% to level 5"/);
+  assert.match(shell, /class="identity-meta">1,040 XP</);
+  assert.match(shell, /<button type="button" class="segment" data-theme-choice="system" aria-pressed="true">System<\/button>/);
+});
+
+test("the identity block escapes the name and wears the rank's effect, and the theme control marks the configured theme", () => {
+  const model = sampleModel();
+  const shell = renderShell({ ...model, name: "<b>Minh</b>", theme: "dark", rank: { name: "Senior Dev", effect: "gradient" } }, route("overview"), "");
+  assert.match(shell, /<span class="identity-name">&lt;b&gt;Minh&lt;\/b&gt;<\/span>/);
+  assert.ok(!shell.includes("<b>Minh</b>"));
+  assert.match(shell, /<span class="rank-chip rank-gradient">Senior Dev<\/span>/);
+  assert.match(shell, /data-theme-choice="dark" aria-pressed="true"/);
+  assert.match(shell, /data-theme-choice="system" aria-pressed="false"/);
 });
 
 test("renderRoute draws the overview, and the overview with a notice for an unknown address", () => {
@@ -83,6 +100,7 @@ test("renderRoute draws the timeline with the filters of the address, and a unit
   assert.equal(renderRoute(model, parseHash("#/timeline")), renderTimeline(model, {}));
   assert.equal(renderRoute(model, parseHash("#/timeline?repo=hiinguyen%2Fevolo&type=feature")),
     renderTimeline(model, { repo: "hiinguyen/evolo", type: "feature" }));
+  assert.equal(renderRoute(model, parseHash("#/timeline?q=local+time")), renderTimeline(model, { q: "local time" }));
   assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "score"));
   assert.equal(renderRoute(model, parseHash("#/unit/hiinguyen/ai-orgs/pr-1/commits")), renderUnit(model, "hiinguyen/ai-orgs/pr-1", "commits"));
   assert.match(renderRoute(model, parseHash("#/unit/me/gone/pr-1")), /This unit is no longer in the ledger/);
@@ -129,4 +147,30 @@ test("a page that cannot be drawn shows an escaped message and a way back, never
   assert.ok(!message.includes("<"));
   assert.deepEqual(readModel({ innerHTML: "" }, '{"a":1}'), { a: 1 });
   assert.equal(logged.mock.callCount(), 2);
+});
+
+test("the sync mark grows older in the reader's time instead of claiming a live sync", () => {
+  const at = "2026-10-21T06:00:00+07:00";
+  assert.equal(syncText(at, new Date("2026-10-21T06:00:30+07:00")), "Synced just now");
+  assert.equal(syncText(at, new Date("2026-10-21T06:05:00+07:00")), "Synced 5 min ago");
+  assert.equal(syncText(at, new Date("2026-10-21T09:00:00+07:00")), "Synced 3 h ago");
+  assert.equal(syncText(at, new Date("2026-10-24T09:00:00+07:00")), "Synced 2026-10-21");
+  assert.equal(syncText("not a time", new Date()), "Synced");
+  assert.equal(syncText(at, new Date("2026-10-21T05:00:00+07:00")), "Synced just now", "a clock behind the page is not negative");
+});
+
+test("a feed tab keeps the newest five of its kind, or the five worth the most", () => {
+  const cards = [
+    { order: 0, kind: "push", xp: 10 },
+    { order: 1, kind: "pr", xp: 40 },
+    { order: 2, kind: "push", xp: 5 },
+    { order: 3, kind: "push", xp: 90 },
+    { order: 4, kind: "pr", xp: 20 },
+    { order: 5, kind: "pr", xp: 70 },
+  ];
+  assert.deepEqual(feedSelection(cards, "all", 3), [0, 1, 2]);
+  assert.deepEqual(feedSelection(cards, "pr", 2), [1, 4]);
+  assert.deepEqual(feedSelection(cards, "push", 2), [0, 2]);
+  assert.deepEqual(feedSelection(cards, "top", 3), [3, 5, 1]);
+  assert.deepEqual(feedSelection([], "all"), []);
 });

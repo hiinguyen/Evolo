@@ -2,9 +2,9 @@
 // prints for a week, a month or a quarter, this one or the one before, drawn as cards and charts. Every number is the
 // model's computeStats; the only arithmetic is scaling bars and the change from the previous period, the subtraction
 // views.mjs's formatStats does, under the same rule: a change is shown only against a previous period with units.
-import { escape, formatUsd, formatXp, hashOf, pageHead, plural } from "./html.mjs";
+import { emptyPanel, escape, formatUsd, formatXp, hashOf, pageHead, plural } from "./html.mjs";
 import { barChart, hBars, strip } from "./charts.mjs";
-import { emptyPanel, panel, RUBRIC_MAX, sentenceCase } from "./unit.mjs";
+import { panel, RUBRIC_MAX, sentenceCase } from "./unit.mjs";
 
 const PERIOD_NAMES = { week: "Week", month: "Month", quarter: "Quarter" };
 // Repositories and directories shown, as many as `evolo stats` prints.
