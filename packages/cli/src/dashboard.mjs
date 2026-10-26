@@ -22,11 +22,14 @@ import { computeStats, PERIODS, periodOf, streakOf } from "./stats.mjs";
 import { logLine, writeText } from "./store.mjs";
 import { recentXp, unitLabel } from "./views.mjs";
 import { bootScript } from "../dashboard/theme.mjs";
+import { BRAND_MARK } from "../dashboard/brand.mjs";
 
 const newestFirst = (time) => (a, b) => Date.parse(time(b)) - Date.parse(time(a));
 const keyOf = (repo, id) => `${repo}/${id}`;
 // The version of the package the page was written from, shown in the sidebar's brand.
 const APP_VERSION = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+// The tab icon carries the same drawing as the sidebar brand, so there is no second image to keep in step.
+const FAVICON = `data:image/svg+xml,${encodeURIComponent(BRAND_MARK)}`;
 
 // Every local day of `period` up to `now` (a finished period runs to its last day) with the XP that landed on it.
 function daysOf(period, xpByDay, now) {
@@ -218,7 +221,7 @@ const DASHBOARD_DIR = fileURLToPath(new URL("../dashboard/", import.meta.url));
 // joined into one script: imports from a sibling module and `export` keywords are dropped. Each module keeps to one
 // import per line, from siblings only, and no two modules declare the same top-level name; the tests load the result.
 const SIBLING_IMPORT = /^import \{[^}]*\} from "\.\/[\w-]+\.mjs";\n/gm;
-export const MODULES = ["html.mjs", "charts.mjs", "icons.mjs", "theme.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "reports.mjs", "app.mjs"];
+export const MODULES = ["html.mjs", "charts.mjs", "icons.mjs", "brand.mjs", "theme.mjs", "overview.mjs", "timeline.mjs", "unit.mjs", "analytics.mjs", "achievements.mjs", "reviews.mjs", "reports.mjs", "app.mjs"];
 
 export function bundle(dir) {
   return MODULES.map((name) => readFileSync(join(dir, name), "utf8").replace(SIBLING_IMPORT, "").replace(/^export /gm, "")).join("\n");
@@ -253,6 +256,7 @@ export function renderPage(model, dir) {
   const data = JSON.stringify(model).replace(/</g, "\\u003c");
   return template
     .replace("/*evolo:csp*/", () => contentSecurityPolicy([boot, script]))
+    .replace("/*evolo:icon*/", () => FAVICON)
     .replace("/*evolo:boot*/", () => boot)
     .replace("/*evolo:style*/", () => style)
     .replace("/*evolo:script*/", () => script)
