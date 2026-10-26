@@ -1,6 +1,7 @@
 # Evolo
 
 ![test](https://github.com/hiinguyen/Evolo/actions/workflows/test.yml/badge.svg)
+[![npm](https://img.shields.io/npm/v/evolo.svg)](https://www.npmjs.com/package/evolo)
 
 Evolo is a personal tool that scores your code contributions on GitHub with an AI judge and a deterministic XP formula.
 It runs entirely on your machine: no server, no account.
