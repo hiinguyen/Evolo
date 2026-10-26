@@ -41,6 +41,7 @@ import { parseArgs } from "node:util";
 import { achievementsOf, unlockedIn } from "../src/achievements.mjs";
 import { dailyBudget } from "../src/budget.mjs";
 import { evaluateUnit, scoreValues } from "../src/evaluate.mjs";
+import { rankFor } from "../src/rank.mjs";
 import { levelFor } from "../src/score.mjs";
 import { git } from "../src/facts.mjs";
 import { mergedPrsOfCommits } from "../src/github.mjs";
@@ -251,7 +252,7 @@ function status() {
   const summary = writeSummary(home);
   const { level, next } = levelFor(summary.total);
   const recent = recentXp(summary);
-  console.log(`level ${level}  ${summary.total} XP  (${next - summary.total} XP to level ${level + 1})`);
+  console.log(`level ${level} · ${rankFor(level).name}  ${summary.total} XP  (${next - summary.total} XP to level ${level + 1})`);
   console.log(`today +${recent.today} XP  last 7 days +${recent.week} XP`);
   const all = listAllRecords(home);
   const failed = all.filter((record) => record.status === "failed").length;

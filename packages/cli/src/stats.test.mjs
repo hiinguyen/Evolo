@@ -84,8 +84,8 @@ test("a period counts the scored units that landed in it, by type, repository an
     { type: "docs", units: 1, xp: 5 },
   ]);
   assert.deepEqual(stats.repos, [{ repo: "me/a", units: 2, xp: 140 }, { repo: "me/b", units: 2, xp: 65 }]);
-  // Level at the end of the week: every scored unit landed before it, 705 XP, and level L needs 20 × L² XP.
-  assert.equal(stats.level, 5);
+  // Level at the end of the week: every scored unit landed before it, 705 XP, and level L needs 20 × L × (L + 9) XP.
+  assert.equal(stats.level, 2);
 });
 
 test("rubric averages leave out units triaged by rule, whose scores are fixed", () => {

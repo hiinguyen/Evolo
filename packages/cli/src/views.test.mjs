@@ -18,9 +18,9 @@ test("recent XP counts today and the six local days before it", () => {
   assert.deepEqual(recentXp(summary, NOW), { today: 105, week: 360 });
 });
 
-test("the status line shows the level and total, and today and the queue only when there is something", () => {
-  assert.equal(statusLine({ total: 1245, xpByDay: { "2026-10-19": 105 } }, 2, NOW), "Lv 7 · 1,245 XP · +105 today · 2 queued");
-  assert.equal(statusLine({ total: 0, xpByDay: {} }, 0, NOW), "Lv 0 · 0 XP");
+test("the status line shows the level, the rank and total, and today and the queue only when there is something", () => {
+  assert.equal(statusLine({ total: 1245, xpByDay: { "2026-10-19": 105 } }, 2, NOW), "Lv 4 · Intern · 1,245 XP · +105 today · 2 queued");
+  assert.equal(statusLine({ total: 0, xpByDay: {} }, 0, NOW), "Lv 0 · Intern · 0 XP");
 });
 
 test("a notification tells the XP, the unit and a level up, and stays quiet for rejected or skipped pushes", () => {
@@ -29,7 +29,7 @@ test("a notification tells the XP, the unit and a level up, and stays quiet for 
     result: { evaluation: { contribution_type: "bugfix" } },
   };
   assert.deepEqual(notification(scored, 200), { title: "+105 XP", body: "proj PR #12: bugfix\nAdds retries." });
-  assert.equal(notification(scored, 300).title, "+105 XP · level 4!", "300 + 105 crosses 320, where level 4 starts");
+  assert.equal(notification(scored, 1000).title, "+105 XP · level 4!", "1,000 + 105 crosses 1,040, where level 4 starts");
   assert.match(notification({ ...scored, status: "failed", reason: "boom" }, 0).body, /^proj PR #12: boom\nRun `evolo retry`/);
   assert.equal(notification({ ...scored, status: "push_failed" }, 0), null);
   assert.equal(notification({ ...scored, status: "skipped" }, 0), null);
@@ -81,7 +81,7 @@ test("without body markup a notification is plain text: the judge's tags are dro
     repo: "me/proj", id: "pr-12", status: "scored", xp: 105, summary: 'Uses <b>Map</b> & <a href="https://ex.com">docs</a>\u001b[1m',
     result: { evaluation: { contribution_type: "bugfix" } },
   };
-  assert.deepEqual(notification(scored, 0), { title: "+105 XP · level 2!", body: "proj PR #12: bugfix\nUses Map & docs (https://ex.com)[1m" });
+  assert.deepEqual(notification(scored, 400), { title: "+105 XP · level 2!", body: "proj PR #12: bugfix\nUses Map & docs (https://ex.com)[1m" });
   assert.equal(notification({ ...scored, summary: "x", xp: 5, status: "scored" }, 0).title, "+5 XP");
 });
 

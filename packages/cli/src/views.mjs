@@ -1,6 +1,7 @@
 // What Evolo shows the user: desktop notifications, the status line and `evolo why` (docs/auto-scoring.md section 6).
 // Pure functions of ledger records and the summary, so every view is tested without a terminal or a desktop.
 import { tierName } from "./achievements.mjs";
+import { rankFor } from "./rank.mjs";
 import { CRITERIA, levelFor } from "./score.mjs";
 import { localDay, localTime } from "./ledger.mjs";
 import { escapeMarkup, richText, terminalSafe } from "./safe-text.mjs";
@@ -26,12 +27,13 @@ export function recentXp(summary, now = new Date()) {
   return { today, week };
 }
 
-// One line for Claude Code's status line: "Lv 3 · 245 XP · +105 today · 1 queued".
+// One line for Claude Code's status line: "Lv 15 · Senior Dev · 7,200 XP · +105 today · 1 queued".
 export function statusLine(summary, queued, now = new Date()) {
   const { level } = levelFor(summary.total);
   const { today } = recentXp(summary, now);
   return [
     `Lv ${level}`,
+    rankFor(level).name,
     `${formatXp(summary.total)} XP`,
     ...(today > 0 ? [`+${formatXp(today)} today`] : []),
     ...(queued > 0 ? [`${queued} queued`] : []),

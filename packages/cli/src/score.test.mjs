@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { classifyFile } from "./facts.mjs";
 import { extractJsonObject } from "./judges/opencode.mjs";
-import { computeXp, levelFor, triage, validateEvaluation } from "./score.mjs";
+import { computeXp, levelFor, triage, validateEvaluation, xpForLevel } from "./score.mjs";
 
 const scored = (impact, centrality, difficulty, quality, scope_fit) => ({ impact, centrality, difficulty, quality, scope_fit });
 
@@ -58,12 +58,25 @@ test("computeXp awards XP in steps of 5, at least one step for a contribution th
   assert.equal(tiny.xp, 5);
 });
 
-test("levelFor needs 20 × L² XP in total for level L", () => {
-  assert.deepEqual(levelFor(0), { level: 0, from: 0, next: 20 });
-  assert.deepEqual(levelFor(19), { level: 0, from: 0, next: 20 });
-  assert.deepEqual(levelFor(20), { level: 1, from: 20, next: 80 });
-  assert.deepEqual(levelFor(1999), { level: 9, from: 1620, next: 2000 });
-  assert.deepEqual(levelFor(2000), { level: 10, from: 2000, next: 2420 });
+test("levelFor needs 20 × L × (L + 9) XP in total for level L", () => {
+  assert.deepEqual(levelFor(0), { level: 0, from: 0, next: 200 });
+  assert.deepEqual(levelFor(199), { level: 0, from: 0, next: 200 });
+  assert.deepEqual(levelFor(200), { level: 1, from: 200, next: 440 });
+  assert.deepEqual(levelFor(1399), { level: 4, from: 1040, next: 1400 });
+  assert.deepEqual(levelFor(1400), { level: 5, from: 1400, next: 1800 });
+  assert.deepEqual(levelFor(58999), { level: 49, from: 56840, next: 59000 });
+  assert.deepEqual(levelFor(59000), { level: 50, from: 59000, next: 61200 });
+});
+
+test("xpForLevel is the start of each level, and levelFor reads it back", () => {
+  assert.equal(xpForLevel(0), 0);
+  assert.equal(xpForLevel(1), 200);
+  assert.equal(xpForLevel(5), 1400);
+  assert.equal(xpForLevel(10), 3800);
+  assert.equal(xpForLevel(50), 59000);
+  assert.equal(xpForLevel(-4), 0);
+  assert.equal(xpForLevel(2.9), xpForLevel(2), "a level is a whole step");
+  for (const level of [0, 1, 5, 10, 49, 50]) assert.equal(levelFor(xpForLevel(level)).level, level);
 });
 
 test("computeXp gives no centrality credit to a change with no impact", () => {
